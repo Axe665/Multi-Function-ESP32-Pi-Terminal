@@ -22,7 +22,7 @@ void VlcVideoOutput::paint(QPainter *painter) {
     painter->fillRect(QRectF(0, 0, width(), height()), Qt::black);
     QMutexLocker locker(&mutex_);
     if (frame_.isNull()) return;
-    const QSizeF scaled = frame_.size().scaled(QSizeF(width(), height()), Qt::KeepAspectRatio);
+    const QSizeF scaled = QSizeF(frame_.size()).scaled(QSizeF(width(), height()), Qt::KeepAspectRatio);
     const QRectF target((width() - scaled.width()) / 2.0, (height() - scaled.height()) / 2.0,
                         scaled.width(), scaled.height());
     painter->drawImage(target, frame_);

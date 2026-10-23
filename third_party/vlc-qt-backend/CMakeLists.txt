@@ -35,10 +35,13 @@ if(VLC_BACKEND_ENABLED)
     endif()
     if(NOT VLC_BACKEND_HAVE_LIBVLC AND LIBVLC_INCLUDE_DIR AND LIBVLC_LIBRARY)
         # Manual override for platforms without pkg-config (Windows, macOS,
-        # custom sysroots). Point at the include dir and the libvlc library.
+        # custom sysroots). Point at the include dir and the libvlc library
+        # (a .so/.dylib on Unix, or a .dll.a import library on Windows — the
+        # DLL itself is resolved from PATH at runtime).
         add_library(libvlc_manual SHARED IMPORTED GLOBAL)
         set_target_properties(libvlc_manual PROPERTIES
             IMPORTED_LOCATION "${LIBVLC_LIBRARY}"
+            IMPORTED_IMPLIB "${LIBVLC_LIBRARY}"
             INTERFACE_INCLUDE_DIRECTORIES "${LIBVLC_INCLUDE_DIR}")
         add_library(PkgConfig::LIBVLC ALIAS libvlc_manual)
         set(VLC_BACKEND_HAVE_LIBVLC TRUE)

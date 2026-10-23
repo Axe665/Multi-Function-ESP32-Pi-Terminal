@@ -11,11 +11,17 @@
 #include <cstring>
 #include <mutex>
 
-// Canonical public libVLC headers (present in every libvlc SDK incl. Windows).
+// libVLC 3.x ships an umbrella <vlc/vlc.h>; 4.x and some Windows SDKs only
+// ship the split headers — support both.
+#if __has_include(<vlc/vlc.h>)
+#include <vlc/vlc.h>
+#else
 #include <vlc/libvlc.h>
 #include <vlc/libvlc_media.h>
 #include <vlc/libvlc_media_player.h>
 #include <vlc/libvlc_events.h>
+#include <vlc/libvlc_renderer_discoverer.h>
+#endif
 
 static void postEvent(VlcPlayer *player, int kind, int value) {
     QMetaObject::invokeMethod(player, [player, kind, value] {
@@ -90,8 +96,10 @@ void VlcPlayer::setSource(const QUrl &source) {
         emit loadingChanged();
         return;
     }
-    const QByteArray path = QFile::encodeName(source.isLocalFile() ? source.toLocalFile() : source.toString());
-    libvlc_media_t *media = libvlc_media_new_path(instance(), path.constData());
+    // new_location with the percent-encoded URI is portable across platforms
+    // and handles non-ASCII paths correctly (media_new_path failed on some
+    // Windows VLC builds and mangles 8-bit path encodings).
+    libvlc_media_t *media = libvlc_media_new_location(instance(), source.toEncoded().constData());
     if (!media) {
         errorString_ = tr("无法解析媒体地址");
         libvlc_media_player_release(player_);
@@ -158,11 +166,10 @@ void VlcPlayer::stop() {
 }
 
 void VlcPlayer::setPosition(qint64 ms) {
-    if (player_ && ms >= 0) {
-        libvlc_media_player_set_time(player_, ms);
-        position_ = ms;
-        emit positionChanged();
-    }
+    if (ms < 0) return;
+    position_ = ms;
+    if (player_) libvlc_media_player_set_time(player_, ms);
+    emit positionChanged();
 }
 
 bool VlcPlayer::loading() const {
