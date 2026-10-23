@@ -13,18 +13,29 @@
 // toggle/open/close manage the panel state.
 class BrowserJoystickTest : public QObject {
     Q_OBJECT
+
+    // The QQmlEngine must stay alive for the whole test: QML functions are
+    // invoked through it, and destroying the engine silently breaks every
+    // QMetaObject::invokeMethod call on the created objects.
+    struct Fixture {
+        FakeWebView fake;
+        JoystickTools tools;
+        QQmlEngine engine;
+        QScopedPointer<QQuickItem> joystick;
+        QString error;
+        bool open(const QSize &joystickSize = QSize(800, 600),
+                  const QSize &viewSize = QSize(400, 400)) {
+            fake.setSize(viewSize);
+            joystick.reset(makeJoystick(engine, tools, fake, joystickSize, &error));
+            if (!joystick) return false;
+            return QMetaObject::invokeMethod(joystick.data(), "open");
+        }
+    };
+
 private slots:
     void initTestCase() {
         QQuickStyle::setStyle(QStringLiteral("Material"));
         initializeTerminalUi();
-    }
-
-    QQuickItem *openJoystick(FakeWebView &fake, QString *error) {
-        JoystickTools tools;
-        QQmlEngine engine;
-        auto *joystick = makeJoystick(engine, tools, fake, QSize(800, 600), error);
-        if (joystick) QMetaObject::invokeMethod(joystick, "open");
-        return joystick;
     }
 
     static int scrollCallCount(const FakeWebView &fake) {
@@ -35,84 +46,66 @@ private slots:
     }
 
     void stickUpScrollsPageUp() {
-        FakeWebView fake;
-        fake.setSize(QSize(400, 400));
-        QString error;
-        QScopedPointer<QQuickItem> joystick(openJoystick(fake, &error));
-        QVERIFY2(joystick, qPrintable(error));
-        QVERIFY(QMetaObject::invokeMethod(joystick.data(), "setStick",
+        Fixture fixture;
+        QVERIFY2(fixture.open(), qPrintable(fixture.error));
+        QVERIFY(QMetaObject::invokeMethod(fixture.joystick.data(), "setStick",
             Q_ARG(QVariant, QVariant(0.0)), Q_ARG(QVariant, QVariant(-1.0))));
-        QTRY_VERIFY_WITH_TIMEOUT(fake.jsCalls.contains(QStringLiteral("window.scrollBy(0,-36); true;")), 2000);
-        QVERIFY(!fake.jsCalls.contains(QStringLiteral("window.scrollBy(0,36); true;")));
+        QTRY_VERIFY_WITH_TIMEOUT(fixture.fake.jsCalls.contains(QStringLiteral("window.scrollBy(0,-36); true;")), 2000);
+        QVERIFY(!fixture.fake.jsCalls.contains(QStringLiteral("window.scrollBy(0,36); true;")));
     }
 
     void stickRightScrollsPageRight() {
-        FakeWebView fake;
-        fake.setSize(QSize(400, 400));
-        QString error;
-        QScopedPointer<QQuickItem> joystick(openJoystick(fake, &error));
-        QVERIFY2(joystick, qPrintable(error));
-        QVERIFY(QMetaObject::invokeMethod(joystick.data(), "setStick",
+        Fixture fixture;
+        QVERIFY2(fixture.open(), qPrintable(fixture.error));
+        QVERIFY(QMetaObject::invokeMethod(fixture.joystick.data(), "setStick",
             Q_ARG(QVariant, QVariant(1.0)), Q_ARG(QVariant, QVariant(0.0))));
-        QTRY_VERIFY_WITH_TIMEOUT(fake.jsCalls.contains(QStringLiteral("window.scrollBy(36,0); true;")), 2000);
+        QTRY_VERIFY_WITH_TIMEOUT(fixture.fake.jsCalls.contains(QStringLiteral("window.scrollBy(36,0); true;")), 2000);
     }
 
     void deadZoneSuppressesJitter() {
-        FakeWebView fake;
-        fake.setSize(QSize(400, 400));
-        QString error;
-        QScopedPointer<QQuickItem> joystick(openJoystick(fake, &error));
-        QVERIFY2(joystick, qPrintable(error));
-        const int before = scrollCallCount(fake);
-        QVERIFY(QMetaObject::invokeMethod(joystick.data(), "setStick",
+        Fixture fixture;
+        QVERIFY2(fixture.open(), qPrintable(fixture.error));
+        const int before = scrollCallCount(fixture.fake);
+        QVERIFY(QMetaObject::invokeMethod(fixture.joystick.data(), "setStick",
             Q_ARG(QVariant, QVariant(0.0)), Q_ARG(QVariant, QVariant(-0.05))));
         QTest::qWait(400);
-        QCOMPARE(scrollCallCount(fake), before); // resting inside the dead zone scrolls nothing
+        QCOMPARE(scrollCallCount(fixture.fake), before); // resting inside the dead zone scrolls nothing
     }
 
     void releaseStopsScrolling() {
-        FakeWebView fake;
-        fake.setSize(QSize(400, 400));
-        QString error;
-        QScopedPointer<QQuickItem> joystick(openJoystick(fake, &error));
-        QVERIFY2(joystick, qPrintable(error));
-        QVERIFY(QMetaObject::invokeMethod(joystick.data(), "setStick",
+        Fixture fixture;
+        QVERIFY2(fixture.open(), qPrintable(fixture.error));
+        QVERIFY(QMetaObject::invokeMethod(fixture.joystick.data(), "setStick",
             Q_ARG(QVariant, QVariant(0.0)), Q_ARG(QVariant, QVariant(-1.0))));
-        QTRY_VERIFY_WITH_TIMEOUT(scrollCallCount(fake) > 0, 2000);
-        QVERIFY(QMetaObject::invokeMethod(joystick.data(), "setStick",
+        QTRY_VERIFY_WITH_TIMEOUT(scrollCallCount(fixture.fake) > 0, 2000);
+        QVERIFY(QMetaObject::invokeMethod(fixture.joystick.data(), "setStick",
             Q_ARG(QVariant, QVariant(0.0)), Q_ARG(QVariant, QVariant(0.0))));
         QTest::qWait(300); // let pending ticks settle
-        const int settled = scrollCallCount(fake);
+        const int settled = scrollCallCount(fixture.fake);
         QTest::qWait(300);
-        QCOMPARE(scrollCallCount(fake), settled); // no further injections after release
+        QCOMPARE(scrollCallCount(fixture.fake), settled); // no further injections after release
     }
 
     void toggleManagesPanelState() {
-        FakeWebView fake;
-        fake.setSize(QSize(400, 400));
-        QString error;
-        QScopedPointer<QQuickItem> joystick(openJoystick(fake, &error));
-        QVERIFY2(joystick, qPrintable(error));
-        QVERIFY(joystick->property("expanded").toBool());
-        QVERIFY(QMetaObject::invokeMethod(joystick.data(), "toggle"));
-        QCOMPARE(joystick->property("expanded").toBool(), false);
-        QVERIFY(QMetaObject::invokeMethod(joystick.data(), "toggle"));
-        QVERIFY(joystick->property("expanded").toBool());
+        Fixture fixture;
+        QVERIFY2(fixture.open(), qPrintable(fixture.error));
+        QVERIFY(fixture.joystick->property("expanded").toBool());
+        QVERIFY(QMetaObject::invokeMethod(fixture.joystick.data(), "toggle"));
+        QCOMPARE(fixture.joystick->property("expanded").toBool(), false);
+        QVERIFY(QMetaObject::invokeMethod(fixture.joystick.data(), "toggle"));
+        QVERIFY(fixture.joystick->property("expanded").toBool());
     }
 
     void inactiveWithoutTargetView() {
-        FakeWebView fake;
-        fake.setSize(QSize(400, 400));
-        QString error;
-        QScopedPointer<QQuickItem> joystick(openJoystick(fake, &error));
-        QVERIFY2(joystick, qPrintable(error));
-        joystick->setProperty("targetView", QVariant::fromValue(static_cast<QQuickItem *>(nullptr)));
+        Fixture fixture;
+        QVERIFY2(fixture.open(), qPrintable(fixture.error));
+        fixture.joystick->setProperty("targetView", QVariant::fromValue(static_cast<QQuickItem *>(nullptr)));
         QTest::qWait(50);
-        const int before = fake.jsCalls.size();
-        QVERIFY(QMetaObject::invokeMethod(joystick.data(), "setStick",
+        const int before = fixture.fake.jsCalls.size();
+        QVERIFY(QMetaObject::invokeMethod(fixture.joystick.data(), "setStick",
             Q_ARG(QVariant, QVariant(0.0)), Q_ARG(QVariant, QVariant(-1.0))));
         QTest::qWait(400);
-        QCOMPARE(fake.jsCalls.size(), before); // no target view -> no injections
+        QCOMPARE(fixture.fake.jsCalls.size(), before); // no target view -> no injections
     }
 };
 

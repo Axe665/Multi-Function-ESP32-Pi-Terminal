@@ -17,6 +17,11 @@ class JoystickTools : public QObject {
     Q_PROPERTY(QString uiLanguage MEMBER language NOTIFY languageChanged)
 public:
     QString language = QStringLiteral("zh");
+    // MaterialIcon resolves its image source through this API; returning a URL
+    // is enough even when the icon file itself is absent in minimal harnesses.
+    Q_INVOKABLE QString monochromeIcon(const QString &, bool) const {
+        return QStringLiteral("qrc:/icons/material/light/apps.svg");
+    }
 signals:
     void languageChanged();
 };
