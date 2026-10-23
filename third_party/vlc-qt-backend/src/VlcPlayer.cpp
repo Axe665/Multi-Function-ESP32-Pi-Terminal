@@ -11,7 +11,11 @@
 #include <cstring>
 #include <mutex>
 
-#include <vlc/vlc.h>
+// Canonical public libVLC headers (present in every libvlc SDK incl. Windows).
+#include <vlc/libvlc.h>
+#include <vlc/libvlc_media.h>
+#include <vlc/libvlc_media_player.h>
+#include <vlc/libvlc_events.h>
 
 static void postEvent(VlcPlayer *player, int kind, int value) {
     QMetaObject::invokeMethod(player, [player, kind, value] {

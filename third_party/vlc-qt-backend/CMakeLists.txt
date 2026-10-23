@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.21)
 project(vlc_qt_backend LANGUAGES CXX)
 
+# Standalone builds (cmake -S third_party/vlc-qt-backend ...) also get ctest
+# registration; harmless when consumed via add_subdirectory from a parent that
+# already included CTest.
+include(CTest)
+
 # QML-facing libVLC playback backend for Qt Quick.
 #
 # Portability contract:
