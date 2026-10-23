@@ -1,5 +1,7 @@
 #include "TerminalApplication.h"
 
+#include <vlc-qt-backend/VlcBackendInfo.h>
+
 #include <QCommandLineParser>
 #include <QQmlContext>
 #include <QSysInfo>
@@ -49,6 +51,7 @@ int TerminalApplication::initialize(const QCommandLineParser &options) {
     engine_.rootContext()->setContextProperty("viperBrowser", &browserController_);
     engine_.rootContext()->setContextProperty("desktopShell", &desktopShell_);
     engine_.rootContext()->setContextProperty("desktopDebug", options.isSet("demo"));
+    engine_.rootContext()->setContextProperty("vlcBackendAvailable", vlcBackendAvailable());
     // QML binds directly to the persisted setting; never freeze it at startup.
     engine_.rootContext()->setContextProperty("efficientRendering", systemTools().energySaving());
     engine_.load(QUrl("qrc:/qt/qml/OrangePiTerminal/Main.qml"));

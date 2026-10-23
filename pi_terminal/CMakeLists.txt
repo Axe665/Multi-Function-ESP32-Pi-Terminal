@@ -17,6 +17,9 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS ShaderTools)
 set(VIPER_EMBEDDED ON CACHE BOOL "Build the Viper browser engine as embedded terminal components" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../third_party/Viper-Browser
                  ${CMAKE_CURRENT_BINARY_DIR}/third_party/Viper-Browser)
+# VLC video backend: always builds (stub without libvlc) — see third_party/vlc-qt-backend.
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../third_party/vlc-qt-backend
+                 ${CMAKE_CURRENT_BINARY_DIR}/third_party/vlc-qt-backend)
 if(BUILD_TESTING)
     find_package(Qt6 6.4 REQUIRED COMPONENTS Test)
 endif()
@@ -110,7 +113,8 @@ qt_add_library(terminal_ui SHARED
     src/ui/PetLibrary.cpp src/ui/PetLibrary.h)
 target_compile_definitions(terminal_ui PRIVATE ARKPETS_CONVERTER_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/tools/arkpets")
 target_include_directories(terminal_ui PUBLIC src)
-target_link_libraries(terminal_ui PUBLIC Qt6::Quick Qt6::Qml PRIVATE Qt6::QuickControls2 Qt6::OpenGL)
+target_link_libraries(terminal_ui PUBLIC Qt6::Quick Qt6::Qml vlc-qt-backend::vlc-qt-backend
+    PRIVATE Qt6::QuickControls2 Qt6::OpenGL)
 
 qt_add_executable(orange_pi_terminal
     src/main.cpp src/app/TerminalApplication.cpp src/app/TerminalApplication.h
@@ -130,6 +134,7 @@ file(RELATIVE_PATH TERMINAL_LIBRARY_FROM_BIN "${CMAKE_INSTALL_FULL_BINDIR}" "${C
 set_target_properties(orange_pi_terminal PROPERTIES
     BUILD_RPATH_USE_ORIGIN TRUE INSTALL_RPATH "$ORIGIN/${TERMINAL_LIBRARY_FROM_BIN}")
 set(UI_QML_FILES qml/Main.qml qml/Theme.qml qml/I18n.qml qml/GlassSurface.qml qml/CarText.qml qml/CarButton.qml qml/CarField.qml qml/MaterialIcon.qml qml/IconButton.qml qml/AppIcon.qml qml/PaintToolButton.qml qml/AppLauncher.qml qml/ApplicationDrawer.qml qml/StatusDock.qml qml/SettingsGroup.qml qml/FloatingKeyboard.qml qml/MusicPlayer.qml qml/VideoPlayer.qml)
+list(APPEND UI_QML_FILES qml/VideoBackendMultimedia.qml qml/VideoBackendVlc.qml)
 list(APPEND UI_QML_FILES qml/MusicModeButton.qml)
 list(APPEND UI_QML_FILES qml/MusicText.qml)
 list(APPEND UI_QML_FILES qml/PictureViewer.qml qml/FileThumbnail.qml)
@@ -218,6 +223,11 @@ if(BUILD_TESTING)
     target_link_libraries(music_seek_test PRIVATE terminal_system terminal_music terminal_ui Qt6::Test Qt6::QuickControls2 Qt6::Multimedia)
     add_test(NAME music_http_seek_clock COMMAND music_seek_test)
     set_tests_properties(music_http_seek_clock PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software" TIMEOUT 180)
+    add_executable(vlc_video_ui_test tests/vlc_video_ui_test.cpp)
+    target_include_directories(vlc_video_ui_test PRIVATE src)
+    target_link_libraries(vlc_video_ui_test PRIVATE terminal_ui Qt6::Test Qt6::Quick Qt6::QuickControls2)
+    add_test(NAME vlc_video_ui COMMAND vlc_video_ui_test)
+    set_tests_properties(vlc_video_ui PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software" TIMEOUT 60)
     target_link_libraries(runtime_test PRIVATE terminal_core terminal_system Qt6::Test)
     add_test(NAME runtime_models_state_files COMMAND runtime_test)
     add_executable(plugin_scale_test tests/plugin_scale_test.cpp)
