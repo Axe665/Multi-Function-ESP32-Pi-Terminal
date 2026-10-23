@@ -31,11 +31,20 @@
 - 不需要 C++：`runJavaScript/goBack/reload/canGoBack` 都是 WebEngineView
   既有 API，测试里用假视图替换即可。
 
-## 测试
+## 测试（功能 / 界面 / 性能）
 
-- `browser_joystick_cursor`（offscreen + software 渲染）：假 WebEngineView
-  记录注入的 JavaScript；断言摇杆把光标推入边缘后出现 `window.scrollBy` 调用、
-  点击注入含 `elementFromPoint`、后退/刷新调用数正确、toggle 收起面板。
+一键入口（构建 + 运行三层测试并输出汇总）：
+
+```sh
+pi_terminal/tests/run_joystick_tests.sh               # 功能 + 界面 + 性能
+pi_terminal/tests/run_joystick_tests.sh --benchmark   # 仅性能层，打印 JOYSTICK_BENCH_* 指标
+```
+
+| 层 | 测试 | 覆盖内容 |
+|---|---|---|
+| 功能 | `browser_joystick_cursor` | 假 WebEngineView 记录注入 JS：摇杆把光标推入边缘后出现 `window.scrollBy`、点击注入含 `elementFromPoint`、后退/刷新调用数正确、toggle 收起 |
+| 界面 | `browser_joystick_ui` | 展开/收起可见性（徽章/面板/光标）、光标几何与 cursorX/Y 公式一致、控件均 ≥48px（适老化触控目标）、后退按钮随 canGoBack 禁用、面板在 800×600 与 360×480 下均不出界 |
+| 性能 | `browser_joystick_performance` | 边缘滚动注入速率（5–80 次/s，防失控循环）、setStick 调用吞吐、点击注入延迟、光标钳制到 1.0 不越界 |
 
 ## 实机验证清单
 
@@ -45,3 +54,4 @@
 4. 页面缩放（`zoomFactor` 1.2/1.5/2.0）下点击位置不偏移。
 5. 无痕标签页与普通标签页切换后摇杆仍作用于当前页。
 6. 拖动面板换位后摇杆与按钮工作正常；展开/收起反复切换无卡顿。
+7. 跑 `run_joystick_tests.sh` 三层全绿，记录 `JOYSTICK_BENCH_*` 指标。

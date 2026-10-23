@@ -7,34 +7,7 @@
 #include <QJSValue>
 #include <QScopedPointer>
 #include "ui/TerminalUi.h"
-
-// Minimal systemTools stand-in: BrowserJoystick only reaches systemTools
-// through the I18n singleton's uiLanguage lookup.
-class JoystickTools : public QObject {
-    Q_OBJECT
-    Q_PROPERTY(QString uiLanguage MEMBER language NOTIFY languageChanged)
-public:
-    QString language = QStringLiteral("zh");
-signals:
-    void languageChanged();
-};
-
-// WebEngineView stand-in that records injected JavaScript and navigation calls.
-class FakeWebView : public QQuickItem {
-    Q_OBJECT
-    Q_PROPERTY(bool canGoBack READ canGoBack CONSTANT)
-public:
-    QStringList jsCalls;
-    int backCalls = 0;
-    int reloadCalls = 0;
-    bool canGoBack() const { return true; }
-    Q_INVOKABLE void runJavaScript(const QString &code, const QJSValue &callback) {
-        jsCalls << code;
-        if (callback.isCallable()) callback.call();
-    }
-    Q_INVOKABLE void goBack() { ++backCalls; }
-    Q_INVOKABLE void reload() { ++reloadCalls; }
-};
+#include "JoystickTestSupport.h"
 
 class BrowserJoystickTest : public QObject {
     Q_OBJECT
