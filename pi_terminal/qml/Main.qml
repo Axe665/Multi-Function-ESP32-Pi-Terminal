@@ -1326,6 +1326,7 @@ ApplicationWindow {
                     IconButton {visible:!narrow;iconName:"arrow_back";label:I18n.t("后退");enabled:activeBrowser && activeBrowser.canGoBack;onClicked:activeBrowser.goBack()}
                     IconButton {visible:!narrow;iconName:"arrow_forward";label:I18n.t("前进");enabled:activeBrowser && activeBrowser.canGoForward;onClicked:activeBrowser.goForward()}
                     IconButton {iconName:activeBrowser && activeBrowser.loading?"close":"refresh";label:activeBrowser && activeBrowser.loading?I18n.t("停止加载"):I18n.t("刷新");enabled:!!activeBrowser;onClicked:{if(activeBrowser.loading)activeBrowser.stop();else activeBrowser.reload()}}
+                    IconButton {objectName:"browserJoystickToggle";iconName:joystick.expanded?"close":"chevron_right";label:I18n.t("摇杆");onClicked:joystick.toggle()}
                     CarField {id:location;objectName:"browserAddressField";Layout.fillWidth:true;Layout.minimumWidth:0;implicitWidth:0
                         text:activeBrowser?activeBrowser.url.toString():defaultBrowserUrl;placeholderText:"";onAccepted:navigateBrowser(text)}
                     IconButton {iconName:"arrow_forward";label:I18n.t("前往");onClicked:navigateBrowser(location.text)}
@@ -1558,6 +1559,13 @@ ApplicationWindow {
                         }
                     }
                 }
+            }
+            BrowserJoystick {
+                id: joystick
+                z: 10
+                anchors.fill: parent
+                targetView: activeBrowser
+                uiScale: uiScale
             }
         }
         Flickable {

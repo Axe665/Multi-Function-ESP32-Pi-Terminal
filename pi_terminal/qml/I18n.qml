@@ -164,6 +164,7 @@ QtObject {
         "打开模块":"Open module", "断开模块":"Disconnect module", "请求断开模块":"Request disconnect",
         "重试连接":"Retry", "后退":"Back", "前进":"Forward", "停止加载":"Stop loading",
         "刷新":"Refresh", "输入网址或域名":"Enter URL or domain", "前往":"Go", "浏览器工具":"Browser tools",
+        "摇杆":"Joystick", "摇杆（可拖动）":"Joystick (drag to move)", "点击":"Click", "收起":"Collapse",
         "浏览器快捷操作":"Browser quick actions",
         "允许弹出窗口":"Allow pop-up windows", "已下载模型预览 · 待机动作图集":"Downloaded model preview · idle animation atlas",
         "已下载角色":"Downloaded characters", "未下载角色":"Not downloaded",
