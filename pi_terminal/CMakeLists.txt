@@ -14,6 +14,20 @@ target_include_directories(pi_module_sdk INTERFACE $<BUILD_INTERFACE:${CMAKE_CUR
 target_compile_features(pi_module_sdk INTERFACE cxx_std_17)
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Network Bluetooth Qml Quick QuickControls2 SerialPort OpenGL WebEngineQuick WebEngineWidgets WebEngineCore QuickWidgets WebChannel Concurrent Svg PrintSupport Multimedia TextToSpeech StateMachine)
 find_package(Qt6 6.4 REQUIRED COMPONENTS ShaderTools)
+option(TERMINAL_VLC_BACKEND "Build the libVLC video playback backend (VlcPlayer/VlcVideoOutput)" ON)
+set(TERMINAL_VLC_AVAILABLE FALSE)
+if(TERMINAL_VLC_BACKEND)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBVLC QUIET IMPORTED_TARGET libvlc)
+        if(LIBVLC_FOUND)
+            set(TERMINAL_VLC_AVAILABLE TRUE)
+        endif()
+    endif()
+    if(NOT TERMINAL_VLC_AVAILABLE)
+        message(STATUS "libvlc not found (apt: libvlc-dev); VideoPlayer falls back to Qt Multimedia")
+    endif()
+endif()
 set(VIPER_EMBEDDED ON CACHE BOOL "Build the Viper browser engine as embedded terminal components" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../third_party/Viper-Browser
                  ${CMAKE_CURRENT_BINARY_DIR}/third_party/Viper-Browser)
@@ -103,14 +117,25 @@ target_include_directories(terminal_system PRIVATE
 target_link_libraries(terminal_system PUBLIC terminal_music Qt6::Gui Qt6::Bluetooth Qt6::TextToSpeech Qt6::WebEngineQuick
     PRIVATE Qt6::Widgets Qt6::WebEngineWidgets viper-core viper-ui)
 
+set(TERMINAL_VLC_SOURCES "")
+if(TERMINAL_VLC_AVAILABLE)
+    set(TERMINAL_VLC_SOURCES
+        src/ui/VlcPlayer.cpp src/ui/VlcPlayer.h
+        src/ui/VlcVideoOutput.cpp src/ui/VlcVideoOutput.h)
+endif()
 qt_add_library(terminal_ui SHARED
     src/ui/TerminalUi.cpp src/ui/TerminalUi.h
     src/ui/BlurItem.cpp src/ui/BlurItem.h src/ui/TextFormatter.h
     src/ui/PetSpriteItem.cpp src/ui/PetSpriteItem.h
-    src/ui/PetLibrary.cpp src/ui/PetLibrary.h)
+    src/ui/PetLibrary.cpp src/ui/PetLibrary.h
+    ${TERMINAL_VLC_SOURCES})
 target_compile_definitions(terminal_ui PRIVATE ARKPETS_CONVERTER_SOURCE="${CMAKE_CURRENT_SOURCE_DIR}/tools/arkpets")
 target_include_directories(terminal_ui PUBLIC src)
 target_link_libraries(terminal_ui PUBLIC Qt6::Quick Qt6::Qml PRIVATE Qt6::QuickControls2 Qt6::OpenGL)
+if(TERMINAL_VLC_AVAILABLE)
+    target_link_libraries(terminal_ui PRIVATE PkgConfig::LIBVLC)
+    target_compile_definitions(terminal_ui PUBLIC TERMINAL_VLC_BACKEND)
+endif()
 
 qt_add_executable(orange_pi_terminal
     src/main.cpp src/app/TerminalApplication.cpp src/app/TerminalApplication.h
@@ -130,6 +155,7 @@ file(RELATIVE_PATH TERMINAL_LIBRARY_FROM_BIN "${CMAKE_INSTALL_FULL_BINDIR}" "${C
 set_target_properties(orange_pi_terminal PROPERTIES
     BUILD_RPATH_USE_ORIGIN TRUE INSTALL_RPATH "$ORIGIN/${TERMINAL_LIBRARY_FROM_BIN}")
 set(UI_QML_FILES qml/Main.qml qml/Theme.qml qml/I18n.qml qml/GlassSurface.qml qml/CarText.qml qml/CarButton.qml qml/CarField.qml qml/MaterialIcon.qml qml/IconButton.qml qml/AppIcon.qml qml/PaintToolButton.qml qml/AppLauncher.qml qml/ApplicationDrawer.qml qml/StatusDock.qml qml/SettingsGroup.qml qml/FloatingKeyboard.qml qml/MusicPlayer.qml qml/VideoPlayer.qml)
+list(APPEND UI_QML_FILES qml/VideoBackendMultimedia.qml qml/VideoBackendVlc.qml)
 list(APPEND UI_QML_FILES qml/MusicModeButton.qml)
 list(APPEND UI_QML_FILES qml/MusicText.qml)
 list(APPEND UI_QML_FILES qml/PictureViewer.qml qml/FileThumbnail.qml)
@@ -218,6 +244,13 @@ if(BUILD_TESTING)
     target_link_libraries(music_seek_test PRIVATE terminal_system terminal_music terminal_ui Qt6::Test Qt6::QuickControls2 Qt6::Multimedia)
     add_test(NAME music_http_seek_clock COMMAND music_seek_test)
     set_tests_properties(music_http_seek_clock PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software" TIMEOUT 180)
+    if(TERMINAL_VLC_AVAILABLE)
+        add_executable(vlc_player_test tests/vlc_player_test.cpp)
+        target_include_directories(vlc_player_test PRIVATE src)
+        target_link_libraries(vlc_player_test PRIVATE terminal_ui Qt6::Test Qt6::Quick)
+        add_test(NAME vlc_player_smoke COMMAND vlc_player_test)
+        set_tests_properties(vlc_player_smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software" TIMEOUT 60)
+    endif()
     target_link_libraries(runtime_test PRIVATE terminal_core terminal_system Qt6::Test)
     add_test(NAME runtime_models_state_files COMMAND runtime_test)
     add_executable(plugin_scale_test tests/plugin_scale_test.cpp)

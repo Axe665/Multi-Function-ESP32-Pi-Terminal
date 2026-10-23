@@ -145,6 +145,7 @@ QtObject {
         "此目录没有可播放视频":"No supported videos in this folder", "从左侧选择视频开始播放":"Choose a video on the left to start playback",
         "尚未选择视频":"No video selected", "暂停":"Pause", "继续播放":"Resume", "静音":"Mute", "打开声音":"Unmute",
         "视频从终端文件目录读取；格式支持取决于系统媒体解码器。":"Videos are read from the terminal files area. Supported formats depend on system codecs.",
+        "视频播放出错":"Video playback error",
         "请输入有效名称":"Enter a valid name",
         "请先选择文件或文件夹":"Select a file or folder first",
         "操作失败：请检查名称、权限或目录是否为空":"Operation failed: check name, permissions or empty directory",

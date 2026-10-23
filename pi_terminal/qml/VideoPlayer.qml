@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
-import QtMultimedia
 
 Item {
     id: root
@@ -15,13 +14,14 @@ Item {
     property var videoRows: []
     property string selectedFile: ""
     property string selectedRelative: ""
+    property string selectedSource: ""
     property bool playing: false
     readonly property bool mediaPlaying: playing
-    readonly property bool hasMedia: mediaPlayer.source.toString() !== ""
-    readonly property real mediaPosition: mediaPlayer.position
-    readonly property real mediaDuration: mediaPlayer.duration
-    function toggleMedia() { if (hasMedia) playing ? mediaPlayer.pause() : mediaPlayer.play() }
-    function pauseMedia() { mediaPlayer.pause() }
+    readonly property bool hasMedia: selectedSource !== ""
+    readonly property real mediaPosition: mediaBackend.item ? mediaBackend.item.position : 0
+    readonly property real mediaDuration: mediaBackend.item ? mediaBackend.item.duration : 0
+    function toggleMedia() { if (hasMedia && mediaBackend.item) playing ? mediaBackend.item.pause() : mediaBackend.item.play() }
+    function pauseMedia() { if (mediaBackend.item) mediaBackend.item.pause() }
     function navigateMedia(delta) {
         const rows = videoRows.filter(function(e) { return !e.directory })
         const index = rows.findIndex(function(e) { return e.relative === root.selectedRelative })
@@ -56,13 +56,13 @@ Item {
         selectedFile = name
         selectedRelative = relative
         playbackError = ""
-        mediaPlayer.source = systemTools.fileUrl(relative)
-        switchPage(1, function() { mediaPlayer.play() })
+        selectedSource = systemTools.fileUrl(relative)
+        switchPage(1, function() { mediaBackend.item && mediaBackend.item.play() })
     }
     function showLibrary() {
         if (fullscreen) setFullscreen(false)
         switchPage(0, function() {
-            mediaPlayer.stop()
+            if (mediaBackend.item) mediaBackend.item.stop()
             selectedFile = ""
             selectedRelative = ""
         })
@@ -142,14 +142,29 @@ Item {
         ScriptAction { script: { transitionPanel.visible = false; transitionPanel.x = root.width } }
     }
 
-    MediaPlayer {
-        id: mediaPlayer
-        source: ""
-        videoOutput: videoSurface
-        audioOutput: AudioOutput { objectName:"videoAudioOutput"; muted: root.muted; volume: root.volume * root.announcementGain }
-        onPlaybackStateChanged: root.playing = playbackState === MediaPlayer.PlayingState
-        onErrorOccurred: function(error, errorString) {
-            if (error !== MediaPlayer.NoError) root.playbackError = errorString
+    // Playback backends. Each component exposes the same surface: source,
+    // muted/volume (page-driven), position/duration/playing/seekable/loading/
+    // buffering/errorString, play/pause/stop/seek, plus playingChanged and
+    // errorOccurred signals. The VLC backend is selected when this build ships
+    // libVLC support; the Qt Multimedia backend is the fallback.
+    Component {
+        id: multimediaBackendComponent
+        VideoBackendMultimedia {
+            source: root.selectedSource
+            muted: root.muted
+            volume: root.volume * root.announcementGain
+            onPlayingChanged: root.playing = playing
+            onErrorOccurred: root.playbackError = errorString || I18n.t("视频播放出错")
+        }
+    }
+    Component {
+        id: vlcBackendComponent
+        VideoBackendVlc {
+            source: root.selectedSource
+            muted: root.muted
+            volume: root.volume * root.announcementGain
+            onPlayingChanged: root.playing = playing
+            onErrorOccurred: root.playbackError = errorString || I18n.t("视频播放出错")
         }
     }
 
@@ -227,11 +242,10 @@ Item {
             Rectangle {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 color: "#080a0e"
-                VideoOutput {
-                    id: videoSurface
-                    objectName: "qtMultimediaVideoOutput"
+                Loader {
+                    id: mediaBackend
                     anchors.fill: parent
-                    fillMode: VideoOutput.PreserveAspectFit
+                    sourceComponent: vlcBackendAvailable ? vlcBackendComponent : multimediaBackendComponent
                 }
                 MouseArea {
                     anchors.fill: parent
@@ -244,7 +258,7 @@ Item {
                 }
                 ColumnLayout {
                     anchors.centerIn: parent; spacing: Theme.gap
-                    visible: mediaPlayer.mediaStatus === MediaPlayer.LoadingMedia || mediaPlayer.mediaStatus === MediaPlayer.BufferingMedia
+                    visible: mediaBackend.item !== null && (mediaBackend.item.loading || mediaBackend.item.buffering)
                     BusyIndicator { running: visible; Layout.alignment: Qt.AlignHCenter }
                     CarText { text: I18n.t("正在载入视频"); subdued: true; Layout.alignment: Qt.AlignHCenter }
                 }
@@ -269,14 +283,14 @@ Item {
                         CarText { text: root.selectedFile; heading: true; Layout.fillWidth: true; maximumLineCount: 1; elide: Text.ElideMiddle }
                         RowLayout {
                             Layout.fillWidth: true; spacing: Theme.gap / 2
-                            CarText { text: root.formatTime(mediaPlayer.position); subdued: true }
-                            Slider { Layout.fillWidth: true; from: 0; to: Math.max(1, mediaPlayer.duration); value: mediaPlayer.position; enabled: mediaPlayer.seekable; onMoved: mediaPlayer.position = value }
-                            CarText { text: root.formatTime(mediaPlayer.duration); subdued: true }
+                            CarText { text: root.formatTime(root.mediaPosition); subdued: true }
+                            Slider { Layout.fillWidth: true; from: 0; to: Math.max(1, root.mediaDuration); value: root.mediaPosition; enabled: mediaBackend.item ? mediaBackend.item.seekable : false; onMoved: mediaBackend.item && mediaBackend.item.seek(value) }
+                            CarText { text: root.formatTime(root.mediaDuration); subdued: true }
                         }
                         RowLayout {
                             Layout.fillWidth: true; spacing: root.compact ? 2 : Theme.gap / 2
-                            IconButton { iconName: "stop"; label: I18n.t("停止"); implicitWidth: root.compact ? 48 * root.uiScale : Theme.hit; implicitHeight: root.compact ? 48 * root.uiScale : Theme.hit; onClicked: mediaPlayer.stop() }
-                            IconButton { iconName: root.playing ? "pause" : "play_arrow"; label: root.playing ? I18n.t("暂停") : I18n.t("继续播放"); implicitWidth: root.compact ? 48 * root.uiScale : Theme.hit; implicitHeight: root.compact ? 48 * root.uiScale : Theme.hit; filled: true; onClicked: root.playing ? mediaPlayer.pause() : mediaPlayer.play() }
+                            IconButton { iconName: "stop"; label: I18n.t("停止"); implicitWidth: root.compact ? 48 * root.uiScale : Theme.hit; implicitHeight: root.compact ? 48 * root.uiScale : Theme.hit; onClicked: mediaBackend.item && mediaBackend.item.stop() }
+                            IconButton { iconName: root.playing ? "pause" : "play_arrow"; label: root.playing ? I18n.t("暂停") : I18n.t("继续播放"); implicitWidth: root.compact ? 48 * root.uiScale : Theme.hit; implicitHeight: root.compact ? 48 * root.uiScale : Theme.hit; filled: true; onClicked: mediaBackend.item && (root.playing ? mediaBackend.item.pause() : mediaBackend.item.play()) }
                             Item { Layout.fillWidth: true }
                             IconButton { iconName: root.muted ? "volume_off" : "volume_up"; label: root.muted ? I18n.t("打开声音") : I18n.t("静音"); onClicked: root.muted = !root.muted }
                             Slider { Layout.preferredWidth: Math.min((root.compact ? 100 : 180) * root.uiScale, root.width * 0.24); from: 0; to: 1; value: root.volume; onMoved: root.volume = value }
@@ -305,23 +319,23 @@ Item {
                     }
                     RowLayout {
                         Layout.fillWidth: true; spacing: Theme.gap / 2
-                        CarText { text: root.formatTime(mediaPlayer.position); subdued: true }
+                        CarText { text: root.formatTime(root.mediaPosition); subdued: true }
                         Slider {
                             id: seekSlider
-                            Layout.fillWidth: true; from: 0; to: Math.max(1, mediaPlayer.duration)
-                            value: mediaPlayer.position; enabled: mediaPlayer.seekable
-                            onMoved: mediaPlayer.position = value
+                            Layout.fillWidth: true; from: 0; to: Math.max(1, root.mediaDuration)
+                            value: root.mediaPosition; enabled: mediaBackend.item ? mediaBackend.item.seekable : false
+                            onMoved: mediaBackend.item && mediaBackend.item.seek(value)
                         }
-                        CarText { text: root.formatTime(mediaPlayer.duration); subdued: true }
+                        CarText { text: root.formatTime(root.mediaDuration); subdued: true }
                     }
                     RowLayout {
                         Layout.fillWidth: true; spacing: root.compact ? 2 : Theme.gap / 2
-                        IconButton { iconName: "stop"; label: I18n.t("停止"); implicitWidth: root.compact ? 48 * root.uiScale : Theme.hit; implicitHeight: root.compact ? 48 * root.uiScale : Theme.hit; onClicked: mediaPlayer.stop() }
+                        IconButton { iconName: "stop"; label: I18n.t("停止"); implicitWidth: root.compact ? 48 * root.uiScale : Theme.hit; implicitHeight: root.compact ? 48 * root.uiScale : Theme.hit; onClicked: mediaBackend.item && mediaBackend.item.stop() }
                         IconButton {
                             iconName: root.playing ? "pause" : "play_arrow"
                             label: root.playing ? I18n.t("暂停") : I18n.t("继续播放")
                             implicitWidth: root.compact ? 48 * root.uiScale : Theme.hit; implicitHeight: root.compact ? 48 * root.uiScale : Theme.hit
-                            filled: true; onClicked: root.playing ? mediaPlayer.pause() : mediaPlayer.play()
+                            filled: true; onClicked: mediaBackend.item && (root.playing ? mediaBackend.item.pause() : mediaBackend.item.play())
                         }
                         Item { Layout.fillWidth: true }
                         IconButton { iconName: root.muted ? "volume_off" : "volume_up"; label: root.muted ? I18n.t("打开声音") : I18n.t("静音"); onClicked: root.muted = !root.muted }
