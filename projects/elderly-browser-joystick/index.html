@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f7fb">
+  <title>安心浏览 · 方向轮盘</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="src/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#home" aria-label="安心浏览首页"><span class="brand-mark" aria-hidden="true">安</span><span>安心浏览</span></a>
+    <div class="accessibility" aria-label="适老化显示设置">
+      <button id="font-toggle" class="utility-button" type="button" aria-pressed="false">大字</button>
+      <button id="contrast-toggle" class="utility-button" type="button" aria-pressed="false">高对比</button>
+    </div>
+  </header>
+  <main id="home">
+    <section class="welcome" aria-labelledby="welcome-title">
+      <p class="eyebrow">简单 · 清楚 · 好操作</p>
+      <h1 id="welcome-title">慢慢浏览，不用着急</h1>
+      <p>试着拖动右下角的方向轮盘，网页会按方向平稳滚动。</p>
+      <a class="jump-link" href="#reading">从这里开始阅读 <span aria-hidden="true">↓</span></a>
+    </section>
+    <section class="reading" id="reading" aria-labelledby="reading-title">
+      <h2 id="reading-title">今日生活小贴士</h2>
+      <article class="story" tabindex="0">
+        <h3>出门前，记得带上常用物品</h3>
+        <p>钥匙、手机和门卡可以放在固定的位置。出门前从容检查一遍，会让一天有个安心的开始。</p>
+        <p>如果页面内容很多，可以按住方向轮盘，再向上或向下拖动。拖得越远，滚动越快；松开手指，滚动马上停止。</p>
+      </article>
+      <div class="sample-scroll" tabindex="0" aria-label="可单独滚动的小贴士列表">
+        <p class="sample-label">这块内容也可以单独滚动</p>
+        <ul>
+          <li>喝水时小口慢饮，记得照顾好自己。</li>
+          <li>出门过马路时留意信号灯和来往车辆。</li>
+          <li>遇到不熟悉的网页，可以先停下来仔细看看。</li>
+          <li>需要休息时，随时松开轮盘即可停止。</li>
+          <li>大字和高对比模式可以通过顶部按钮开启。</li>
+        </ul>
+      </div>
+      <article class="story" tabindex="0">
+        <h3>让手机字体更容易阅读</h3>
+        <p>清楚易读的文字能减轻眼睛负担。使用“大字”按钮可以放大页面文字；再次点击就会恢复。</p>
+        <p>使用“高对比”按钮可以增强文字和背景的对比，让页面内容更醒目。</p>
+      </article>
+      <article class="story last-story" tabindex="0">
+        <h3>方向轮盘使用说明</h3>
+        <p>轮盘分为上、下、左、右四个方向。触摸中心附近不会滚动，往外拖动开始滚动，拖动方向对应页面内容方向。</p>
+        <p>键盘用户也可以先聚焦轮盘，再用方向键控制页面滚动；按 Escape 停止。</p>
+      </article>
+    </section>
+  </main>
+  <p id="live-status" class="visually-hidden" role="status" aria-live="polite">方向轮盘已就绪</p>
+  <aside class="joystick-dock" aria-label="网页方向控制">
+    <span class="joystick-hint" aria-hidden="true">按住并拖动<br>松开即停止</span>
+    <div id="joystick" class="joystick" role="application" tabindex="0"
+         aria-label="网页滚动方向轮盘"
+         aria-describedby="joystick-help"
+         aria-description="上、下、左、右四个方向。按住拖动可连续滚动，松开或按 Escape 停止。">
+      <span class="direction direction-up" aria-hidden="true">▲</span>
+      <span class="direction direction-right" aria-hidden="true">▶</span>
+      <span class="direction direction-down" aria-hidden="true">▼</span>
+      <span class="direction direction-left" aria-hidden="true">◀</span>
+      <span class="joystick-knob" aria-hidden="true"></span>
+    </div>
+    <span id="joystick-help" class="visually-hidden">方向键或按住拖动轮盘可滚动网页，松开或按 Escape 停止。</span>
+  </aside>
+</body>
+</html>
