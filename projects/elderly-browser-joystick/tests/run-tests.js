@@ -1,4 +1,5 @@
 import { directionFor, sampleStick, scrollDelta } from "../src/joystick.js";
+import { setJoystickEnabled } from "../src/joystick-toggle.js";
 import { installContextTracking, scrollContext } from "../src/scroll-context.js";
 
 let passed = 0;
@@ -16,6 +17,19 @@ assert(sampleStick(100, 50, { width: 100, height: 100 }).direction === "right", 
 assert(sampleStick(100, 50, { width: 100, height: 100 }).magnitude === 1, "stick magnitude is capped at the wheel edge");
 assert(scrollDelta("down", 1, 50).y === 36, "maximum tick duration is bounded and speed is predictable");
 assert(scrollDelta("left", 1, 16).x < 0 && scrollDelta("up", 1, 16).y < 0, "scroll direction follows selected sector");
+
+const toggleState = { button: { textContent: "", attributes: {}, setAttribute(key, value) { this.attributes[key] = value; } },
+  dock: { hidden: false }, wheel: { tabIndex: 0, attributes: {}, setAttribute(key, value) { this.attributes[key] = value; } },
+  status: { textContent: "" } };
+let stopCalls = 0;
+const controls = { button: toggleState.button, dock: toggleState.dock, wheel: toggleState.wheel, status: toggleState.status };
+setJoystickEnabled(false, controls, () => { stopCalls += 1; });
+assert(toggleState.dock.hidden && toggleState.wheel.tabIndex === -1, "disabling hides the wheel and removes it from keyboard focus");
+assert(toggleState.button.attributes["aria-pressed"] === "false" && toggleState.wheel.attributes["aria-disabled"] === "true", "disabled state is announced accessibly");
+assert(toggleState.button.textContent === "摇杆：关" && stopCalls === 1, "off switch is visible and immediately stops active scrolling");
+setJoystickEnabled(true, controls, () => { stopCalls += 1; });
+assert(!toggleState.dock.hidden && toggleState.wheel.tabIndex === 0, "enabling restores the wheel and keyboard focus");
+assert(toggleState.button.attributes["aria-pressed"] === "true" && toggleState.button.textContent === "摇杆：开", "on switch state is announced and labeled");
 
 function makeDocument() {
   const listeners = {};

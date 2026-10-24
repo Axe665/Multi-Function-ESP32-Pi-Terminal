@@ -1,8 +1,11 @@
 import { sampleStick, scrollDelta } from "./joystick.js";
 import { installContextTracking, scrollContext } from "./scroll-context.js";
+import { setJoystickEnabled } from "./joystick-toggle.js";
 
 const wheel = document.querySelector("#joystick");
+const dock = document.querySelector("#joystick-dock");
 const status = document.querySelector("#live-status");
+const joystickToggle = document.querySelector("#joystick-toggle");
 const fontToggle = document.querySelector("#font-toggle");
 const contrastToggle = document.querySelector("#contrast-toggle");
 let pointerId = null;
@@ -23,6 +26,11 @@ function stop() {
   delete wheel.dataset.direction;
   status.textContent = "方向轮盘已停止";
 }
+
+joystickToggle.addEventListener("click", () => {
+  const enabled = joystickToggle.getAttribute("aria-pressed") !== "true";
+  setJoystickEnabled(enabled, { button: joystickToggle, dock, wheel, status }, stop);
+});
 
 function updatePointer(event) {
   const rect = wheel.getBoundingClientRect();

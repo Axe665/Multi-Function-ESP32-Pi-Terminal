@@ -50,6 +50,7 @@ h2 { margin: 0 0 2px; font-size: 1.65rem; }
 .sample-scroll ul { margin: 0; padding-left: 24px; }
 .sample-scroll li { padding: 2px 0; }
 .joystick-dock { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 5; display: grid; justify-items: center; gap: 8px; }
+.joystick-dock[hidden] { display: none; }
 .joystick-hint { padding: 5px 10px; border-radius: 9px; background: #172235; color: white; text-align: center; font-size: .78rem; line-height: 1.4; }
 .joystick {
   --size: clamp(156px, 28vw, 196px);
@@ -83,5 +84,9 @@ body.high-contrast .joystick { border-width: 3px; background: conic-gradient(fro
   main { padding-right: 16px; padding-left: 16px; }
   .story, .sample-scroll { padding: 18px; }
   .joystick { --size: clamp(148px, 40vw, 176px); }
+}
+@media (max-width: 390px) {
+  .topbar { flex-wrap: wrap; }
+  .accessibility { width: 100%; justify-content: flex-end; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }

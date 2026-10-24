@@ -12,6 +12,7 @@
   <header class="topbar">
     <a class="brand" href="#home" aria-label="安心浏览首页"><span class="brand-mark" aria-hidden="true">安</span><span>安心浏览</span></a>
     <div class="accessibility" aria-label="适老化显示设置">
+      <button id="joystick-toggle" class="utility-button" type="button" aria-pressed="true" aria-controls="joystick-dock">摇杆：开</button>
       <button id="font-toggle" class="utility-button" type="button" aria-pressed="false">大字</button>
       <button id="contrast-toggle" class="utility-button" type="button" aria-pressed="false">高对比</button>
     </div>
@@ -53,7 +54,7 @@
     </section>
   </main>
   <p id="live-status" class="visually-hidden" role="status" aria-live="polite">方向轮盘已就绪</p>
-  <aside class="joystick-dock" aria-label="网页方向控制">
+  <aside id="joystick-dock" class="joystick-dock" aria-label="网页方向控制">
     <span class="joystick-hint" aria-hidden="true">按住并拖动<br>松开即停止</span>
     <div id="joystick" class="joystick" role="application" tabindex="0"
          aria-label="网页滚动方向轮盘"
