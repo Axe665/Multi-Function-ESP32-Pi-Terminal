@@ -18,8 +18,16 @@ export function sampleStick(pointerX, pointerY, bounds, deadZone = DEAD_ZONE) {
   return { direction, magnitude, strength };
 }
 
-export function scrollDelta(direction, strength, elapsedMs, speed = 720) {
-  const distance = Math.max(0, Math.min(50, elapsedMs)) / 1000 * speed * Math.max(0, Math.min(1, strength));
+export function getZoomFactor(windowRef = window, baselinePixelRatio = windowRef.devicePixelRatio || 1) {
+  const pixelRatio = windowRef.devicePixelRatio || baselinePixelRatio;
+  const browserZoom = pixelRatio / Math.max(0.1, baselinePixelRatio);
+  const pinchZoom = windowRef.visualViewport?.scale || 1;
+  return Math.max(0.1, browserZoom * pinchZoom);
+}
+
+export function scrollDelta(direction, strength, elapsedMs, speed = 720, zoomFactor = 1) {
+  const zoom = Number.isFinite(zoomFactor) ? Math.max(0.1, zoomFactor) : 1;
+  const distance = Math.max(0, Math.min(50, elapsedMs)) / 1000 * speed * Math.max(0, Math.min(1, strength)) / zoom;
   switch (direction) {
     case "up": return { x: 0, y: -distance };
     case "down": return { x: 0, y: distance };

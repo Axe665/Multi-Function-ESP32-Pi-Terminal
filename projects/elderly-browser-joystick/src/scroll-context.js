@@ -1,5 +1,11 @@
 const trackingKey = "__calmBrowseJoystickContext";
 
+export function setScrollContext(element, documentRef = document) {
+  if (!documentRef[trackingKey]) documentRef[trackingKey] = { element: null, focusedAtPointer: null };
+  documentRef[trackingKey].element = element;
+  documentRef[trackingKey].focusedAtPointer = documentRef.activeElement;
+}
+
 export function installContextTracking(documentRef = document) {
   function install(doc) {
     if (!doc || doc[trackingKey]) return;

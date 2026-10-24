@@ -1,6 +1,8 @@
-import { sampleStick, scrollDelta } from "./joystick.js";
-import { installContextTracking, scrollContext } from "./scroll-context.js";
+import { getZoomFactor, sampleStick, scrollDelta } from "./joystick.js";
+import { installContextTracking, scrollContext, setScrollContext } from "./scroll-context.js";
 import { setJoystickEnabled } from "./joystick-toggle.js";
+import { activateBrowserTab } from "./browser-tabs.js";
+import { installStopHandlers } from "./stop-on-navigation.js";
 
 const wheel = document.querySelector("#joystick");
 const dock = document.querySelector("#joystick-dock");
@@ -8,6 +10,10 @@ const status = document.querySelector("#live-status");
 const joystickToggle = document.querySelector("#joystick-toggle");
 const fontToggle = document.querySelector("#font-toggle");
 const contrastToggle = document.querySelector("#contrast-toggle");
+const tabs = [...document.querySelectorAll('[role="tab"]')].map((button) => ({
+  id: button.getAttribute("aria-controls"), button, panel: document.getElementById(button.getAttribute("aria-controls")),
+}));
+const baselinePixelRatio = window.devicePixelRatio || 1;
 let pointerId = null;
 let direction = null;
 let strength = 0;
@@ -25,6 +31,18 @@ function stop() {
   previousTime = 0;
   delete wheel.dataset.direction;
   status.textContent = "方向轮盘已停止";
+}
+
+for (const tab of tabs) {
+  tab.button.addEventListener("click", () => activateBrowserTab(tabs, tab.id, stop, (panel) => setScrollContext(panel)));
+  tab.button.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const index = tabs.indexOf(tab);
+    const next = tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+    activateBrowserTab(tabs, next.id, stop, (panel) => setScrollContext(panel));
+    next.button.focus();
+  });
 }
 
 joystickToggle.addEventListener("click", () => {
@@ -45,7 +63,7 @@ function animate(time) {
   if (pointerId === null || !direction) { frame = 0; return; }
   const elapsed = previousTime ? time - previousTime : 16;
   previousTime = time;
-  const delta = scrollDelta(direction, strength, elapsed);
+  const delta = scrollDelta(direction, strength, elapsed, 720, getZoomFactor(window, baselinePixelRatio));
   scrollContext(delta.x, delta.y);
   frame = requestAnimationFrame(animate);
 }
@@ -76,12 +94,11 @@ wheel.addEventListener("keydown", (event) => {
   if (!keys[event.key]) return;
   event.preventDefault();
   const directionKey = keys[event.key];
-  const delta = scrollDelta(directionKey, 0.65, 50);
+  const delta = scrollDelta(directionKey, 0.65, 50, 720, getZoomFactor(window, baselinePixelRatio));
   scrollContext(delta.x * 1.5, delta.y * 1.5);
   status.textContent = `已向${{ up: "上", down: "下", left: "左", right: "右" }[directionKey]}滚动`;
 });
-window.addEventListener("blur", stop);
-document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
+installStopHandlers(window, document, stop);
 fontToggle.addEventListener("click", () => {
   const enabled = document.body.classList.toggle("large-text");
   fontToggle.setAttribute("aria-pressed", String(enabled));

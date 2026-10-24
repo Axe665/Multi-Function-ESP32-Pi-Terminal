@@ -18,6 +18,11 @@
     </div>
   </header>
   <main id="home">
+    <div class="browser-tabs" role="tablist" aria-label="浏览器标签页">
+      <button id="tab-life" class="browser-tab" type="button" role="tab" aria-selected="true" aria-controls="page-life" tabindex="0">生活小贴士</button>
+      <button id="tab-help" class="browser-tab" type="button" role="tab" aria-selected="false" aria-controls="page-help" tabindex="-1">使用说明</button>
+    </div>
+    <section id="page-life" class="tab-page" role="tabpanel" aria-labelledby="tab-life">
     <section class="welcome" aria-labelledby="welcome-title">
       <p class="eyebrow">简单 · 清楚 · 好操作</p>
       <h1 id="welcome-title">慢慢浏览，不用着急</h1>
@@ -51,6 +56,13 @@
         <p>轮盘分为上、下、左、右四个方向。触摸中心附近不会滚动，往外拖动开始滚动，拖动方向对应页面内容方向。</p>
         <p>键盘用户也可以先聚焦轮盘，再用方向键控制页面滚动；按 Escape 停止。</p>
       </article>
+    </section>
+    </section>
+    <section id="page-help" class="tab-page help-page" role="tabpanel" aria-labelledby="tab-help" hidden>
+      <h1>使用说明</h1>
+      <article class="story"><h2>方向轮盘</h2><p>按住轮盘并向上、下、左、右拖动，网页就会跟随方向滚动。拖动幅度控制速度，中心死区可避免误触。松开手指、切换标签或离开页面都会立即停止。</p></article>
+      <article class="story"><h2>网页缩放</h2><p>轮盘会根据浏览器缩放和屏幕放大比例校正滚动速度，保持操作幅度自然。</p></article>
+      <article class="story"><h2>独立滚动区域</h2><p>先让鼠标或触摸经过要滚动的内容区域。滚动到区域边缘后，剩余滚动量会传给外层页面；遵守网页本身的边界设置。</p></article>
     </section>
   </main>
   <p id="live-status" class="visually-hidden" role="status" aria-live="polite">方向轮盘已就绪</p>
