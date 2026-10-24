@@ -87,6 +87,11 @@ installContextTracking(doc);
 assert(installedListenerCount === 4 && Object.keys(listeners).length === installedListenerCount,
   "context tracking installs safely and idempotently");
 listeners.pointermove({ target, composedPath: () => [target] });
+const wheelNode = { id: "joystick", closest: () => ({ id: "joystick-dock" }) };
+listeners.pointerdown({ target: wheelNode, composedPath: () => [wheelNode, { id: "joystick-dock" }] });
+listeners.focusin({ target: wheelNode, composedPath: () => [wheelNode, { id: "joystick-dock" }] });
+assert(doc.__calmBrowseJoystickContext.element === target,
+  "dragging/focusing the overlay wheel preserves the page's last scroll context");
 const alternateContext = makeElement("DIV", page, { overflowX: "auto", overflowY: "auto" }, 50, 50);
 setScrollContext(alternateContext, doc);
 assert(scrollContext(0, 10, doc).y === 10 && alternateContext.scrollTop === 10,
@@ -103,4 +108,28 @@ target.scrollTop = 0; page.scrollTop = 0;
 scrollContext(0, 50, doc);
 assert(page.scrollTop === 0, "overscroll containment is respected");
 assert(scrollContext(Number.NaN, 2, doc).x === 0, "invalid movement is safely ignored");
+
+const textarea = makeElement("TEXTAREA", page, { overflowX: "auto", overflowY: "auto" }, 0, 80);
+setScrollContext(textarea, doc);
+assert(scrollContext(0, 20, doc).y === 20 && textarea.scrollTop === 20, "textarea is supported as the active scroll context");
+
+const shadowHost = makeElement("DIV", page, { overflowX: "hidden", overflowY: "auto" }, 0, 80);
+const shadowChild = makeElement("SPAN", null, { overflowX: "hidden", overflowY: "hidden" }, 0, 0);
+shadowChild.getRootNode = () => ({ host: shadowHost });
+setScrollContext(shadowChild, doc);
+assert(scrollContext(0, 20, doc).y === 20 && shadowHost.scrollTop === 20, "scroll traversal crosses an open shadow-root host");
+
+const { doc: frameDoc, target: frameTarget } = makeDocument();
+setScrollContext(frameTarget, frameDoc);
+const sameOriginFrame = makeElement("IFRAME", page, { overflowX: "hidden", overflowY: "hidden" }, 0, 0);
+sameOriginFrame.contentDocument = frameDoc;
+setScrollContext(sameOriginFrame, doc);
+assert(scrollContext(0, 20, doc).y === 20 && frameTarget.scrollTop === 20, "same-origin iframe context can be scrolled");
+
+const crossOriginFrame = makeElement("IFRAME", page, { overflowX: "hidden", overflowY: "hidden" }, 0, 0);
+Object.defineProperty(crossOriginFrame, "contentDocument", { get() { throw new Error("cross-origin access denied"); } });
+page.scrollTop = 0;
+setScrollContext(crossOriginFrame, doc);
+assert(scrollContext(0, 20, doc).y === 20 && page.scrollTop === 20,
+  "cross-origin iframe remains inaccessible and outer-page fallback stays safe");
 print(`\n${passed} checks passed.`);

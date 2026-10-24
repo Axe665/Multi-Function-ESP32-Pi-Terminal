@@ -7,17 +7,24 @@ export function setScrollContext(element, documentRef = document) {
 }
 
 export function installContextTracking(documentRef = document) {
+  function isJoystickControl(event) {
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [event.target];
+    return path.some((node) => node?.id === "joystick-dock" || node?.closest?.("#joystick-dock"));
+  }
   function install(doc) {
     if (!doc || doc[trackingKey]) return;
     doc[trackingKey] = { element: null, focusedAtPointer: null };
     const remember = (event) => {
+      if (isJoystickControl(event)) return;
       const path = typeof event.composedPath === "function" ? event.composedPath() : [];
       doc[trackingKey].element = path[0] || event.target;
       doc[trackingKey].focusedAtPointer = doc.activeElement;
     };
     doc.addEventListener("pointermove", remember, { passive: true });
     doc.addEventListener("pointerdown", remember, { passive: true });
-    doc.addEventListener("focusin", (event) => { doc[trackingKey].element = event.target; }, { passive: true });
+    doc.addEventListener("focusin", (event) => {
+      if (!isJoystickControl(event)) doc[trackingKey].element = event.target;
+    }, { passive: true });
     doc.addEventListener("load", () => installFrames(doc), true);
     installFrames(doc);
   }

@@ -64,7 +64,12 @@ function animate(time) {
   const elapsed = previousTime ? time - previousTime : 16;
   previousTime = time;
   const delta = scrollDelta(direction, strength, elapsed, 720, getZoomFactor(window, baselinePixelRatio));
-  scrollContext(delta.x, delta.y);
+  try {
+    scrollContext(delta.x, delta.y);
+  } catch {
+    stop();
+    return;
+  }
   frame = requestAnimationFrame(animate);
 }
 
