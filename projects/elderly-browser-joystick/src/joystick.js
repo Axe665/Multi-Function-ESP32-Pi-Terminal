@@ -9,13 +9,15 @@ export function directionFor(x, y) {
 
 export function sampleStick(pointerX, pointerY, bounds, deadZone = DEAD_ZONE) {
   const radius = Math.min(bounds.width, bounds.height) * 0.3;
-  if (!(radius > 0)) return { direction: null, magnitude: 0, strength: 0 };
+  if (!(radius > 0)) return { direction: null, magnitude: 0, strength: 0, offsetX: 0, offsetY: 0 };
   const dx = (pointerX - bounds.width / 2) / radius;
   const dy = (pointerY - bounds.height / 2) / radius;
-  const magnitude = Math.min(1, Math.hypot(dx, dy));
+  const rawMagnitude = Math.hypot(dx, dy);
+  const magnitude = Math.min(1, rawMagnitude);
+  const limit = rawMagnitude > 1 ? 1 / rawMagnitude : 1;
   const direction = magnitude <= deadZone ? null : directionFor(dx, dy);
   const strength = direction ? Math.max(0, (magnitude - deadZone) / (1 - deadZone)) : 0;
-  return { direction, magnitude, strength };
+  return { direction, magnitude, strength, offsetX: dx * limit, offsetY: dy * limit };
 }
 
 export function getZoomFactor(windowRef = window, baselinePixelRatio = windowRef.devicePixelRatio || 1) {

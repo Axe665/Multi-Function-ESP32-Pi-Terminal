@@ -30,6 +30,8 @@ function stop() {
   strength = 0;
   previousTime = 0;
   delete wheel.dataset.direction;
+  wheel.style.setProperty("--knob-x", "0%");
+  wheel.style.setProperty("--knob-y", "0%");
   status.textContent = "方向轮盘已停止";
 }
 
@@ -55,6 +57,8 @@ function updatePointer(event) {
   const sample = sampleStick(event.clientX - rect.left, event.clientY - rect.top, rect);
   direction = sample.direction;
   strength = sample.strength;
+  wheel.style.setProperty("--knob-x", `${sample.offsetX * 30}%`);
+  wheel.style.setProperty("--knob-y", `${sample.offsetY * 30}%`);
   if (direction) wheel.dataset.direction = direction;
   else delete wheel.dataset.direction;
 }

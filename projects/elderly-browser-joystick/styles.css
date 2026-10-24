@@ -72,12 +72,8 @@ h2 { margin: 0 0 2px; font-size: 1.65rem; }
 .direction-right { top: calc(50% - 15px); right: 7%; }
 .direction-down { bottom: 7%; left: calc(50% - 15px); }
 .direction-left { top: calc(50% - 15px); left: 7%; }
-.joystick-knob { position: absolute; z-index: 3; top: 50%; left: 50%; width: 36%; height: 36%; transform: translate(-50%, -50%); border: 3px solid white; border-radius: 50%; background: #1756a9; box-shadow: 0 3px 10px #17223555; pointer-events: none; }
+.joystick-knob { position: absolute; z-index: 3; top: calc(50% + var(--knob-y, 0%)); left: calc(50% + var(--knob-x, 0%)); width: 36%; height: 36%; transform: translate(-50%, -50%); border: 3px solid white; border-radius: 50%; background: #1756a9; box-shadow: 0 3px 10px #17223555; pointer-events: none; }
 .joystick[data-direction] .joystick-knob { background: #0b3977; }
-.joystick[data-direction="up"] .joystick-knob { top: 34%; }
-.joystick[data-direction="right"] .joystick-knob { left: 66%; }
-.joystick[data-direction="down"] .joystick-knob { top: 66%; }
-.joystick[data-direction="left"] .joystick-knob { left: 34%; }
 body.large-text { font-size: 22px; }
 body.high-contrast { --surface: #fff; --ink: #050505; --muted: #111; --accent: #003b8e; --line: #111; --wheel: #fff; color: #050505; background: #fff; }
 body.high-contrast .joystick { border-width: 3px; background: conic-gradient(from -45deg, #fff 0deg 90deg, #d6e5ff 90deg 180deg, #fff 180deg 270deg, #d6e5ff 270deg 360deg); }

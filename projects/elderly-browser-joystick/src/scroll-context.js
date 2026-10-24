@@ -53,9 +53,11 @@ export function scrollContext(dx, dy, documentRef = document) {
   if (!Number.isFinite(dx) || !Number.isFinite(dy)) return { x: 0, y: 0 };
   let doc = documentRef;
   let element = contextElement(doc);
+  const frameAncestors = [];
   for (let depth = 0; element && depth < 8 && /^(IFRAME|FRAME)$/.test(element.tagName); depth += 1) {
     try {
       if (!element.contentDocument) break;
+      frameAncestors.push({ document: doc, frame: element });
       doc = element.contentDocument;
       element = contextElement(doc);
     } catch { break; }
@@ -79,6 +81,11 @@ export function scrollContext(dx, dy, documentRef = document) {
     if (element.parentElement) element = element.parentElement;
     else if (typeof element.getRootNode === "function" && element.getRootNode().host) element = element.getRootNode().host;
     else if (element !== doc.scrollingElement) element = doc.scrollingElement;
+    else if (frameAncestors.length) {
+      const ancestor = frameAncestors.pop();
+      doc = ancestor.document;
+      element = ancestor.frame;
+    }
     else break;
   }
   return { x: movedX, y: movedY };

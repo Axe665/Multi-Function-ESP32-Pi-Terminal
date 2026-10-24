@@ -15,8 +15,15 @@ assert(directionFor(1, 0) === "right" && directionFor(-1, 0) === "left", "horizo
 assert(directionFor(0, -1) === "up" && directionFor(0, 1) === "down", "vertical sectors map to up/down");
 assert(directionFor(1, -1) === "right" && directionFor(1, 1) === "right", "diagonal sectors resolve to one cardinal direction");
 assert(sampleStick(50, 50, { width: 100, height: 100 }).direction === null, "center dead zone prevents accidental scroll");
-assert(sampleStick(100, 50, { width: 100, height: 100 }).direction === "right", "outer wheel activates its direction");
-assert(sampleStick(100, 50, { width: 100, height: 100 }).magnitude === 1, "stick magnitude is capped at the wheel edge");
+const rightSample = sampleStick(80, 50, { width: 100, height: 100 });
+assert(rightSample.direction === "right", "right wheel sector activates right scrolling");
+assert(rightSample.magnitude === 1 && rightSample.offsetX === 1 && rightSample.offsetY === 0,
+  "stick position reaches but never exceeds the wheel edge");
+const shortDrag = sampleStick(65, 50, { width: 100, height: 100 });
+assert(Math.abs(shortDrag.offsetX - 0.5) < 1e-9, "stick knob position reflects drag distance continuously");
+const diagonalSample = sampleStick(70, 30, { width: 100, height: 100 });
+assert(diagonalSample.direction === "right" && diagonalSample.offsetX > 0 && diagonalSample.offsetY < 0,
+  "visual knob follows diagonal input while scrolling stays in one cardinal sector");
 assert(scrollDelta("down", 1, 50).y === 36, "maximum tick duration is bounded and speed is predictable");
 assert(scrollDelta("left", 1, 16).x < 0 && scrollDelta("up", 1, 16).y < 0, "scroll direction follows selected sector");
 assert(getZoomFactor({ devicePixelRatio: 2 }, 1) === 2, "browser zoom factor follows device-pixel-ratio changes");
@@ -109,6 +116,22 @@ scrollContext(0, 50, doc);
 assert(page.scrollTop === 0, "overscroll containment is respected");
 assert(scrollContext(Number.NaN, 2, doc).x === 0, "invalid movement is safely ignored");
 
+const focusedContext = makeElement("TEXTAREA", page, { overflowX: "auto", overflowY: "auto" }, 0, 50);
+setScrollContext(target, doc);
+doc.activeElement = focusedContext;
+assert(scrollContext(0, 10, doc).y === 10 && focusedContext.scrollTop === 10,
+  "a newly focused scrollable element takes priority over an older pointer context");
+doc.activeElement = null;
+
+const fallbackFixture = makeDocument();
+installContextTracking(fallbackFixture.doc);
+fallbackFixture.doc.activeElement = fallbackFixture.doc.body;
+assert(scrollContext(0, 10, fallbackFixture.doc).y === 10 && fallbackFixture.target.scrollTop === 10,
+  "missing page context falls back to the viewport center");
+fallbackFixture.doc.elementFromPoint = () => null;
+assert(scrollContext(0, 10, fallbackFixture.doc).y === 10 && fallbackFixture.page.scrollTop === 10,
+  "empty viewport-center hit falls back to whole-page scrolling");
+
 const textarea = makeElement("TEXTAREA", page, { overflowX: "auto", overflowY: "auto" }, 0, 80);
 setScrollContext(textarea, doc);
 assert(scrollContext(0, 20, doc).y === 20 && textarea.scrollTop === 20, "textarea is supported as the active scroll context");
@@ -119,12 +142,18 @@ shadowChild.getRootNode = () => ({ host: shadowHost });
 setScrollContext(shadowChild, doc);
 assert(scrollContext(0, 20, doc).y === 20 && shadowHost.scrollTop === 20, "scroll traversal crosses an open shadow-root host");
 
-const { doc: frameDoc, target: frameTarget } = makeDocument();
+const { doc: frameDoc, page: framePage, target: frameTarget } = makeDocument();
 setScrollContext(frameTarget, frameDoc);
 const sameOriginFrame = makeElement("IFRAME", page, { overflowX: "hidden", overflowY: "hidden" }, 0, 0);
 sameOriginFrame.contentDocument = frameDoc;
 setScrollContext(sameOriginFrame, doc);
 assert(scrollContext(0, 20, doc).y === 20 && frameTarget.scrollTop === 20, "same-origin iframe context can be scrolled");
+frameTarget.scrollTop = 100;
+framePage.scrollTop = 1000;
+page.scrollTop = 0;
+setScrollContext(sameOriginFrame, doc);
+assert(scrollContext(0, 20, doc).y === 20 && page.scrollTop === 20,
+  "remaining movement crosses a same-origin iframe boundary to the outer page");
 
 const crossOriginFrame = makeElement("IFRAME", page, { overflowX: "hidden", overflowY: "hidden" }, 0, 0);
 Object.defineProperty(crossOriginFrame, "contentDocument", { get() { throw new Error("cross-origin access denied"); } });
