@@ -13,18 +13,21 @@
 
 ---
 
-## 0. 分工与交付边界
+## 0. 范围与分工
 
-**软件不为固件未就绪留降级路径。** D 按本文件完整实现，桥板侧四项未完成时（二进制发送入口、桥板签名、`hello_ok.uptime_ms`、命令上限 512），握手**就是会失败**。这是预期行为：失败可见、可诊断，不会假装安全。禁止为"暂时连不上"加明文 fallback——那正是 f-day1 §4.1 明令禁止的降级。
+**本文件只约束 Pi 终端软件。** ESP 固件不在本文件范围内，也不由本文件派活。
 
-| 交付物 | 归属 | 说明 |
+| 角色 | 范围 | 与本文的关系 |
 |---|---|---|
-| 本规范、`vectors.json`、`mbedtls_check.c` | **D**（签认后拥有） | 任何字节布局变更须 D 提、F 审 |
-| Pi 侧 C++ 实现 | **D** | `PbrSession` / `ReplayGuard` / `EventAckManager` / 事件校验 |
-| ESP 侧 C 实现 | **L** | NVS 身份、桥板签名、AEAD 状态机、二进制发送路径 |
-| 两侧一致性 | **D 提供工具，L 执行** | L 必须在 ESP 上跑同一份 `vectors.json`，结果贴 PR |
+| **D** | 本规范、向量、一致性工具、Pi 侧全部实现 | 签认后拥有本文；字节布局变更由 D 提、F 审 |
+| **Z** | 用户 / PIN / 会话 / SQLCipher / worker 隔离 | 消费本文的身份与事件字段，不实现协议 |
+| **L** | ESP 固件 | **等软件侧完成后再对接**。本文只写"桥板必须满足的行为"，不派发固件任务，也不规定固件怎么实现 |
 
-**D 不需要为 ESP 固件写代码，也不许改 ESP 仓库。** 跨仓对齐只靠本文与向量，不靠口头约定。本文对 ESP 侧的要求都写在 §3～§6 的行为条款里，L 按条款实现，不按 Pi 代码反推。
+**软件不为固件现状让步。** D 按本文件完整实现。固件侧尚未具备相应能力时，握手**就是会失败**——这是预期状态，不是软件的缺陷。失败必须可见、可诊断。
+
+**禁止为"暂时连不上"加明文 fallback。** 那正是 f-day1 §4.1 明令禁止的降级。软件侧唯一的合法行为是：按规范实现，连不上就报错。
+
+**固件侧需要满足什么，由 L 在软件完成后自行对照本文推导。** 本文在行为层面写清了要求（二进制载荷、桥板签名、单调时间基准、命令体积），够 L 开工，不需要本文替他设计实现。
 
 ---
 
@@ -40,16 +43,18 @@
 
 **为什么不是 Ed25519**：ESP-IDF 5.5.4 的 mbedtls 3.6.5 经典 API 不含 Ed25519（只有 PSA 层）；Qt 也不提供。ECDSA P-256 两端都有现成实现。
 
-**必须显式打开的编译开关**（均 `default n`，且**存在依赖关系**）：
+**mbedtls 必须启用的能力**（算法前提，两端都适用）：ChaCha20、Poly1305、ChaCha20-Poly1305 AEAD、HKDF-SHA256、ECDH、ECDSA P-256、Curve25519、SHA-256。
+
+其中 AEAD 与 HKDF 在 mbedtls 默认配置里**是关的**，必须显式打开：
 
 ```text
-CONFIG_MBEDTLS_CHACHA20_C=y        # 前置，否则下一行被静默丢弃
-CONFIG_MBEDTLS_POLY1305_C=y        # 前置
-CONFIG_MBEDTLS_CHACHAPOLY_C=y      # 依赖上面两个
-CONFIG_MBEDTLS_HKDF_C=y
+MBEDTLS_CHACHA20_C          # 前置
+MBEDTLS_POLY1305_C          # 前置
+MBEDTLS_CHACHAPOLY_C        # 依赖上面两个
+MBEDTLS_HKDF_C
 ```
 
-**实测教训**：只写 `CONFIG_MBEDTLS_CHACHAPOLY_C=y` 时，Espressif 的 Kconfig 会**静默丢弃**该项（不报错，`sdkconfig` 里根本不出现），固件照样编译成功，运行时 AEAD 不可用。必须四个一起写。
+> **给远端的一条实测提醒（不是本仓库的任务）**：在 ESP-IDF 的 Kconfig 里只写 `CHACHAPOLY` 一项会被**静默丢弃**——不报错、`sdkconfig` 里不出现、固件照样编译成功，运行时 AEAD 不可用；必须四项一起写。这条记在这里是为了让将来对接的人不必重踩，不构成对本仓库的交付要求。
 
 X25519 走 `MBEDTLS_ECP_DP_CURVE25519_ENABLED` 与 `MBEDTLS_ECDH_C`；ECDSA P-256 走 `MBEDTLS_ECDSA_C` + `MBEDTLS_ECP_DP_SECP256R1_ENABLED`（均默认 y）。
 
@@ -109,7 +114,9 @@ record = { bridge_id, public_key(65B), fingerprint(8B), enrolled_at, revoked_at 
 | `hello_finish` | Pi → 桥板 | 0 | **2** (ControlCommand) | 明文 JSON |
 | `hello_ok` | 桥板 → Pi | 1 | **1** (ControlEvent) | **AEAD 信封**（`k_handshake`） |
 
-桥板 `pbr_poll_control` 硬性丢弃 `rx[4] != 0 || rx[5] != 2`，即它**只接收 Pi 发来的 ControlCommand**；桥板自己只用 `pbr_send_frame(1, ...)` 发 ControlEvent。Pi 侧 `PogoControlTransport::readAvailable` 同样只处理 `direction==1` 的帧。因此握手不能"全部用 kind=1"。
+方向不对称是**协议要求**，不是某一版实现的巧合：桥板的命令入口只接受 `direction=0` 且 `kind=2` 的帧，而桥板自身只以 `direction=1` 发事件；Pi 侧同样只处理 `direction=1` 的帧。
+
+因此握手**不能"全部用 kind=1"**：Pi 发的三条必须是 ControlCommand（`kind=2`），桥板回的两条必须是 ControlEvent（`kind=1`）。任何一侧按"握手也是事件"实现，都会在第一步被对端的帧头检查丢弃，且不会有错误帧。
 
 三条明文握手消息的 payload 是 JSON，`schema="pbr-handshake-v1"`：
 
@@ -206,7 +213,21 @@ age < 0 或 age > 3000 → EVENT_EXPIRED
 
 **`hello_ok` 是唯一使用 `k_handshake` 的帧。** 之后的业务事件用 `k_pi_to_bridge` / `k_bridge_to_pi`。
 
-### 3.6 时序、超时与重传
+### 3.6 握手消息的体积
+
+三条明文消息是定长体 + hex，落地成 JSON 后的实际字节数：
+
+| 消息 | 定长体 | JSON 实测 | 说明 |
+|---|---|---|---|
+| `hello_req` | 50 | 157 | |
+| `hello_resp` | 55 + 64 签名 | 305 | 含桥板签名 |
+| `hello_finish` | 66 + 64 签名 | **329** | |
+
+**桥板的命令接收路径必须能容纳 329 字节（含 JSON 开销），并以帧头 `length` 为准判断合法性。** 若桥板对命令方向另有小于 329 字节的上限，`hello_finish` 会被当成坏帧丢弃，握手停在第 2 步，且不会有任何错误帧——这类失败最难定位，因为两侧日志都"看起来正常"。
+
+本规范不规定桥板用什么常量，只要求：**任何合法长度的 PBR1 帧（≤2048）都不得被静默丢弃**；确需拒绝时必须回错误帧。
+
+### 3.7 时序、超时与重传
 
 | 阶段 | 谁在等 | 超时 | 重试 | 超时后 |
 |---|---|---|---|---|
@@ -260,7 +281,7 @@ payload = env_ver(1) || key_id(1) || nonce(12) || ciphertext(N) || tag(16)
 
 **认证前不解 JSON**：先验 `env_ver`、`key_id`、tag，全部通过后才解析 payload。
 
-> **给 L 的实现约束**：桥板现有 `pbr_send_frame(uint8_t kind, const char *json)` 只发 C 字符串，且命令入口有 `memchr(payload, '\0', length)` 检查。密文里必然出现 `0x00`，因此**必须新增一个按长度发送二进制的入口**（例如 `pbr_send_frame_bin(kind, const uint8_t*, size_t)`），并让命令入口对信封帧跳过 NUL 扫描。这条不改，AEAD 在 ESP 上不可能跑通。
+> **载荷是二进制，不是文本。** 信封里必然出现 `0x00` 字节。任何按 C 字符串处理、或以"含 NUL 即非法"为前提的实现，都会把合法密文当成坏帧丢掉。接收侧必须按帧头的 `length` 定长读取，发送侧必须能按长度发送任意字节。这条对两端都成立。
 
 ### 5.2 nonce
 
@@ -298,9 +319,11 @@ AAD = env_ver(1) || key_id(1) || kind(1) || dir(1)
 
 ### 6.1 未认证期
 
-产品构建（`CONFIG_PBR_ISOLATION_BASELINE=n`）在认证完成前只接受 `hello_req`。其他一律回 Error 帧 `authentication required`。
+产品构建在认证完成前只接受 `hello_req`。其他一律回 Error 帧 `authentication required`。
 
-`ping`/`status` 仅 `CONFIG_PBR_ISOLATION_BASELINE=y` 的隔离基线构建可用，**编译期**排除，不是运行时开关。
+`ping`/`status` 这类**未认证诊断**只允许存在于隔离测试构建中，且必须是**编译期**排除，不是运行时开关——运行时开关意味着产品镜像里留着那条明文通道，只等一个配置位。
+
+> 该约束对两端都成立。Pi 侧对应的是"未认证期不接受诊断响应"，桥板侧是怎么编译掉它的，不在本文范围。
 
 ### 6.2 拒绝顺序
 

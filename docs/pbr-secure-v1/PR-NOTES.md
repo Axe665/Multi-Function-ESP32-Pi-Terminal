@@ -1,8 +1,8 @@
 # PR 审核备注：pbr-secure-v1 修订 2 + T-05 控制事件校验
 
 > 分支：`feat/p0-t05-control-schema` → `main`
-> 关联：T-03 / T-05 / T-07 / T-08 / T-12 的**软件部分**；DR-01～DR-14；B-01、B-07
-> 分工：**ESP 固件归 Mr.L**，本 PR 不含任何固件改动
+> 关联：T-03 / T-05 / T-07 / T-08 的**软件部分**；DR-01～DR-14；B-01、B-07
+> 分工：**D/Z 只做软件，L 等软件完成后才动固件**。本 PR 不含任何固件改动
 > 审查记录：`docs/pbr-secure-v1/F-REVIEW-2.md`（F 第二轮，含 D 的完整开发任务书）
 
 ## 1. 这个 PR 做了什么
@@ -10,7 +10,7 @@
 | 项 | 内容 |
 |---|---|
 | 规范 | `pbr-secure-v1.md` 升到**修订 2**：补桥板签名（双向认证）、拆分 `session_id`/`nonce_prefix`、给 TTL 加时间基准、重写 `auth_seq` 规则 |
-| 向量 | 重新生成，含 `hello_ok`、`t2`、桥板签名、13 条反向用例 |
+| 向量 | 重新生成，含 `hello_ok`、`t2`、桥板签名、12 条反向用例 |
 | 一致性工具 | `mbedtls_check.c` 改为 2.28/3.6 公共 API，**两个版本各 7/7 通过** |
 | T-05 | `PbrControl::validate()` + `payloadAcceptable()`：字段校验、重复 key、深度、转义绕过 |
 | 审查 | `F-REVIEW-2.md`：PR #28 复核结论 + D 的开发任务书 + 6 处必改的原因 |
@@ -33,7 +33,7 @@
 | 2 | `key_id` 三种宽度（1 / 8 字节 / "1～64 字符"） | §2.1 定死：1 字节选钥、2 位小写 hex、TrustStore 用完整公钥 SHA-256 前 8 字节 |
 | 3 | `auth_seq` 上限自相矛盾（正文 2⁶⁴−1，拒绝规则 2⁶³） | 严格递增，`0` 与回退都算 `REPLAY`，到上限主动重握手 |
 | 4 | TTL 没有时间基准（握手不带任何时间字段） | `hello_ok` 加 `uptime_ms`，只接受一次，Pi 据此算 `offset` |
-| 5 | ESP 侧没有二进制发送路径 | L 必须新增按长度发送的入口，命令入口对信封帧跳过 NUL 扫描 |
+| 5 | 载荷必须是二进制能承载的 | 信封含 `0x00`，按 C 字符串或"含 NUL 即非法"处理就会丢合法密文 |
 
 ## 3. 修掉的真桥板兼容性缺陷
 
@@ -48,12 +48,12 @@
 | 项 | 命令 | 结果 |
 |---|---|---|
 | 向量稳定 | `python3 docs/pbr-secure-v1/gen_vectors.py` ×2 | 完全一致 |
-| spec ↔ 向量 | 20 项交叉核对（msg 长度、T2/T3 拼接、hash 切片、AAD 六字段、nonce 布局、key_id） | 全部吻合 |
+| spec ↔ 向量 | 49 项交叉核对（msg 长度、T2/T3 拼接与自引用、hash 双切片、AAD 六字段、nonce 布局、key_id、两条签名对象、反向向量覆盖） | 全部吻合 |
 | mbedtls 2.28 | `cc -I<mbedtls-2.28>/include ... -lmbedcrypto` | **7/7 PASS** |
 | mbedtls 3.6.5（IDF 5.5.4 源码，主机编译） | 同上 | **7/7 PASS** |
 | 签名 | Pi 的 T3、桥板的 T2 各用 `r‖s` 独立验签 | 通过 |
 | 反向向量 | 篡改密文/tag/方向密钥/kind/签名、`seq=0`、未知 key_id | 全部按预期拒绝 |
-| Pi 单元测试 | `ctest -R pibridge_protocol` | 通过（32 条断言） |
+| Pi 单元测试 | `ctest -R pibridge_protocol` | 通过（39 条断言，其中 PbrControl 29 条） |
 | 全量构建 | `cmake --build` | 本次改动文件 0 新增警告 |
 
 ### 4.1 `mbedtls_check.c` 之前在 3.6.5 上编译都过不去
@@ -80,29 +80,32 @@ error: 'mbedtls_ecdh_context' has no member named 'd'
 
 按 DR-08：以上均为开发期证据，不得作为实机验收。
 
-## 6. 跨仓依赖（ESP 侧，归 L）
+## 6. 分工：本 PR 不含固件，也不派发固件任务
 
-| 项 | 不改的后果 |
+**D 和 Z 只做软件。L 等软件完成后才开始固件工作。** 本 PR 的 19 个文件全在 `docs/` 与 `pi_terminal/`，**没有一行固件代码**。
+
+固件侧的缺口不由本 PR 负责，也不作为合并条件。软件按完整规范实现后，若固件未具备下列行为，握手会失败——这是**预期结果**，用来证明软件侧做对了，而不是软件缺陷。
+
+| 固件需要具备的行为 | 软件侧的预期观察 |
 |---|---|
-| 二进制发送入口 + 命令入口跳过 NUL 扫描 | 密文含 `0x00`，AEAD 在 ESP 上不可能跑通 |
-| 命令 payload 上限 256 → 512 | `hello_finish` 实测 329 字节，超限被**静默丢弃**，握手停在第二步 |
-| 桥板签名（NVS 私钥） | Pi 无法认证桥板，等于单向认证 |
-| `hello_ok.uptime_ms` | TTL 无时间基准 |
-| `CONFIG_PBR_ISOLATION_BASELINE` | 产品构建无法编译期移除 `ping`/`status` 明文通道 |
+| 命令方向能容纳 329 字节（`hello_finish` 含 JSON 的实测值） | 否则停在第 2 步，且无错误帧 |
+| 命令路径不把"含 NUL"当非法 | 否则密文帧被当坏帧丢弃 |
+| 桥板能对 `T2` 签名 | 否则 Pi 在 `hello_resp` 之后即断连 |
+| `hello_ok` 带 `uptime_ms` | 否则 Pi 拒绝建立 TTL 基准 |
 
-已实测（供 L 参考，不必重做）：隔离基线 y/n 两种配置在 IDF 5.5.4 下均编过，固件 0xc6430 / 0xc6240，分区余量 47%；`CONFIG_MBEDTLS_CHACHAPOLY_C` 单独写会被 Kconfig 静默丢弃，必须连同 `CHACHA20_C`/`POLY1305_C`/`HKDF_C` 四项同写。
+**顺序很重要**：软件侧先把实现与测试做完，用主机侧模拟对端自验；固件跟上后再联调。反过来（先迁就固件现状）会让 Pi 的实现被固件牵着走，并诱出"临时明文 fallback"这类降级路径——f-day1 §4.1 明令禁止。
 
 ## 7. 已知遗留
 
 1. **DR-01 未关闭**：D 尚未技术签认修订 2，B-01 不关闭，T-07 不开工。
 2. **Legacy 明文入口**：schema-less 的 `attach`/`detach` 仍被接受（否则现有桥板全部失联）。**T-07 合入时必须删除该分支及规范 §6.6**，代码里已有到期标记。
-3. **B-07 记为遗留、不阻塞**：只做只读扫描，未改 Git 历史。固件 `0x006984` 含明文 provision（instance/SSID/token/静态 IP），无私钥；token 与公开 archive README 一致。**token 是否仍在役未确认**。按当前优先级（先完成 Pi 终端软件、固件后续开发），本轮不阻塞合并，轮换归固件侧任务。**这是一条未关闭的风险，不是已解决的问题。**
+3. **B-07 记为遗留、不阻塞**：只做只读扫描，未改 Git 历史。固件 `0x006984` 含明文 provision（instance/SSID/token/静态 IP），无私钥；token 与公开 archive README 一致。**token 是否仍在役未确认**。按当前优先级（先完成 Pi 终端软件、固件后续开发），本轮不阻塞合并，轮换属固件侧工作，等软件完成后一并处理。**这是一条未关闭的风险，不是已解决的问题。**
 4. **PR #28 流程问题**：无描述、未留 review 痕迹；内容已在 `00-decisions-for-f.md` §6.5 与 `F-REVIEW-2.md` §1 追认。
 
 ## 8. 审核建议顺序
 
 1. `F-REVIEW-2.md` §2（六处必改的原因）——异议最可能在这里。
-2. `pbr-secure-v1.md` §3.3（桥板签名）与 §3.5（TTL 基准）——修订 2 的新增部分。
+2. `pbr-secure-v1.md` §3.3（桥板签名）与 §3.5（`hello_ok` 与 TTL 基准）——修订 2 的新增部分。
 3. `control_event.cpp` 的 `payloadAcceptable()`——手写扫描器，已知修过一次转义绕过。
 4. 跑 `gen_vectors.py` 两次、两个 mbedtls 版本各跑一次 `mbedtls_check`。
 
@@ -113,8 +116,8 @@ error: 'mbedtls_ecdh_context' has no member named 'd'
 ```
 feat(pbr): spec rev2 with mutual authentication, plus T-05 event validation
 
-任务: T-03/T-05/T-07/T-08/T-12 软件部分；DR-01～DR-14；B-01、B-07
-分工: ESP 固件归 Mr.L，本 PR 无固件改动
+任务: T-03/T-05/T-07/T-08 软件部分（T-12 业务 TLS 另行处理）；DR-01～DR-14；B-01、B-07
+分工: D/Z 只做软件，L 等软件完成后才动固件；本 PR 无固件改动
 
 修订 2 修掉 1 处协议级错误：
 - 修订 1 的握手只有 Pi 签名，桥板身份从未被证明，等于单向认证。
@@ -126,16 +129,16 @@ feat(pbr): spec rev2 with mutual authentication, plus T-05 event validation
 - key_id 三种宽度 -> 1 字节选钥 + 2 位 hex + 完整公钥指纹
 - auth_seq 上限自相矛盾 -> 严格递增，0 与回退都是 REPLAY
 - TTL 无时间基准 -> hello_ok 带 uptime_ms，只接受一次
-- ESP 无二进制发送路径 -> L 必须新增（密文含 0x00 会被 NUL 扫描丢弃）
+- 载荷为二进制：信封含 0x00，不能按 C 字符串处理（对两端都成立）
 
 修掉一个真桥板兼容性缺陷：
 - rfid_card 被要求 module_id/module_instance，但 rfid_service.c 不发这两个字段。
   当前 rfid 在 Pi 侧还没有消费者（T-08 才接），这是下一块多米诺骨牌而不是线上故障。
 
 验收:
-- 向量重跑两次一致；spec 与向量 20 项交叉核对全吻合
+- 向量重跑两次一致；spec 与向量 49 项交叉核对全吻合
 - mbedtls 2.28 与 3.6.5 各 7/7 PASS（修订 1 的检查程序在 3.6.5 上编译失败，已重写）
-- ctest -R pibridge_protocol 通过（32 条断言）
+- ctest -R pibridge_protocol 通过（39 条断言，其中 PbrControl 29 条）
 - 全量构建本次改动文件 0 新增警告
 
 测试命令:
@@ -147,8 +150,9 @@ feat(pbr): spec rev2 with mutual authentication, plus T-05 event validation
 目标硬件: 主机 AMD x86_64（Qt 6.5.3 / mbedtls 2.28 与 3.6.5）
 实机结果: NOT_RUN —— Pi 3B / ESP32-S3 / RC522 / ARM64 交叉编译均未执行
 
-跨仓依赖（归 L）: 二进制发送入口、命令上限 512、桥板签名、hello_ok.uptime_ms、
-隔离基线开关。不改则握手无法完成。
+固件侧当前缺口（不是本 PR 的合并条件）: 命令路径需能容纳 329 字节、
+需能承载二进制载荷、需实现桥板签名与 hello_ok.uptime_ms。软件侧先按完整规范
+实现并自验，固件跟上后再联调。
 
 详细审查见 docs/pbr-secure-v1/F-REVIEW-2.md
 ```
