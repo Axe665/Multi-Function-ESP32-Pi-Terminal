@@ -222,27 +222,34 @@ Item {
                 width: Math.max(240, parent.width - Theme.gap * 2)
                 spacing: Theme.gap / 2
 
+                // ColumnLayout 里要给 Layout.fillWidth + preferredWidth 0，
+                // 只写 width 会被布局忽略，长句不换行、直接冲出卡片。
                 Text {
-                    width: ackColumn.width
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 0
                     text: I18n.t("确认已保存恢复码？")
                     color: Theme.foreground
                     font.pointSize: Theme.title
                     font.weight: Font.Medium
+                    wrapMode: Text.WordWrap
                 }
                 Text {
-                    width: ackColumn.width
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 0
                     text: I18n.t("关闭后恢复码不会再次显示。请确认已经抄写，或已经导出到 U 盘。")
                     color: Theme.warning
                     font.pointSize: Theme.body * 0.85
                     wrapMode: Text.WordWrap
                 }
                 Text {
-                    width: ackColumn.width
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 0
                     text: recoveryAck.cooldown > 0
                           ? I18n.t("冷静期") + " " + recoveryAck.cooldown + " " + I18n.t("秒")
                           : I18n.t("可以确认了")
                     color: recoveryAck.cooldown > 0 ? Theme.warning : Theme.secondary
                     font.pointSize: Theme.body * 0.78
+                    wrapMode: Text.WordWrap
                 }
                 // 普通 Row + 显式半宽：ColumnLayout 会覆盖子 RowLayout 的 width，
                 // 按钮按 implicitWidth 撑出去，直接压到卡片边框外（真机截图可见）。
