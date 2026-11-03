@@ -163,6 +163,116 @@ Item {
         }
     }
 
+    // 恢复码确认层：放在向导根上天然全屏，不依赖步骤页（Loader 里的窄列）的定位。
+    // 步骤页自己做遮罩会盖不满窗口：外围点不动、确认按钮又因倒计时不跑而灰着，
+    // 两件事叠在一起就是"点已抄写卡死"。
+    Item {
+        id: recoveryAck
+        objectName: "onboardingRecoveryAckLayer"
+        anchors.fill: parent
+        z: 20
+        visible: false
+
+        property int cooldown: 5
+        property double startedAt: 0
+
+        function open() {
+            cooldown = 5
+            startedAt = Date.now()
+            visible = true
+            ackTimer.start()
+        }
+        function close() {
+            ackTimer.stop()
+            visible = false
+        }
+
+        // 用时间戳算剩余，不用 Timer.running 绑定：旧写法在某些环境里
+        // running 没被求值，cooldown 永远停在 5，确认按钮一直是灰的。
+        Timer {
+            id: ackTimer
+            interval: 250
+            repeat: true
+            onTriggered: {
+                const left = 5 - Math.floor((Date.now() - recoveryAck.startedAt) / 1000)
+                recoveryAck.cooldown = Math.max(0, left)
+                if (recoveryAck.cooldown <= 0) stop()
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: Qt.rgba(0, 0, 0, 0.55)
+            MouseArea { anchors.fill: parent }
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(460 * Theme.scaleFactor, Math.max(240, parent.width - Theme.gap * 4))
+            height: ackColumn.implicitHeight + Theme.gap * 2
+            radius: Theme.shapeLarge
+            color: Theme.surface
+            border.color: Theme.outline
+            border.width: 1
+
+            ColumnLayout {
+                id: ackColumn
+                x: Theme.gap
+                y: Theme.gap
+                width: Math.max(240, parent.width - Theme.gap * 2)
+                spacing: Theme.gap / 2
+
+                Text {
+                    width: ackColumn.width
+                    text: I18n.t("确认已保存恢复码？")
+                    color: Theme.foreground
+                    font.pointSize: Theme.title
+                    font.weight: Font.Medium
+                }
+                Text {
+                    width: ackColumn.width
+                    text: I18n.t("关闭后恢复码不会再次显示。请确认已经抄写，或已经导出到 U 盘。")
+                    color: Theme.warning
+                    font.pointSize: Theme.body * 0.85
+                    wrapMode: Text.WordWrap
+                }
+                Text {
+                    width: ackColumn.width
+                    text: recoveryAck.cooldown > 0
+                          ? I18n.t("冷静期") + " " + recoveryAck.cooldown + " " + I18n.t("秒")
+                          : I18n.t("可以确认了")
+                    color: recoveryAck.cooldown > 0 ? Theme.warning : Theme.secondary
+                    font.pointSize: Theme.body * 0.78
+                }
+                RowLayout {
+                    // 用显式宽度而不是 Layout.fillWidth：ColumnLayout 里那套在
+                    // 带固定宽度的子项上会让按钮撑出卡片边框（真机截图可见）。
+                    width: ackColumn.width
+                    spacing: Theme.gap / 2
+                    CarButton {
+                        Layout.fillWidth: true
+                        text: I18n.t("返回")
+                        onClicked: recoveryAck.close()
+                    }
+                    CarButton {
+                        objectName: "onboardingRecoveryAckConfirm"
+                        Layout.fillWidth: true
+                        text: I18n.t("确认已保存")
+                        accent: true
+                        enabled: recoveryAck.cooldown <= 0
+                        onClicked: {
+                            recoveryAck.close()
+                            wizard.goTo(3)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 步骤页通过这个入口叫起确认层。
+    function showRecoveryAck() { recoveryAck.open() }
+
     // 向导自己的键盘实例：parent 设为向导根，让 Popup 的 z 在本层内比较，
     // 从而压在向导内容之上。不碰 Main.qml 里那个全局 screenKeyboard（z=2000）。
     FloatingKeyboard {

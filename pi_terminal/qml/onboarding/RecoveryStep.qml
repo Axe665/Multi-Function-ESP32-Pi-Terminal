@@ -17,7 +17,7 @@ Item {
     property bool canGoBack: true
 
     signal primaryAction()
-    onPrimaryAction: ackOverlay.open()
+    onPrimaryAction: { if (wizard) wizard.showRecoveryAck() }
 
     Component.onCompleted: onboarding.prepareRecoveryCode()
 
@@ -77,117 +77,4 @@ Item {
         }
     }
 
-    // 5 秒确认用自绘覆盖层，不用 Popup：向导由 Loader 动态加载，
-    // 那里的 Overlay 解析不到，Popup 会变成一层吃点击的暗幕（表现为卡死）。
-    Item {
-        id: ackOverlay
-        // 不能只铺满 parent：步骤页在向导的窄内容列里（约 720px），
-        // 那样遮罩只有中间一块，四周留出黑色边框（真机截图可见）。
-        // 这里把它对齐全窗，并用负偏移抵消内容列的位置。
-        // 直接对到窗口内容上：向导是 Loader 动态加载的，Overlay.overlay 解析不到；
-        // 只对 parent（窄内容列）会留出黑边，而且遮罩盖不满时用户点别处没反应，
-        // 看起来就是卡死。
-        readonly property Item hostItem: step.Window.window ? step.Window.window.contentItem : null
-        x: hostItem ? -step.mapToItem(hostItem, 0, 0).x : 0
-        y: hostItem ? -step.mapToItem(hostItem, 0, 0).y : 0
-        width: hostItem ? hostItem.width : parent.width
-        height: hostItem ? hostItem.height : parent.height
-        z: 10
-        visible: false
-
-        property int cooldown: 5
-        property double startedAt: 0
-
-        function open() {
-            cooldown = 5
-            startedAt = Date.now()
-            visible = true
-            ackTimer.start()
-        }
-        function close() {
-            ackTimer.stop()
-            visible = false
-        }
-
-        // 用时间戳算剩余，不依赖 Timer.running 绑定：某些环境下 running
-        // 绑定没被求值，倒计时永远停着，确认按钮一直是灰的（表现为卡死）。
-        Timer {
-            id: ackTimer
-            interval: 250
-            repeat: true
-            onTriggered: {
-                const left = 5 - Math.floor((Date.now() - ackOverlay.startedAt) / 1000)
-                ackOverlay.cooldown = Math.max(0, left)
-                if (ackOverlay.cooldown <= 0) stop()
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            color: Qt.rgba(0, 0, 0, 0.55)
-            MouseArea { anchors.fill: parent }
-        }
-
-        Rectangle {
-            anchors.centerIn: parent
-            width: Math.min(460 * Theme.scaleFactor, Math.max(240, parent.width - Theme.gap * 4))
-            height: ackColumn.implicitHeight + Theme.gap * 2
-            radius: Theme.shapeLarge
-            color: Theme.surface
-            border.color: Theme.outline
-            border.width: 1
-
-            ColumnLayout {
-                id: ackColumn
-                x: Theme.gap
-                y: Theme.gap
-                width: Math.max(240, parent.width - Theme.gap * 2)
-                spacing: Theme.gap / 2
-
-                Text {
-                    text: I18n.t("确认已保存恢复码？")
-                    color: Theme.foreground
-                    font.pointSize: Theme.title
-                    font.weight: Font.Medium
-                }
-                Text {
-                    Layout.fillWidth: true
-                    width: parent.width
-                    text: I18n.t("关闭后恢复码不会再次显示。请确认已经抄写，或已经导出到 U 盘。")
-                    color: Theme.warning
-                    font.pointSize: Theme.body * 0.85
-                    wrapMode: Text.WordWrap
-                }
-                Text {
-                    width: parent.width
-                    text: ackOverlay.cooldown > 0
-                          ? I18n.t("冷静期") + " " + ackOverlay.cooldown + " " + I18n.t("秒")
-                          : I18n.t("可以确认了")
-                    color: ackOverlay.cooldown > 0 ? Theme.warning : Theme.secondary
-                    font.pointSize: Theme.body * 0.78
-                }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.gap / 2
-                    CarButton {
-                        Layout.fillWidth: true
-                        text: I18n.t("返回")
-                        onClicked: ackOverlay.close()
-                    }
-                    CarButton {
-                        objectName: "onboardingRecoveryAck"
-                        Layout.fillWidth: true
-                        text: I18n.t("确认已保存")
-                        accent: true
-                        enabled: ackOverlay.cooldown <= 0
-                        onClicked: {
-                            ackOverlay.close()
-                            wizard.goTo(3)
-                        }
-                    }
-                }
-            }
-        }
-
-    }
 }
