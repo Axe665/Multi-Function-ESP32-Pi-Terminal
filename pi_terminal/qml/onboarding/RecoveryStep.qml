@@ -81,7 +81,14 @@ Item {
     // 那里的 Overlay 解析不到，Popup 会变成一层吃点击的暗幕（表现为卡死）。
     Item {
         id: ackOverlay
-        anchors.fill: parent
+        // 不能只铺满 parent：步骤页在向导的窄内容列里（约 720px），
+        // 那样遮罩只有中间一块，四周留出黑色边框（真机截图可见）。
+        // 这里把它对齐全窗，并用负偏移抵消内容列的位置。
+        readonly property var hostWizard: (typeof wizard !== "undefined" && wizard) ? wizard : null
+        x: hostWizard ? -step.mapToItem(hostWizard, 0, 0).x : 0
+        y: hostWizard ? -step.mapToItem(hostWizard, 0, 0).y : 0
+        width: hostWizard ? hostWizard.width : parent.width
+        height: hostWizard ? hostWizard.height : parent.height
         z: 10
         visible: false
 

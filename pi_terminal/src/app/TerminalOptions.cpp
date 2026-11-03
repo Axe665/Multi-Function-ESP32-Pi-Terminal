@@ -35,7 +35,10 @@ void configure(QCommandLineParser &parser) {
                        {"init-pin-stdin", "Read the initial administrator PIN from stdin instead of a TTY prompt"},
                        // 首次开机向导（OOBE）：注册表为空时默认进入。仅调试/自动化绕过，
                        // 绕过时 qInfo 留痕；生产环境不要设置。
-                       {"skip-onboarding", "Test-only: bypass the first-run setup wizard"}});
+                       {"skip-onboarding", "Test-only: bypass the first-run setup wizard"},
+                       // 注册表为空时默认会清掉上一次跑留下的鉴权与用户数据残留；
+                       // 需要保留现场（排查用）时加这个开关。
+                       {"keep-stale-data", "Keep leftover profile data even when no user exists"}});
 }
 
 } // namespace TerminalOptions

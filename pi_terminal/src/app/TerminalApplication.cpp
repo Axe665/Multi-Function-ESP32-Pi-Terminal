@@ -26,6 +26,39 @@
 
 namespace {
 
+// 新机器 / 新用户：注册表为空却留着上一次的鉴权与用户数据，
+// 会让启动直接落到锁屏或半初始化状态（列表里有账户但库打不开）。
+// 只清「肯定属于旧用户」的部分：登录锁定、UID 索引、各用户库、
+// 语音包与浏览器缓存；日志保留，方便排查。
+void purgeStaleProfile() {
+    const QString configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    const QStringList targets{
+        configDir + QStringLiteral("/auth_locks.json"),
+        configDir + QStringLiteral("/uid_index.key"),
+        configDir + QStringLiteral("/users"),
+        dataDir + QStringLiteral("/arkpets"),
+        dataDir + QStringLiteral("/voice-packs"),
+        dataDir + QStringLiteral("/music-api"),
+        dataDir + QStringLiteral("/music-covers"),
+        dataDir + QStringLiteral("/viper-browser"),
+        dataDir + QStringLiteral("/QtWebEngine"),
+    };
+    QStringList removed;
+    for (const QString &path : targets) {
+        const QFileInfo info(path);
+        if (!info.exists()) continue;
+        const bool ok = info.isDir() ? QDir(path).removeRecursively() : QFile::remove(path);
+        if (ok) removed << path;
+    }
+    if (!removed.isEmpty())
+        qInfo().noquote() << "profile: cleared stale data from a previous run:" << removed.join(QLatin1String(", "));
+}
+
+} // namespace
+
+namespace {
+
 // QML 里的 XMLHttpRequest 走 Qt Network；给它一个默认就带代理的 NAM，
 // 这样天气、校时以及任何新写的 QML 请求都自动经过 qml 通道。
 class ProxiedNamFactory final : public QQmlNetworkAccessManagerFactory {
@@ -282,6 +315,9 @@ int TerminalApplication::initialize(const QCommandLineParser &options) {
     const bool onboardingBypassed = options.isSet("skip-onboarding")
                                     || options.isSet("ui-test") || options.isSet("no-login");
     const bool onboardingRequired = !onboardingBypassed && !userService_.hasAnyUser();
+    // 没有用户却留着旧数据时，先清干净再进向导：否则新机器上会直接落到锁屏。
+    if (onboardingRequired && !options.isSet("keep-stale-data"))
+        purgeStaleProfile();
     onboarding_.setStartupRequirement(onboardingRequired);
     if (onboardingBypassed && !userService_.hasAnyUser())
         qInfo().noquote() << "onboarding: bypassed by debug flag, user registry is empty";

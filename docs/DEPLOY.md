@@ -87,7 +87,40 @@ XDG_DATA_HOME=/tmp/fresh-data XDG_CONFIG_HOME=/tmp/fresh-config orange_pi_termin
 - 代理跑在独立 systemd 单元里（`DynamicUser`），策略文件在 `/run/orpi-net-proxy/policy.json`；
 - `net-policy-helper` 通过 polkit 授权改规则，策略文件在 `/usr/share/polkit-1/actions/`。
 
-## 7. 卸载
+## 7. 提 PR 之前：清掉本机数据残留
+
+**这条是硬要求**。本机跑过之后，`~/.config/ModularTerminal/OrangePiTerminal/users.json`
+里会有账户；别人拉到 PR 分支一跑，会**直接进锁屏而不是开机向导**，
+很容易被误判成"编译坏了 / OOBE 挂了"。
+
+提 PR 前执行：
+
+```bash
+rm -rf ~/.config/ModularTerminal/OrangePiTerminal
+rm -rf ~/.local/share/ModularTerminal/OrangePiTerminal
+```
+
+想验证「空库首启」而不动自己的数据，用隔离目录：
+
+```bash
+XDG_CONFIG_HOME=$(mktemp -d) XDG_DATA_HOME=$(mktemp -d) \
+  build/orange_pi_terminal --window-size 1024x600
+```
+
+### 程序本身也做了兜底
+
+注册表为空但目录里有上一次的残留时，启动会自动清理（日志：
+
+```
+profile: cleared stale data from a previous run: …
+onboarding: no users, starting first-run setup
+```
+
+清理范围：`auth_locks.json`、`uid_index.key`、`users/`（配置目录），
+以及 `arkpets/`、`voice-packs/`、`music-api/`、`music-covers/`、`viper-browser/`、`QtWebEngine/`（数据目录）。
+日志文件保留。需要保留现场排查时加 `--keep-stale-data`。
+
+## 8. 卸载
 
 ```bash
 sudo systemctl disable --now orange-pi-net-proxy orange-pi-file-daemon
