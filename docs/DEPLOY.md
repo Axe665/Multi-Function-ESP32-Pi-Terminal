@@ -25,8 +25,13 @@
 ./scripts/bootstrap-deps.sh
 ```
 
-它会报告 Qt（验证版本 6.5.3，最低 6.4）、GStreamer、X11/OpenGL、Node.js。
-加密依赖（OpenSSL/mbedTLS/SQLCipher）**已在 `third_party/vendor/deps`**，不用装。
+分三层报告：
+
+1. **内置**（`third_party/vendor/deps`，不用装）：OpenSSL / mbedTLS / SQLCipher；
+2. **编译必需**：Qt（验证 6.5.3，最低 6.4）、GStreamer 运行时、X11/OpenGL 开发包；
+3. **功能级**（缺了不影响编译，但对应功能不可用）：
+   `nft`（nftables，网络策略兜底）、`python3`（宠物库与测试脚本）、`espeak-ng`（中文语音播报）、
+   可选 `node`（在线音乐 API）、`udisksctl`（U 盘自动挂载）。
 
 缺 Qt 时脚本会打印 `aqtinstall` 命令。
 

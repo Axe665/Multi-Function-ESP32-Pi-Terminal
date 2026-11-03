@@ -72,7 +72,18 @@ if [ "$missing" -eq 1 ]; then
 TIP
 fi
 
-echo "== 4. 可选 =="
+echo "== 4. 功能级依赖（缺了对应功能不可用，不影响编译） =="
+check_cmd() {
+    if command -v "$1" >/dev/null 2>&1; then say_ok "$2"; else say_miss "$2"; fi
+}
+# nft：网络策略用 nftables 兜底；没有它出站控制不生效。
+check_cmd nft "nft（nftables，网络策略）"
+# python3：宠物库（ArkPets）与测试脚本调用 /usr/bin/python3。
+check_cmd python3 "python3（宠物库 / 测试脚本）"
+# espeak-ng：中文语音播报引擎。
+check_cmd espeak-ng "espeak-ng（语音播报）"
+
+echo "== 5. 可选 =="
 if command -v node >/dev/null 2>&1; then say_ok "Node.js $(node --version)（在线音乐 API）"; else say_miss "Node.js（仅在线音乐需要，可跳过）"; fi
 if command -v udisksctl >/dev/null 2>&1; then say_ok "udisks2（U 盘自动挂载）"; else say_miss "udisks2（U 盘相关功能需要）"; fi
 

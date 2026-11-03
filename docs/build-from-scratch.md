@@ -23,6 +23,7 @@ OpenSSL、mbedTLS、SQLCipher 都在这里找到，**不用装 `libssl-dev` / `l
 | **GStreamer 运行时** | 与系统多媒体栈绑定 | 同上 |
 | **X11 / OpenGL 开发包** | 系统库 | 同上 |
 | Node.js（可选，仅在线音乐） | 运行时可选 | 同上 |
+| `nft` / `python3` / `espeak-ng` | 功能级依赖：网络策略兜底 / 宠物库 / 语音播报 | 同上（`bootstrap-deps.sh` 会逐项检查） |
 
 ### Qt 版本
 
