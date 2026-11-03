@@ -3,8 +3,9 @@
 > ## 给接手的 AI：这些是硬性要求，不是建议
 >
 > 每一步都必须真的执行完，**不能跳过、不能假装成功、不能用替代方案绕开**。
-> 需要 root 的命令**直接带 sudo 执行并让用户输密码**——sudo 弹出来是对的，
-> 不要因为它要密码就改成"跳过部署"或"只编译不安装"。
+> 需要 root 的命令**直接带 sudo 执行并让用户输密码**——sudo 弹出来是对的。
+> 拿不到 root 就停下来如实报告，不要改用别的运行方式、不要只编译不安装、
+> 不要在没有 systemd 单元的情况下宣称部署完成。
 >
 > **必须做的四步，按顺序：**
 >
@@ -113,49 +114,6 @@ XDG_DATA_HOME=/tmp/fresh-data XDG_CONFIG_HOME=/tmp/fresh-config orange_pi_termin
   按 cgroup 而不是 UID（避免误伤同用户的浏览器/ssh）；
 - 代理跑在独立 systemd 单元里（`DynamicUser`），策略文件在 `/run/orpi-net-proxy/policy.json`；
 - `net-policy-helper` 通过 polkit 授权改规则，策略文件在 `/usr/share/polkit-1/actions/`。
-
-## 6.5 拿不到 root 的环境（容器 / CI / no_new_privs）
-
-有些环境里 `sudo` 直接被内核挡住：
-
-```
-sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
-```
-
-这不是"要密码"的问题，是**没有任何提权路径**。此时 `deploy.sh` 一步也做不了，
-但不是不能跑——用用户态启动器：
-
-```bash
-scripts/run-local.sh --window-size 1024x600
-```
-
-它做了三件事，把能降级的都降了：
-
-| 项 | 用户态方案 | 代价 |
-| --- | --- | --- |
-| 模块加载 | `ORANGE_PI_MODULE_INPROCESS=1`，模块在进程内跑 | **没有沙箱**（无 DynamicUser / ProtectHome / 网络隔离），外部模块包要自行信任 |
-| 模块根 | `ORANGE_PI_MODULE_ROOT=<repo>/pi_terminal/modules` | 不装到 `/usr/lib`，只对本仓库有效 |
-| 网络代理 | `network_proxy` 用用户态 runtime 目录跑 | **系统级 nftables 策略不生效**，只有应用层策略 |
-
-以下功能在无 root 环境下**确定不可用**：
-
-- 模块沙箱（`orange-pi-worker@.service` 的 systemd 隔离）；
-- 系统级出站限制（`net-egress.sh` 需要 nftables + root）；
-- polkit 授权的 `net-policy-helper`；
-- `orange-pi-file-daemon` 服务（可手动跑，但没有 systemd 的生命周期管理）。
-
-对应的日志会明确说出来，别当成程序 bug：
-
-```
-net-proxy: build/network_proxy missing, every outbound request will fail
-net-proxy: cannot write policy /run/user/1000/orange-pi-net-policy.json
-net-proxy: policy loaded, allowed=[]
-module cache points into HOME; using system module root
-PBR handshake failed: timeout
-```
-
-**结论**：无 root 时这是"降级可用"，不是"不可用"。要完整能力必须有一台能做
-`systemctl` + `polkit` 的机器（真机树莓派/普通 Linux 桌面）。
 
 ## 7. 提 PR 之前：清掉本机数据残留
 
