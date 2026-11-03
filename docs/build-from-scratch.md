@@ -19,10 +19,21 @@ OpenSSL、mbedTLS、SQLCipher 都在这里找到，**不用装 `libssl-dev` / `l
 
 | 依赖 | 为什么不能内置 | 怎么来 |
 | --- | --- | --- |
-| **Qt 6.4+**（含 WebEngine / Multimedia / TextToSpeech / ShaderTools） | 1.2 GB，且与系统图形栈绑定 | `scripts/bootstrap-deps.sh` 会给出安装命令 |
+| **Qt 6.5.3**（最低 6.4） | 1.2 GB，且与系统图形栈绑定 | `scripts/bootstrap-deps.sh` 会给出安装命令 |
 | **GStreamer 运行时** | 与系统多媒体栈绑定 | 同上 |
 | **X11 / OpenGL 开发包** | 系统库 | 同上 |
 | Node.js（可选，仅在线音乐） | 运行时可选 | 同上 |
+
+### Qt 版本
+
+| | 版本 | 出处 |
+| --- | --- | --- |
+| **验证版本**（作者 SDK） | **Qt 6.5.3 gcc_64** | `pi_terminal/CMakePresets.json`、`pi_terminal/scripts/env.sh` 默认都指向 `…/qt/6.5.3/gcc_64` |
+| 最低要求 | Qt 6.4 | `pi_terminal/CMakeLists.txt` 的 `find_package(Qt6 6.4 …)` |
+| 必需组件 | Quick、QuickControls2、WebEngine(Quick/Widgets/Core)、Multimedia、TextToSpeech、SerialPort、Bluetooth、ShaderTools、Test | 同上 |
+
+低于 6.4 直接配置失败；6.4~6.5.2 理论上可用但**没有验证过**，
+提交 PR 前请用 6.5.3 编译一遍，避免因为组件 API 差异出现只在老版本上的问题。
 
 先跑检查：
 

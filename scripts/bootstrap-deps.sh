@@ -21,7 +21,7 @@ for item in include/openssl/ssl.h include/mbedtls/ecdsa.h include/sqlcipher/sqli
     if [ -e "$VENDOR/$item" ]; then say_ok "$item"; else say_miss "$VENDOR/$item"; fi
 done
 
-echo "== 2. Qt 6.4+（必需，体积太大不内置） =="
+echo "== 2. Qt（必需，体积太大不内置）；验证版本 6.5.3，最低 6.4 =="
 QT_OK=""
 # 作者 SDK 的默认落点（CMakePresets.json 里也指向这里）
 for q in "$HOME/.local/share/orange-pi-terminal-sdk/qt/6.5.3/gcc_64" "$HOME/Qt/6.5.3/gcc_64"; do
@@ -36,7 +36,7 @@ fi
 if [ -n "$QT_OK" ]; then
     say_ok "Qt $QT_OK"
 else
-    say_miss "Qt 6.4+ 未找到"
+    say_miss "Qt 未找到（需要 6.5.3；最低 6.4）"
     cat <<'TIP'
         二选一：
           a) 用官方安装器（需要 Qt 账号，选 Desktop gcc_64 + Qt WebEngine）：
