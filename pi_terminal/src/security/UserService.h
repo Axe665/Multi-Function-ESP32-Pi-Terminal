@@ -99,6 +99,9 @@ public:
     bool replaceRecord(const UserRecord &record);
 
     bool hasAnyUser() const;
+    // 是否还有可用的管理员账号。没有管理员时终端必须能重新初始化，
+    // 哪怕注册表里还留着普通用户（否则永远无法管理）。
+    bool hasAdminUser() const;
 
 private:
     QList<UserRecord> load() const;

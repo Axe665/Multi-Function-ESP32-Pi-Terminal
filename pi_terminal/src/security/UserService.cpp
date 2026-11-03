@@ -123,10 +123,17 @@ bool UserService::save(const QList<UserRecord> &records) const {
 
 bool UserService::hasAnyUser() const { return !load().isEmpty(); }
 
+bool UserService::hasAdminUser() const {
+    for (const UserRecord &record : load())
+        if (record.admin && !record.disabled) return true;
+    return false;
+}
+
 QString UserService::createInitialAdmin(const QString &displayName, const QString &pin,
                                         const QString &recoveryCode) {
-    // 已有任何用户就拒绝，且不覆盖 —— 否则删文件即可重建管理员。
-    if (hasAnyUser()) return {};
+    // 只要还有可用的管理员就拒绝（删文件重建管理员的路子走不通）。
+    // 但最后一名管理员被删掉后必须允许重新初始化，哪怕还留着普通用户。
+    if (hasAdminUser()) return {};
     return createUser({}, displayName, pin, true, recoveryCode);
 }
 
@@ -135,12 +142,17 @@ QString UserService::createUser(const QString &actorUserId, const QString &displ
     QList<UserRecord> records = load();
     // actorUserId 为空只允许"首次初始化"路径；其余必须由管理员发起。
     if (!records.isEmpty()) {
-        if (actorUserId.isEmpty()) return {};
+        if (actorUserId.isEmpty()) {
+            // 空 actor 只在"没有任何管理员"时合法：这是接管路径；
+            // 还有管理员就必须由管理员发起。
+            if (hasAdminUser()) return {};
+        } else {
         bool actorIsAdmin = false;
         for (const UserRecord &record : records) {
             if (record.userId == actorUserId) actorIsAdmin = record.admin && !record.disabled;
         }
         if (!actorIsAdmin) return {};
+        }
     }
     if (displayName.trimmed().isEmpty() || !PinPolicy::validPin(pin)) return {};
 

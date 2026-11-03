@@ -314,15 +314,22 @@ int TerminalApplication::initialize(const QCommandLineParser &options) {
     // 否则 --ui-test / --no-login 会被向导挡住。
     const bool onboardingBypassed = options.isSet("skip-onboarding")
                                     || options.isSet("ui-test") || options.isSet("no-login");
-    const bool onboardingRequired = !onboardingBypassed && !userService_.hasAnyUser();
-    // 没有用户却留着旧数据时，先清干净再进向导：否则新机器上会直接落到锁屏。
-    if (onboardingRequired && !options.isSet("keep-stale-data"))
+    // 判定标准是「没有可用的管理员」，而不是「没有任何用户」：
+    // 最后一名管理员被删掉后，哪怕还留着普通用户，也必须能重新初始化，
+    // 否则这台终端永远没人能管理。
+    const bool onboardingRequired = !onboardingBypassed && !userService_.hasAdminUser();
+    // 只有「完全没有任何用户」时才清理旧数据；只剩普通用户时必须原样保留。
+    if (onboardingRequired && !userService_.hasAnyUser() && !options.isSet("keep-stale-data"))
         purgeStaleProfile();
     onboarding_.setStartupRequirement(onboardingRequired);
-    if (onboardingBypassed && !userService_.hasAnyUser())
-        qInfo().noquote() << "onboarding: bypassed by debug flag, user registry is empty";
-    else if (onboardingRequired)
-        qInfo().noquote() << "onboarding: no users, starting first-run setup";
+    if (onboardingBypassed && !userService_.hasAdminUser())
+        qInfo().noquote() << "onboarding: bypassed by debug flag, no administrator";
+    else if (onboardingRequired) {
+        if (userService_.hasAnyUser())
+            qInfo().noquote() << "onboarding: no administrator left, offering re-initialisation (regular users kept)";
+        else
+            qInfo().noquote() << "onboarding: no users, starting first-run setup";
+    }
     engine_.rootContext()->setContextProperty("onboarding", &onboarding_);
     // §0.8.5：业务数据必须挂在当前登录用户上。会话变化时同步给连接管理器，
     // 否则 lane 门控拿不到用户，所有业务数据都会被拒。
