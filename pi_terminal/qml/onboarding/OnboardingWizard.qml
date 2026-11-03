@@ -244,19 +244,19 @@ Item {
                     color: recoveryAck.cooldown > 0 ? Theme.warning : Theme.secondary
                     font.pointSize: Theme.body * 0.78
                 }
-                RowLayout {
-                    // 用显式宽度而不是 Layout.fillWidth：ColumnLayout 里那套在
-                    // 带固定宽度的子项上会让按钮撑出卡片边框（真机截图可见）。
+                // 普通 Row + 显式半宽：ColumnLayout 会覆盖子 RowLayout 的 width，
+                // 按钮按 implicitWidth 撑出去，直接压到卡片边框外（真机截图可见）。
+                Row {
                     width: ackColumn.width
                     spacing: Theme.gap / 2
                     CarButton {
-                        Layout.fillWidth: true
+                        width: (ackColumn.width - Theme.gap / 2) / 2
                         text: I18n.t("返回")
                         onClicked: recoveryAck.close()
                     }
                     CarButton {
                         objectName: "onboardingRecoveryAckConfirm"
-                        Layout.fillWidth: true
+                        width: (ackColumn.width - Theme.gap / 2) / 2
                         text: I18n.t("确认已保存")
                         accent: true
                         enabled: recoveryAck.cooldown <= 0
