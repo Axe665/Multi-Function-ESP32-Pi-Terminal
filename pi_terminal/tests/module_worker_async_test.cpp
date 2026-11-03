@@ -1,6 +1,6 @@
 // worker 路径的异步语义测试（T-11）。
 //
-// 与 session_test 的区别：那个测的是同进程 QLibrary 的同步回调，
+// 与已删除的旧 session_test 的区别：那个测的是同进程 QLibrary 的同步回调，
 // 这里测 worker 进程 IPC 的异步行为。
 //
 // 本机没有 systemd unit，所以走 degraded 路径（直接起二进制）。

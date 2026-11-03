@@ -35,6 +35,8 @@ class GstVideoItem : public QQuickFramebufferObject {
     Q_PROPERTY(bool hardwareDecode READ hardwareDecode NOTIFY hardwareDecodeChanged)
     // 当前源的画面尺寸（用于播放区按比例自适应、消掉黑边）
     Q_PROPERTY(QSize videoSize READ videoSize NOTIFY videoSizeChanged)
+    // 0.0–1.0，作用在管线 volume 元素上；QML 用它叠加播报降音（mediaGain）。
+    Q_PROPERTY(qreal volume READ volume WRITE setVolume NOTIFY volumeChanged)
 
 public:
     explicit GstVideoItem(QQuickItem *parent = nullptr);
@@ -46,6 +48,7 @@ public:
     QString errorText() const { return errorText_; }
     bool hardwareDecode() const { return hardwareDecode_; }
     QSize videoSize() const { return videoSize_; }
+    qreal volume() const { return volume_; }
 
     Q_INVOKABLE void play();
     // 短时间暂停后直接 PAUSED→PLAYING，不用重建管线；长时间暂停则重新起播
@@ -74,6 +77,7 @@ signals:
     void errorTextChanged();
     void hardwareDecodeChanged();
     void videoSizeChanged();
+    void volumeChanged();
 
 private slots:
     void onWorkerStarted(bool hardware);
@@ -97,6 +101,7 @@ private:
     void setError(const QString &text);
     void clearFrames();
     bool hasDueFrame();                   // GUI 线程：是否有到期的帧
+    void drainFrameQueue();               // 后台播放：窗口不在屏上时消费帧，避免阻塞音频
 
     QString source_;
     QString errorText_;

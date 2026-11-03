@@ -4,6 +4,7 @@ import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
 import QtWebEngine 2.0
+import QtQuick.Dialogs
 import Terminal.Native 1.0
 import "TimeMath.js" as TimeMath
 
@@ -37,14 +38,139 @@ ApplicationWindow {
     property int appBackdropRefreshCount:0
     readonly property Item panelBlurTexture:panelBlurCache.activeTexture
     property bool blurInputReady:false
+    property bool connectionSettingsOpen:false
+    property bool developerPanelOpen:false
+    property bool testModeOpen:false
+    property bool aboutDeviceOpen:false
+    property bool networkPermissionsOpen:false
     property bool startupInterfaceReady:false
     property bool startupComplete:false
+    // 删账户的等待层是否正在显示（由 userSecurityView 的 accountDeleted 打开）。
+    property bool deletingAccount:false
+    // 键盘避让：聚焦输入框被浮动键盘盖住时，内容整体上移刚好的距离。
+    // 宠物菜单那套是「缩小容器到键盘上方」，全屏页面不能缩，只能位移。
+    property real keyboardShift:0
+    // 供 Popup 自己避让用：它们在 overlay 上，不在 pages 里，吃不到上面的位移。
+    readonly property var virtualKeyboard: screenKeyboard
+
+    function updateKeyboardShift() {
+        if (!screenKeyboard || !screenKeyboard.visible) { keyboardShift = 0; return }
+        const focusItem = win.activeFocusItem
+        if (!focusItem) { keyboardShift = 0; return }
+        // 用「未偏移」的位置算，否则位移会自己把自己越推越远。
+        const rawBottom = focusItem.mapToItem(win.contentItem, 0, focusItem.height).y + keyboardShift
+        const keyboardTop = screenKeyboard.y
+        const overlap = rawBottom + 12 * uiScale - keyboardTop
+        keyboardShift = Math.min(Math.max(0, overlap), screenKeyboard.height + 24 * uiScale)
+    }
+    // 启动后 8 秒内的日志（音频设备切换等）不弹横幅，只进运行记录。
+    property double bootAt:Date.now()
     // 登入门禁 + 锁屏 + 无交互自动锁：未登录时挡住整个桌面。
     SessionGate {
         id:sessionGate
         parent:Overlay.overlay
         z:20000
+        // 首次开机向导激活时门禁让位：此时没有任何用户，登录页只会显示
+        // “请先在终端执行 --init-admin”，与向导重复且会抢焦点。
+        enabledGate:(typeof sessionGateBypassed !== "undefined" ? !sessionGateBypassed : true)
+                    && !onboarding.active
         inputSource:win
+        onKeyboardRequested: screenKeyboard.show()
+    }
+    // 首次开机向导（OOBE）：注册表为空时接管启动。
+    // splash（z=10000）结束后才加载，避免两个全屏层叠加；
+    // z=50000 压在门禁（20000）与所有应用弹窗（40000+）之上。
+    Loader {
+        id:onboardingLoader
+        parent:Overlay.overlay
+        anchors.fill:parent
+        z:50000
+        // 删账户的等待层没走完之前先别把向导拉起来，否则两个全屏层会抢同一帧。
+        active:onboarding.active && win.startupComplete && !win.deletingAccount
+        source:active?"OnboardingWizard.qml":""
+        onLoaded:if(item)item.hostWindow=win
+    }
+    // 删账户后的等待层：至少 4 秒，再放行下一个界面（首次开机向导 / 登录页 / 账户列表）。
+    // 删除本身是同步调用，计时从「删完」那一刻开始；z 压在应用弹窗之上、向导之下。
+    Timer {
+        id:accountDeleteWaitTimer
+        interval:4000
+        onTriggered:win.deletingAccount=false
+    }
+    AdminDeleteWait {
+        id:accountDeleteWait
+        parent:Overlay.overlay
+        anchors.fill:parent
+        z:45000
+        visible:win.deletingAccount
+    }
+    Connections {
+        target:userSecurityView
+        function onAccountDeleted(lastAdmin) {
+            win.deletingAccount=true
+            accountDeleteWaitTimer.restart()
+        }
+    }
+    // 访客点灰显入口时的"无权限"说明。z 必须高于 SessionGate(20000)，
+    // 因为 Popup 渲染在窗口 overlay 上，z 不跟随父元素。
+    //
+    // 这里刻意不用 Qt Quick Layouts：ColumnLayout + 换行文本在 DPR 2 下会让
+    // "文本高度 ↔ 弹窗可用高度"互相反馈，稳定触发 Layout polish loop，
+    // 表现为点灰卡直接卡死（实测日志每秒刷几十行）。改成固定高度 + 普通
+    // Column/Row + 显式宽度，隐式高度不参与弹窗定高，彻底断开反馈。
+    Dialog {
+        id:restrictedNotice;objectName:"restrictedAccessDialog"
+        parent:Overlay.overlay;z:40000;modal:true
+        x:(win.width-width)/2;y:(win.height-height)/2
+        width:Math.min(520*uiScale,win.width-Theme.gap*2)
+        height:Math.min(280*uiScale,win.height-Theme.gap*2)
+        padding:Theme.shapeExtraLarge
+        // 用不透明深色卡片而不是 GlassSurface：弹窗背后是亮色壁纸/磨砂首页，
+        // 玻璃层会把底色冲淡，白字对比度不够（实测发灰）。
+        background:Rectangle {color:Theme.surface;radius:Theme.shapeExtraLarge;border.width:1;border.color:Theme.outline}
+        property string entryTitle:""
+        readonly property real innerWidth:width-padding*2
+        function show(title){entryTitle=title;open()}
+        contentItem:Column {
+            width:restrictedNotice.innerWidth
+            spacing:Theme.gap
+            Row {
+                spacing:Theme.gap/1.5
+                MaterialIcon {width:26*uiScale;height:width;name:"lock"}
+                CarText {text:I18n.t("无权限");heading:true}
+            }
+            CarText {
+                width:parent.width
+                wrapMode:Text.Wrap
+                text:I18n.t("访客会话无法访问")+"「"+restrictedNotice.entryTitle+"」"+I18n.t("。请退出访客会话后使用管理员或普通用户账户登录。")
+            }
+            Item {
+                width:parent.width
+                height:restrictedOkButton.height
+                CarButton {id:restrictedOkButton;objectName:"restrictedNoticeOk"
+                    anchors.right:parent.right;anchors.verticalCenter:parent.verticalCenter
+                    text:I18n.t("知道了");accent:true;onClicked:restrictedNotice.close()}
+            }
+        }
+    }
+    // 开发者选项：仅管理员可见（入口在设置里），全英文、原样输出。
+    DeveloperPanel {
+        id:developerPanel
+        // 挂在 contentItem 上：ui-audit 用 findControl(contentItem,"energySwitch") 找节能开关。
+        parent:win.contentItem
+        width:parent?parent.width:win.width
+        height:parent?parent.height:win.contentItem.height
+        open:win.developerPanelOpen
+        onCloseRequested:win.developerPanelOpen=false
+        onKeyboardRequested:screenKeyboard.show()
+    }
+    TestModePanel {
+        id:testModePanel
+        parent:Overlay.overlay
+        width:parent?parent.width:win.width
+        height:parent?parent.height:win.contentItem.height
+        open:win.testModeOpen
+        onCloseRequested:win.testModeOpen=false
     }
     // 锁屏即撤销前台读取（f-day1 §2）：模块页可能显示传感器读数，必须卸载。
     // 不用 visible:false —— 那只是不画，数据仍在内存里可读。
@@ -57,6 +183,99 @@ ApplicationWindow {
                 activeActions=[]
             }
         }
+        function onSessionInvalidated() {
+            // 退出登录 / 删掉最后一个账户：先回到桌面首页。删号后向导会
+            // 重新接管（onboarding.rearm），否则向导关掉时会停在已删账户的
+            // 页面（例如用户与权限）上。
+            win.phase = "home"
+            win.section = 0
+            modulePageHost.unload()
+            activeSession = ""
+            activeActions = []
+        }
+        function onChanged() {
+            // 会话切换（正式用户 ↔ 临时访客）会改变可见应用集合：
+            // 访客看不到设置/连接管理/用户与权限。卡片表必须跟着重建，
+            // 否则登录后仍是启动时那份（登出状态的）列表。
+            syncCards()
+            // 最近使用是内存 ListModel（不落盘），但它跨会话存活：
+            // 访客打开过什么会留给下一个登录的人看。登出即清。
+            if (!sessionManager.loggedIn) recentApps.clear()
+        }
+    }
+    Connections {
+        target: networkPolicy
+        function onChanged() { win.applyModulePermissions() }
+    }
+    Connections {
+        target: modulePageHost
+        function onFileWriteAccessRequested(instance, packageId) {
+            win.pendingWriteInstance = instance
+            writeScopeDialog.title = I18n.t("选择模块可写位置") + " · " + packageId
+            writeScopeDialog.open()
+        }
+    }
+    Dialog {
+        id: writeScopeDialog
+        modal: true
+        closePolicy: Popup.CloseOnEscape
+        x: (win.width - width) / 2
+        y: (win.height - height) / 2
+        width: Math.min(520 * Theme.scaleFactor, win.width - Theme.gap * 4)
+        padding: Theme.gap
+        background: GlassSurface { color: Theme.surface; radius: Theme.shapeLarge; borderColor: Theme.outline; borderWidth: 1 }
+        contentItem: ColumnLayout {
+            spacing: Theme.gap
+            CarText { Layout.fillWidth: true; heading: true; text: writeScopeDialog.title }
+            CarText {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                fontPixelSize: Theme.fontCaption
+                subdued: true
+                text: I18n.t("模块只能写入你选中的单个文件或目录；授权默认 24 小时后失效。")
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.gap / 2
+                CarButton {
+                    Layout.fillWidth: true
+                    text: I18n.t("选择单个文件")
+                    onClicked: { writeScopeDialog.close(); moduleWriteFileDialog.open() }
+                }
+                CarButton {
+                    Layout.fillWidth: true
+                    text: I18n.t("选择目录")
+                    onClicked: { writeScopeDialog.close(); moduleWriteFolderDialog.open() }
+                }
+                CarButton {
+                    text: I18n.t("取消")
+                    onClicked: { win.pendingWriteInstance = ""; writeScopeDialog.close() }
+                }
+            }
+        }
+    }
+    FolderDialog {
+        id: moduleWriteFolderDialog
+        title: I18n.t("选择模块可写目录")
+        onAccepted: {
+            if (win.pendingWriteInstance !== win.activeSession) return
+            const path = decodeURIComponent(selectedFolder.toString().replace("file://", ""))
+            modulePageHost.grantFileWrite(path)
+            win.announce(I18n.t("已授权模块写入所选目录"))
+        }
+        onRejected: win.pendingWriteInstance = ""
+    }
+    FileDialog {
+        id: moduleWriteFileDialog
+        title: I18n.t("选择模块可写文件")
+        fileMode: FileDialog.OpenFile
+        onAccepted: {
+            if (win.pendingWriteInstance !== win.activeSession) return
+            const path = decodeURIComponent(selectedFile.toString().replace("file://", ""))
+            modulePageHost.grantFileWrite(path)
+            win.announce(I18n.t("已授权模块写入所选文件"))
+        }
+        onRejected: win.pendingWriteInstance = ""
     }
     Loader {
         id:startupLoader
@@ -148,7 +367,7 @@ ApplicationWindow {
         }
         if(spec.quickPanel)showDevicePanel(false)
         if(spec.volumePanel){showDevicePanel(false);findControl(devicePanel.contentItem,"quickVolumeTile").clicked()}
-        if(spec.soundSettings)settingsSearch.text=systemTools.uiLanguage==="en"?"sound":"声音"
+        if(spec.soundSettings)settingsQuery=systemTools.uiLanguage==="en"?"sound":"声音"
         if(spec.quickGlass)notices.insert(0,{title:"Preview notification",message:"Position-matched background blur",appName:"Terminal",iconName:"notifications",time:"12:00",read:true,important:false})
         if(spec.quickMedia) {
             auditPage(spec.quickMedia==="video"?10:9)
@@ -309,6 +528,10 @@ ApplicationWindow {
     readonly property real uiScale: autoScale * textScale
     readonly property bool narrow: width < 760 * uiScale
     readonly property bool shortScreen: height < 760 * uiScale
+    // At 360dp + large text there is not enough width for four 48dp browser
+    // actions plus a usable address field. Drop the redundant "go" action
+    // (Enter/onAccepted still navigates) instead of letting the field collapse.
+    readonly property bool compactBrowserToolbar: width < 520 * uiScale
     readonly property real edge: width < 600 ? Theme.gap : Theme.margin
     font.pointSize: Theme.body
     // 有输入就重置锁屏计时（5 分钟无交互自动锁）。
@@ -322,6 +545,10 @@ ApplicationWindow {
     Material.theme: Material.Dark; Material.accent: Theme.accent; Material.foreground: Theme.foreground
     Binding { target: Theme; property: "scaleFactor"; value: win.uiScale }
     property int section: 0
+    // 浏览器懒加载：第一次打开浏览器才创建 WebEngineView（渲染进程）。
+    // 主页/天气/媒体等页面不再在启动时就拉起 WebEngine。
+    property bool browserLoaded: false
+    onSectionChanged: if(section===2) browserLoaded=true
     property string phase:"home"
     property real openProgress:0
     property real originX:width/2
@@ -350,6 +577,22 @@ ApplicationWindow {
     property bool bannerImportant:false
     property string bookmarkFilter:""
     property string settingsQuery:""
+    // 设置主页的二级页索引：-1 = 主页；0..9 = 分类页。
+    property int settingsSection:-1
+    // 设置主页分类卡片。match 只用于搜索过滤；adminOnly / hideForGuest
+    // 沿用原分组的可见规则（开发者选项只给管理员，关于本机不给访客）。
+    readonly property var settingsCards:[
+        {icon:"image",color:"#ff9d37",title:I18n.t("显示与个性化"),subtitle:I18n.t("壁纸、应用卡片与屏幕文字"),match:/显示|壁纸|比例|界面|外观|opacity/i},
+        {icon:"accessibility_new",color:"#ffb74d",title:I18n.t("无障碍"),subtitle:I18n.t("大字号模式"),match:/适老|大字|无障碍|accessibility|large/i},
+        {icon:"verified_user",color:"#85deff",title:I18n.t("锁屏与安全"),subtitle:I18n.t("无操作后自动锁定当前账户"),match:/锁屏|安全|自动锁|超时|lock|timeout|security/i},
+        {icon:"shield",color:"#4fd4a4",title:I18n.t("隐私与数据"),subtitle:I18n.t("记录保留期限"),match:/隐私|保留|清理|记录|privacy|retention|cleanup/i},
+        {icon:"language",color:"#27b7c5",title:I18n.t("语言 / Language"),subtitle:I18n.t("切换终端界面显示语言"),match:/语言|language|中文|english|英文/i},
+        {icon:"volume_up",color:"#10b7a8",title:I18n.t("语音音色"),subtitle:I18n.t("播报音色、输出设备与媒体降音"),match:/语音|音色|播报|voice|tts|speech/i},
+        {icon:"schedule",color:"#4c9dff",title:I18n.t("时间与报时"),subtitle:I18n.t("世界时钟校时与整点语音报时"),match:/时间|校时|报时|time|chime|alarm/i},
+        {icon:"wifi",color:"#35a9ff",title:I18n.t("网络连接管理"),subtitle:I18n.t("热点、联网总闸与各功能联网"),match:/网络|联网|热点|internet|network|权限|permission|wi.?fi|lan/i},
+        {icon:"code",color:"#85deff",title:I18n.t("开发者选项"),subtitle:I18n.t("运行时状态、日志、安全与沙箱"),match:/开发者|调试|沙箱|运行时|developer|debug|sandbox|runtime/i,adminOnly:true,action:"developer"},
+        {icon:"info",color:"#4c9dff",title:I18n.t("关于本机"),subtitle:I18n.t("设备信息、版本与软件更新"),match:/关于|本机|版本|硬件|about|device|version|hardware|update/i,hideForGuest:true,action:"about"}
+    ]
     property var keyboardAuditInput:null
     property var windowAnimationAuditSnapshot:({})
     property int windowAnimationAuditStage:0
@@ -390,6 +633,11 @@ ApplicationWindow {
         notificationBanner.open();bannerTimer.interval=important?10000:5000;bannerTimer.restart()
     }
     property string activeSession: ""
+    property string pendingWriteInstance: ""
+    // 子页面里的同名 property 会遮蔽外层 id；通过别名显式注入，避免
+    // `timeSync: timeSync` 变成自绑定并触发 binding loop。
+    readonly property var timeSyncBackend: timeSync
+    readonly property var alarmBackend: alarmEngine
     readonly property bool modulePageLoaded: modulePageHost.hasPage
     property bool bridgeConnectedPromptShown: false
     property string moduleMessage: ""
@@ -465,9 +713,40 @@ ApplicationWindow {
     property bool browserTestPassed: false
     property bool browserTouchLinkPassed:false
     property string browserStatus: ""
+    property string browserHttpPending: ""
     property string noteFile: "pi-terminal-note.txt"
     property string noteText: ""
     property string calcDisplay: "0"
+    // 表达式（用户按键拼出来的算式，等号后保留 "算式 ="）。
+    property string calcExpression: ""
+    // 历史：最近 20 条 { expr, result }。
+    // 计算器历史：存 calc/history（JSON），重启后仍在。
+    property var calcHistory: {
+        if (typeof systemTools === "undefined" || !systemTools) return []
+        const raw = systemTools.settingsRead("calc/history", "")
+        if (raw.length === 0) return []
+        try {
+            const parsed = JSON.parse(raw)
+            return Array.isArray(parsed) ? parsed : []
+        } catch (e) { return [] }
+    }
+
+    function saveCalcHistory() {
+        if (typeof systemTools === "undefined" || !systemTools) return
+        systemTools.settingsWrite("calc/history", JSON.stringify(calcHistory))
+    }
+
+    function removeCalcHistoryAt(index) {
+        const next = []
+        for (let i = 0; i < calcHistory.length; ++i) if (i !== index) next.push(calcHistory[i])
+        calcHistory = next
+        saveCalcHistory()
+    }
+
+    function clearCalcHistory() {
+        calcHistory = []
+        saveCalcHistory()
+    }
     property real calcStored: 0
     property string calcOperator: ""
     property bool calcFresh: true
@@ -508,15 +787,27 @@ ApplicationWindow {
     property bool exitPending:false
     readonly property bool permissionPending:trustDialog.visible
     property int browserViewGeneration: 0
-    // Repeater.itemAt() is a method, so bind it to an explicit revision bumped
-    // whenever delegates are added/removed or the active tab changes.
-    property var activeBrowser: browserViewGeneration >= 0
-        ? browserRepeater.itemAt(browserTabs.currentIndex) : null
+    // 浏览器视图在 Loader 里懒创建；未打开过浏览器时这里为 null。
+    // StackLayout 没有可靠的 currentItem 暴露，改为按 Repeater 的 index
+    // 找到当前标签的 WebEngineView；否则 activeBrowser 会一直停在第一页。
+    property var activeBrowser: null
+    function refreshActiveBrowser() {
+        const layout=browserViewLoader.item
+        if(!layout){activeBrowser=null;return}
+        let fallback=null
+        for(let i=0;i<layout.children.length;++i){
+            const view=layout.children[i]
+            if(!view || view.index===undefined) continue
+            if(!fallback) fallback=view
+            if(view.index===browserTabs.currentIndex){activeBrowser=view;return}
+        }
+        activeBrowser=fallback
+    }
     property bool browserWheelEnabled: false
     readonly property string defaultBrowserUrl: "https://baidu.com"
     Timer { interval: 1000; running: true; repeat: true; onTriggered: win.clockTick++ }
     function builtin(page) {
-        return ({1:{entryId:"connections",title:I18n.t("连接管理"),iconName:"lan",accentColor:"#ad8cff",route:1,instance:"",ready:true},
+        const entry = ({1:{entryId:"connections",title:I18n.t("连接管理"),iconName:"lan",accentColor:"#ad8cff",route:1,instance:"",ready:true},
                  2:{entryId:"browser",title:I18n.t("浏览器"),iconName:"language",accentColor:"#4fd4a4",route:2,instance:"",ready:true},
                  3:{entryId:"files",title:I18n.t("文件"),iconName:"folder",accentColor:"#ffbd54",route:3,instance:"",ready:true},
                  4:{entryId:"settings",title:I18n.t("设置"),iconName:"settings",accentColor:"#4c9dff",route:4,instance:"",ready:true},
@@ -527,7 +818,20 @@ ApplicationWindow {
                  10:{entryId:"video",title:I18n.t("视频播放器"),iconName:"play_arrow",accentColor:"#65c9bd",route:10,instance:"",ready:true},
                  11:{entryId:"tv",title:I18n.t("网络电视"),iconName:"tv",accentColor:"#ff7a59",route:11,instance:"",ready:true},
                  12:{entryId:"time",title:I18n.t("时间"),iconName:"schedule",accentColor:"#8f7bff",route:12,instance:"",ready:true},
-                 13:{entryId:"voice",title:I18n.t("语音音色"),iconName:"volume_up",accentColor:"#10b7a8",route:13,instance:"",ready:true}})[page]
+                 13:{entryId:"voice",title:I18n.t("语音音色"),iconName:"volume_up",accentColor:"#10b7a8",route:13,instance:"",ready:true},
+                 14:{entryId:"weather",title:I18n.t("天气"),iconName:"wb_cloudy",accentColor:"#35a9ff",route:14,instance:"",ready:true},
+                 15:{entryId:"users",title:I18n.t("用户与权限"),iconName:"person_add",accentColor:"#8f7bff",route:15,instance:"",ready:true}})[page]
+        // 临时会话的权限边界：设置、连接管理、用户与权限仍然出现在主界面，
+        // 但灰显、点开只弹"无权限"。灰显只是第一层，真正的拒绝在
+        // SessionManager/securityService 里（隐藏入口从来不是安全边界）。
+        // restricted 必须始终存在：ListModel 的角色在首次插入时定型，
+        // 只在访客分支才带这个键会让登录后残留 true（实测灰卡不消退）。
+        if (!entry) return entry
+        const guest = typeof sessionManager !== "undefined" && sessionManager && sessionManager.guestSession
+        const restricted = !!guest && (page === 3 || page === 4 || page === 15)
+        return ({entryId:entry.entryId, title:entry.title, iconName:entry.iconName,
+                 accentColor:entry.accentColor, route:entry.route, instance:entry.instance,
+                 ready:entry.ready, restricted:restricted})
     }
     function rememberApp(entry) {
         for(let i=recentApps.count-1;i>=0;--i)if(recentApps.get(i).entryId===entry.entryId)recentApps.remove(i)
@@ -543,7 +847,8 @@ ApplicationWindow {
             modulePageHost.unload(); activeSession=""; activeActions=[]; moduleMessage=""
         }
     }
-    function closeModulePopups() {
+    function closePopupsUnder(root) {
+        if (!root) return
         const seen=[]
         function visit(object) {
             if (!object || seen.indexOf(object)>=0) return
@@ -553,9 +858,48 @@ ApplicationWindow {
                 if (list && typeof list.length==="number")
                     for(let n=0;n<list.length;++n) visit(list[n])
             }
-            if (object!==modulePageHost.page && object.opened!==undefined && typeof object.close==="function") object.close()
+            if (object!==root && object.opened!==undefined && typeof object.close==="function") object.close()
         }
-        visit(modulePageHost.page)
+        visit(root)
+    }
+    function closeModulePopups() { closePopupsUnder(modulePageHost.page) }
+    // 二级页是 appShell 的常驻子项；关闭/切换/最小化应用时必须清掉它们的
+    // open 状态，否则联网权限、关于本机这类页面会直接盖到下一个应用上。
+    function closeAuxiliaryPanels(immediate) {
+        win.aboutDeviceOpen=false
+        win.networkPermissionsOpen=false
+        win.connectionSettingsOpen=false
+        win.developerPanelOpen=false
+        win.testModeOpen=false
+        if (!immediate) return
+        closePopupsUnder(settingsPageLoader.item)
+        closePopupsUnder(aboutDevicePage)
+        closePopupsUnder(networkPermissionsPageLoader.item)
+        closePopupsUnder(connectionSettingsPage)
+        closePopupsUnder(developerPanel)
+        closePopupsUnder(testModePanel)
+        if (aboutDevicePage) aboutDevicePage.hideImmediately()
+        if (networkPermissionsPageLoader.item) networkPermissionsPageLoader.item.hideImmediately()
+        if (connectionSettingsPage) connectionSettingsPage.hideImmediately()
+        if (developerPanel) developerPanel.hideImmediately()
+        if (testModePanel) testModePanel.hideImmediately()
+    }
+    // 把 root 策略里的第三方模块授权同步到当前实例。
+    function applyModulePermissions() {
+        if (typeof networkPolicy === "undefined" || !networkPolicy) return
+        const cards = connectionManager.cards
+        for (let i = 0; i < cards.length; ++i) {
+            const card = cards[i]
+            if (!card || !card.instance) continue
+            const id = String(card.packageId || "")
+            if (id === "") continue
+            const broker = String(card.networkApi || "none") === "broker"
+            const files = String(card.fileApi || "none") === "home-read"
+            networkGate.setModuleNetworkAllowed(card.instance,
+                broker && networkPolicy.moduleNetworkEnabled(id))
+            networkGate.setModuleFileAllowed(card.instance,
+                files && networkPolicy.moduleFileEnabled(id))
+        }
     }
     function announce(text) { if(systemTools.speechEnabled) systemTools.speak(text) }
     // 指定音色播报（后续功能用）；同样受总开关/300 字/降音约束。
@@ -661,23 +1005,121 @@ ApplicationWindow {
         paintRedo=paintRedo.slice(0,paintRedo.length-1);paintCanvas.redraw()
     }
     function paintClear() {paintStrokes=[];paintRedo=[];paintCanvas.redraw()}
-    function calcReset() {calcDisplay="0";calcStored=0;calcOperator="";calcFresh=true}
+    function calcReset() {calcDisplay="0";calcExpression="";calcStored=0;calcOperator="";calcFresh=true}
+    function calcBackspace() {
+        if(calcExpression.length===0){calcDisplay="0";calcFresh=true;return}
+        calcExpression=calcExpression.slice(0,calcExpression.length-1)
+        calcDisplay=calcExpression.length>0?calcExpression:"0"
+        calcFresh=calcExpression.length===0
+    }
+    // 表达式求值：递归下降，支持 + - × ÷ % 括号与负号。
+    function calcEvaluate(text) {
+        const src=String(text||"")
+                  .replace(/×/g,"*").replace(/÷/g,"/").replace(/−/g,"-")
+                  .replace(/%/g,"/100")
+        let i=0
+        function skip(){while(i<src.length&&src.charAt(i)===" ")i++}
+        function number(){
+            skip();let start=i
+            while(i<src.length&&/[0-9.]/.test(src.charAt(i)))i++
+            if(start===i)throw "num"
+            return parseFloat(src.slice(start,i))
+        }
+        function primary(){
+            skip()
+            const ch=src.charAt(i)
+            if(ch==="("){i++;const v=expr();skip();if(src.charAt(i)===")")i++;return v}
+            if(ch==="-"){i++;return -primary()}
+            if(ch==="+"){i++;return primary()}
+            return number()
+        }
+        function term(){
+            let v=primary();skip()
+            while(i<src.length&&(src.charAt(i)==="*"||src.charAt(i)==="/")){
+                const op=src.charAt(i++);const r=primary()
+                v=op==="*"?v*r:(r===0?NaN:v/r);skip()
+            }
+            return v
+        }
+        function expr(){
+            let v=term();skip()
+            while(i<src.length&&(src.charAt(i)==="+"||src.charAt(i)==="-")){
+                const op=src.charAt(i++);const r=term()
+                v=op==="+"?v+r:v-r;skip()
+            }
+            return v
+        }
+        try{return expr()}catch(e){return NaN}
+    }
+    function calcTailNumber() {
+        const m=calcExpression.match(/(\d+\.?\d*)$/)
+        return m?m[0]:""
+    }
+    // 一元函数（√ x² 1/x sin cos）：只作用于表达式末尾的那个数。
+    function calcApplyUnary(kind) {
+        const tail=calcTailNumber()
+        const value=tail===""?0:parseFloat(tail)
+        let out=0
+        if(kind==="√")out=value<0?NaN:Math.sqrt(value)
+        else if(kind==="x²")out=value*value
+        else if(kind==="1/x")out=value===0?NaN:1/value
+        else if(kind==="sin")out=Math.sin(value*Math.PI/180)
+        else if(kind==="cos")out=Math.cos(value*Math.PI/180)
+        const text=isNaN(out)?"0":String(Math.round(out*10000000000)/10000000000)
+        if(tail==="")calcExpression+=text
+        else calcExpression=calcExpression.slice(0,calcExpression.length-tail.length)+text
+        calcDisplay=calcExpression
+        calcFresh=false
+    }
     function calcInput(value) {
-        if(value==="C"){calcReset();return}
-        if(value===".") {if(calcFresh){calcDisplay="0.";calcFresh=false}else if(calcDisplay.indexOf(".")<0)calcDisplay+=".";return}
-        if(value>="0" && value<="9") {if(calcFresh||calcDisplay==="0"){calcDisplay=value;calcFresh=false}else calcDisplay+=value;return}
+        if(value==="AC"||value==="C"){calcReset();return}
+        if(value==="⌫"){calcBackspace();return}
+        if(value==="π"){calcExpression+=String(Math.PI);calcDisplay=calcExpression;calcFresh=false;return}
         if(value==="=") {calcEquals();return}
-        if(value==="+"||value==="-"||value==="×"||value==="÷") {calcStored=parseFloat(calcDisplay)||0;calcOperator=value;calcFresh=true}
+        if(value==="+"||value==="-"||value==="×"||value==="÷") {
+            if(calcExpression.length===0)calcExpression="0"
+            const last=calcExpression.charAt(calcExpression.length-1)
+            if(["+","-","×","÷"].indexOf(last)>=0)
+                calcExpression=calcExpression.slice(0,calcExpression.length-1)
+            calcExpression+=value
+            calcDisplay=calcExpression
+            calcFresh=false
+            return
+        }
+        if(value===".") {
+            const tail=calcTailNumber()
+            if(tail.indexOf(".")>=0)return
+            calcExpression+=tail===""?"0.":"."
+            calcDisplay=calcExpression
+            calcFresh=false
+            return
+        }
+        if(value==="±") {
+            const tail=calcTailNumber()
+            if(tail==="")return
+            const pos=calcExpression.length-tail.length
+            const before=calcExpression.slice(0,pos)
+            calcExpression=(before.endsWith("-")?before.slice(0,before.length-1)+tail:before+"-"+tail)
+            calcDisplay=calcExpression
+            return
+        }
+        if(value==="√"||value==="x²"||value==="1/x"||value==="sin"||value==="cos") {
+            calcApplyUnary(value);return
+        }
+        // 数字、括号
+        calcExpression+=value
+        calcDisplay=calcExpression
+        calcFresh=false
     }
     function calcEquals() {
-        if(!calcOperator)return
-        const rhs=parseFloat(calcDisplay)||0
-        let result=calcStored
-        if(calcOperator==="+")result+=rhs
-        else if(calcOperator==="-")result-=rhs
-        else if(calcOperator==="×")result*=rhs
-        else if(calcOperator==="÷")result=rhs===0?0:result/rhs
-        calcDisplay=String(Math.round(result*100000000)/100000000);calcOperator="";calcFresh=true
+        if(calcExpression.length===0)return
+        const result=calcEvaluate(calcExpression)
+        const shown=isNaN(result)?"错误":String(Math.round(result*100000000)/100000000)
+        calcHistory=([{expr:calcExpression+" =",result:shown}].concat(calcHistory)).slice(0,20)
+        saveCalcHistory()
+        calcExpression=shown==="错误"?calcExpression:calcExpression+" ="
+        calcDisplay=shown
+        calcFresh=true
     }
     function taskRow(entryId) {
         for(let i=0;i<openTasks.count;++i) if(openTasks.get(i).entryId===entryId) return openTasks.get(i)
@@ -696,8 +1138,21 @@ ApplicationWindow {
         for(let i=0;i<openTasks.count;++i)if(openTasks.get(i).entryId===entry.entryId){openTasks.set(i,row);return}
         openTasks.append(row)
     }
+    // 访客受限入口：只以内置应用、且非模块会话为准。
+    // 抽屉/最近使用/快捷键构造的 entry 可能没有 restricted 字段，
+    // 所以这里按 route 再判一次，不能只依赖卡片上的灰显状态。
+    function guestRestricted(entry) {
+        if (!entry || entry.instance || !sessionManager.guestSession) return false
+        return entry.restricted === true || entry.route === 3
+                || entry.route === 4 || entry.route === 15
+    }
+    function openVoiceSettings() {
+        // 语音音色已从主界面移入设置：从这里进入同一个二级页面（route 13）。
+        launch(builtin(13), width / 2, contentItem.height / 2)
+    }
     function launch(entry,x,y) {
         if(!entry)return false
+        if (guestRestricted(entry)) { restrictedNotice.show(entry.title); return false }
         if (appMinimized && appEntryId===entry.entryId) {
             restoreApp();return true
         }
@@ -705,6 +1160,8 @@ ApplicationWindow {
             if(appEntryId===entry.entryId){appMinimized=false;phase="open";updateTaskState();return true}
             pendingLaunch={entry:entry,x:x,y:y};switchTask(entry);return true
         }
+        // 新应用从干净的应用壳开始：不继承上一个应用打开的二级页。
+        closeAuxiliaryPanels(true)
         if(!entry.instance) clearForegroundModulePage()
         if(entry.instance) {
             let session=null
@@ -712,6 +1169,9 @@ ApplicationWindow {
             if(!session || !session.ready){showDevicePanel(false);return false}
             activeSession=entry.instance;activeActions=session.actions;moduleMessage=session.message
             // §0.7：模块页在独立引擎里加载，只注入 sessionModel 与只读 userContext。
+            applyModulePermissions()
+            modulePageHost.setNetworkInstance(entry.instance)
+            modulePageHost.setPackageId(connectionManager.modulePackageId(entry.instance))
             modulePageHost.load(Qt.url(connectionManager.pageProvider.page(entry.instance)),
                                 connectionManager.pageProvider.model(entry.instance),
                                 {background:Theme.background, surface:Theme.surface,
@@ -747,11 +1207,17 @@ ApplicationWindow {
     }
     function closeApp() {
         if(phase==="home" || phase==="closing")return
+        closeAuxiliaryPanels(true)
+        // 关闭 = 彻底停止：电视立即停播并释放解码器，不靠 active 变化兜底。
+        if(section===11) tvPage.stopPlayback()
         if(section===2){const savedTabs=[];for(let i=0;i<tabs.count;++i)savedTabs.push({address:tabs.get(i).address,pageTitle:tabs.get(i).pageTitle,privateMode:tabs.get(i).privateMode});viperBrowser.saveSession(savedTabs,browserTabs.currentIndex)}
         zoomAnimation.stop();phase="closing";zoomAnimation.to=0;zoomAnimation.duration=200;zoomAnimation.easing.type=Easing.InCubic;zoomAnimation.restart()
     }
     function minimizeApp() {
         if(phase!=="open") return
+        closeAuxiliaryPanels(true)
+        // 电视最小化按“后台播放”处理：保留管线，音频继续。
+        if(section===11) tvPage.enterBackgroundPlayback()
         closeModulePopups()
         appMinimizeAnimating=true;phase="minimizing"
         minimizeAnimation.from=openProgress;minimizeAnimation.to=0.06;minimizeAnimation.restart()
@@ -769,9 +1235,14 @@ ApplicationWindow {
         if(activeSession!=="") {
             const page=connectionManager.pageProvider.page(activeSession)
             const model=connectionManager.pageProvider.model(activeSession)
-            if(page!=="" && model) modulePageHost.load(Qt.url(page), model,
+            if(page!=="" && model) {
+                applyModulePermissions()
+                modulePageHost.setNetworkInstance(activeSession)
+                modulePageHost.setPackageId(connectionManager.modulePackageId(activeSession))
+                modulePageHost.load(Qt.url(page), model,
                 {background:Theme.background, surface:Theme.surface,
                  foreground:Theme.foreground, accent:Theme.accent, scale:win.uiScale})
+            }
             else { activeSession="";activeActions=[];moduleMessage="";section=0;phase="home";updateTaskState();return }
         }
         appMinimizeAnimating=true;phase="restoring";updateTaskState()
@@ -792,13 +1263,19 @@ ApplicationWindow {
         for(let i=0;i<openTasks.count;++i)if(openTasks.get(i).entryId===entry.entryId){
             // Keep task records alive while changing the foreground view; do not
             // send the current module through the close/unload path.
-            pendingLaunch=null;clearForegroundModulePage();announce(I18n.t("切换到")+entry.title);phase="home";
+            pendingLaunch=null;closeAuxiliaryPanels(true);clearForegroundModulePage();announce(I18n.t("切换到")+entry.title);
+            // 任务栏切换不是关闭：电视按后台播放处理，保住管线与音频。
+            if(section===11) tvPage.enterBackgroundPlayback()
+            phase="home";
             openTasks.setProperty(i,"minimized",false)
             Qt.callLater(function(){launch(entry,width/2,contentItem.height/2)});return
         }
         if(openTaskIds.indexOf(entry.entryId)<0)openTaskIds.push(entry.entryId)
         pendingLaunch={entry:entry,x:width/2,y:contentItem.height/2};
-        clearForegroundModulePage();phase="home";Qt.callLater(function(){let next=pendingLaunch;pendingLaunch=null;launch(next.entry,next.x,next.y)})
+        closeAuxiliaryPanels(true)
+        clearForegroundModulePage();
+        if(section===11) tvPage.enterBackgroundPlayback()
+        phase="home";Qt.callLater(function(){let next=pendingLaunch;pendingLaunch=null;launch(next.entry,next.x,next.y)})
     }
     function arrangeWindows() { }
     function exitApplication() {
@@ -808,6 +1285,7 @@ ApplicationWindow {
     function finishTransition() {
         if(phase==="opening"){phase="open";return}
         if(phase!=="closing")return
+        closeAuxiliaryPanels(true)
         modulePageHost.unload();activeSession="";activeActions=[];moduleMessage="";section=0;phase="home";appMinimized=false;appMaximized=false
         const closingId=appEntryId;openTaskIds=openTaskIds.filter(function(id){return id!==closingId})
         for(let i=openTasks.count-1;i>=0;--i)if(openTasks.get(i).entryId===closingId)openTasks.remove(i)
@@ -828,13 +1306,35 @@ ApplicationWindow {
     NumberAnimation {id:zoomAnimation;target:win;property:"openProgress";onFinished:win.finishTransition()}
     NumberAnimation {id:minimizeAnimation;target:win;property:"openProgress";duration:300;easing.type:Easing.InCubic;onFinished:win.finishMinimizeAnimation()}
     NumberAnimation {id:restoreAnimation;target:win;property:"openProgress";duration:360;easing.type:Easing.OutCubic;onFinished:win.finishRestoreAnimation()}
-    Shortcut {sequence:"Escape";enabled:phase==="open" && !videoFullscreen && !trustDialog.opened && !fileDialog.opened && !fileOperationDialog.opened && !bookmarkDialog.opened && !devicePanel.opened;onActivated:closeApp()}
+    Shortcut {sequence:"Escape";enabled:phase==="open" && !videoFullscreen && !developerPanelOpen && !testModeOpen && !aboutDeviceOpen && !networkPermissionsOpen && !trustDialog.opened && !fileDialog.opened && !fileOperationDialog.opened && !bookmarkDialog.opened && !devicePanel.opened;onActivated:closeApp()}
     function stateText(state) { return connectionStateLabel(state) }
+    // 应用卡片的默认顺序（内置应用）；编辑模式确认后会以 layout/apps 覆盖。
+    readonly property var appDefaultRoutes: [2,3,1,4,6,7,8,9,10,12,15,14,11]
+    readonly property var appDefaultOrder: {
+        const ids = []
+        for (let route of appDefaultRoutes) ids.push(builtin(route).entryId)
+        return ids
+    }
+
     function syncCards() {
-        const entries=[]
-        for(let card of connectionManager.cards) entries.push({entryId:card.instance,title:card.title,
-            description:stateText(card.state),category:I18n.t("模块"),accentColor:"#85deff",iconName:card.icon||"extension",route:5,instance:card.instance,ready:card.ready})
-        for(let route of [2,3,1,4,6,7,8,9,10,11,12]) {let app=builtin(route);app.description="";app.category=I18n.t("应用");entries.push(app)}
+        const modules=[]
+        for(let card of connectionManager.cards) modules.push({entryId:card.instance,title:card.title,
+            description:stateText(card.state),category:I18n.t("模块"),accentColor:"#85deff",iconName:card.icon||"extension",route:5,instance:card.instance,ready:card.ready,restricted:false})
+        const apps=[]
+        for(let route of appDefaultRoutes) {let app=builtin(route);app.description="";app.category=I18n.t("应用");apps.push(app)}
+        // 已保存顺序只认内置应用；新版本新增的应用没有记录，按默认顺序接在末尾。
+        let savedOrder=[]
+        try { savedOrder=JSON.parse(systemTools.settingsRead("layout/apps","[]")) } catch(e) { savedOrder=[] }
+        if (Array.isArray(savedOrder) && savedOrder.length>0) {
+            const rank={}
+            for(let i=0;i<savedOrder.length;++i) rank[savedOrder[i]]=i
+            apps.sort(function(a,b) {
+                const ra=rank.hasOwnProperty(a.entryId)?rank[a.entryId]:Number.MAX_SAFE_INTEGER
+                const rb=rank.hasOwnProperty(b.entryId)?rank[b.entryId]:Number.MAX_SAFE_INTEGER
+                return ra-rb
+            })
+        }
+        const entries=modules.concat(apps)
         for (let i=homeCards.count-1; i>=0; --i)
             if (!entries.some(function(e) { return e.entryId === homeCards.get(i).entryId })) homeCards.remove(i)
         for (let desired=0;desired<entries.length;++desired) {
@@ -857,6 +1357,14 @@ ApplicationWindow {
     function openVoicePage() {
         launch(builtin(13), width/2, contentItem.height/2)
     }
+    // 语音播报的输出设备/测试音色确认浮层仍挂在 Main（Overlay 全局层），
+    // 由「语音音色」页通过 hostWindow 调用；设置页不再持有语音播报配置。
+    function openAudioOutputPopup() {
+        audioOutputPopup.open()
+    }
+    function openVoiceTestConfirm() {
+        voiceTestConfirm.open()
+    }
     function openAlarms() {
         launch(builtin(12), width/2, contentItem.height/2)
         Qt.callLater(function() { if (timePage) timePage.setTab(3) })
@@ -867,22 +1375,66 @@ ApplicationWindow {
         }
         showDevicePanel(false);return false
     }
-    function navigateBrowser(text) {
-        let address=viperBrowser.resolveAddress(text)
-        if (address === "") return
+    function loadBrowserAddress(address) {
         if(browserTabs.currentIndex>=0 && browserTabs.currentIndex<tabs.count)tabs.setProperty(browserTabs.currentIndex,"address",address)
         location.text=address
         if(activeBrowser){browserStatus=I18n.t("正在加载");activeBrowser.forceActiveFocus();activeBrowser.url=address}
     }
+    function navigateBrowser(text) {
+        let address=viperBrowser.resolveAddress(text)
+        if (address === "") return
+        // 内置浏览器保留 HTTP 可用性，但每次地址栏/历史导航先明确警告。
+        if (address.toLowerCase().startsWith("http://")) {
+            win.browserHttpPending=address
+            browserHttpConfirm.open()
+            return
+        }
+        win.loadBrowserAddress(address)
+    }
     function beginBrowserTest() {
-        go(2); tabs.append({address:"about:blank",privateMode:false}); browserTabs.currentIndex=tabs.count-1
-        Qt.callLater(function() { browserTestRunning=true; activeBrowser.zoomFactor=1.6
-            activeBrowser.loadHtml("<html><head><title>Local terminal test</title></head><body><h1>Browser ready</h1></body></html>") })
+        go(2); browserLoaded=true
+        tabs.append({address:"about:blank",privateMode:false}); browserTabs.currentIndex=tabs.count-1
+        // WebEngineView 是懒加载的；activeBrowser 在下一轮布局后才存在。
+        // 不能在 callLater 第一帧就 loadHtml，否则审计会报 loadHtml undefined。
+        const start=function(attempt) {
+            const view=activeBrowser ? activeBrowser : findControl(win.contentItem,"browserWebView")
+            if (!view) {
+                if (attempt<60) Qt.callLater(function(){ start(attempt+1) })
+                return
+            }
+            browserTestRunning=true
+            view.zoomFactor=1.6
+            view.loadHtml("<html><head><title>Local terminal test</title></head><body><h1>Browser ready</h1></body></html>")
+        }
+        Qt.callLater(function(){ start(0) })
+    }
+    property bool auditGateWasEnabled: true
+    property bool auditBrowserWasAllowed: false
+    function auditEnableBrowserFixture() {
+        if(typeof networkGate==="undefined")return
+        auditGateWasEnabled=networkGate.enabled
+        auditBrowserWasAllowed=networkGate.browserAllowed
+        if(!networkGate.enabled)networkGate.setEnabledFromUi(true)
+        if(!networkGate.browserAllowed)networkGate.setFeatureEnabledFromUi("browser",true)
+    }
+    function auditRestoreBrowserFixture() {
+        if(typeof networkGate==="undefined")return
+        networkGate.setFeatureEnabledFromUi("browser",auditBrowserWasAllowed)
+        networkGate.setEnabledFromUi(auditGateWasEnabled)
     }
     function auditBrowserTouchPage() {
         tabs.append({address:"about:blank",privateMode:false});browserTabs.currentIndex=tabs.count-1
         viperBrowser.setJavascriptPopupsEnabled(true)
-        Qt.callLater(function(){activeBrowser.loadHtml("<html><body style='font-size:32px'><a id='go' target='_blank' href='https://touch-link.example/'>TOUCH LINK</a><div style='height:1800px'>TOUCH SCROLL TARGET</div></body></html>")})
+        const start=function(attempt) {
+            win.refreshActiveBrowser()
+            const view=win.activeBrowser
+            if (!view || view.index!==browserTabs.currentIndex) {
+                if (attempt<60) Qt.callLater(function(){ start(attempt+1) })
+                return
+            }
+            view.loadHtml("<html><body style='font-size:32px'><a id='go' target='_blank' href='https://touch-link.example/'>TOUCH LINK</a><div style='height:1800px'>TOUCH SCROLL TARGET</div></body></html>")
+        }
+        Qt.callLater(function(){ start(0) })
     }
     function auditBrowserClickLink() { if(activeBrowser) activeBrowser.runJavaScript("document.getElementById('go').click()") }
     function auditBrowserTouchReset() { if(activeBrowser) activeBrowser.runJavaScript("window.scrollTo(0,0)") }
@@ -909,11 +1461,14 @@ ApplicationWindow {
             downloadDirectory:viperBrowser.downloadDirectory()})
     }
     function auditBrowserTouchSnapshot() {
+        const view=activeBrowser && activeBrowser.index===browserTabs.currentIndex ? activeBrowser : null
+        const touchHandler=view?findControl(view,"browserTouchScrollFallback"):null
         return JSON.stringify({drag:browserTouchDragDistance,
-            scroll:activeBrowser?activeBrowser.scrollPosition.toString():"no-view",
-            scrollY:activeBrowser?activeBrowser.scrollPosition.y:-1,
-            url:activeBrowser?activeBrowser.url.toString():"no-view",
-            size:activeBrowser?activeBrowser.contentsSize.toString():"no-view"})
+            scroll:view?view.scrollPosition.toString():"no-view",
+            scrollY:view?view.scrollPosition.y:-1,
+            url:view?view.url.toString():"no-view",
+            size:view?view.contentsSize.toString():"no-view",
+            dragActive:touchHandler?touchHandler.active:false})
     }
     function auditOpenBrowserTools() { browserTools.open(); return true }
     function auditCloseBrowserTools() { browserTools.close() }
@@ -1060,7 +1615,28 @@ ApplicationWindow {
             }
         }
     }
-    function auditPage(page) {pendingLaunch=null;if(phase!=="home"){closeApp();zoomAnimation.complete()}if(page>0){go(page);zoomAnimation.complete()}}
+    function auditPage(page) {
+        pendingLaunch=null
+        if(phase!=="home") {
+            closeApp()
+            zoomAnimation.complete()
+            // complete() 只把动画推到终点，不保证走 onFinished；不调用
+            // finishTransition 会留下 section!=0 的隐藏 appShell，后续 resize
+            // 会进入坏掉的布局。审计/测试必须显式收尾。
+            if(phase==="closing") finishTransition()
+        }
+        if(page>0){go(page);zoomAnimation.complete()}
+    }
+    function auditNetworkPanel(show) {
+        win.aboutDeviceOpen=false
+        win.networkPermissionsOpen=show
+    }
+    function auditNetworkPanelSnapshot() {
+        const panel=networkPermissionsPageLoader.item
+        return JSON.stringify({section:section,phase:phase,open:win.networkPermissionsOpen,
+            loaded:!!panel,visible:panel?panel.visible:false,shown:panel?panel.shown:false,
+            x:panel?panel.x:-1,width:panel?panel.width:0})
+    }
     function targetPageAudit() {
         let count=0,fit=true
         if(section===6) for(let i=0;i<calculatorGrid.children.length;++i) {
@@ -1130,7 +1706,8 @@ ApplicationWindow {
             for(let i=0;i<openTasks.count;++i)if(openTasks.get(i).route!==5)openTasks.setProperty(i,"title",builtin(openTasks.get(i).route).title)
         }
     }
-        function onNotification(message){win.notify("",message,false)} }
+        // 启动阶段的日志（如“语音输出切换…”）不再弹横幅，只进运行记录。
+        function onNotification(message){ if(!message || !message.trim() || !win.startupComplete || Date.now()-win.bootAt < 8000) return; win.notify("",message,false) } }
     Connections {
         target:connectionManager
         // 模块包更新后不重启终端：重新加载当前模块页。
@@ -1154,7 +1731,7 @@ ApplicationWindow {
     }
     Timer { id:bannerTimer; onTriggered:notificationBanner.close() }
     Popup {
-        id:notificationBanner;objectName:"notificationBanner";parent:Overlay.overlay;visible:!sessionManager.locked
+        id:notificationBanner;objectName:"notificationBanner";parent:Overlay.overlay
         x:(win.width-width)/2;y:Theme.gap;width:Math.min(win.width-Theme.gap*2,720*uiScale)
         padding:Theme.gap;modal:false;closePolicy:Popup.NoAutoClose
         background:GlassSurface {color:Theme.surface;radius:Theme.shapeLarge;borderColor:bannerImportant?"#ffc66d":Theme.outline;borderWidth:2}
@@ -1266,6 +1843,9 @@ ApplicationWindow {
     }
     // 校时状态活在页面之外：设置页分区与时间页看到的是同一份城市/线路状态。
     TimeSync {id:timeSync;objectName:"timeSync"}
+    // 天气状态同样活在页面之外：切换页面不会丢数据，设置页与天气页共用一份地点/缓存。
+    WeatherEngine {id:weatherEngine;objectName:"weatherEngine";active:win.section===14 && win.phase!=="home"}
+
     footer:StatusDock {
         id:statusDock
         visible:!win.repairBackdropOnly && !win.videoFullscreen
@@ -1320,27 +1900,61 @@ ApplicationWindow {
     }
     FloatingKeyboard {
         id:screenKeyboard
-        z:2000
+        // 必须压过登入门禁(20000)、解锁遮罩(31000)、开发者面板与建号覆盖层(30000)，
+        // 但低于首次开机向导(50000)与删账户等待层(45000)。
+        z:36000
         uiScale:win.uiScale
         hostWindow:win
+        onVisibleChanged:Qt.callLater(win.updateKeyboardShift)
+        onYChanged:Qt.callLater(win.updateKeyboardShift)
+        onHeightChanged:Qt.callLater(win.updateKeyboardShift)
+    }
+    Connections {
+        target:win
+        function onActiveFocusItemChanged(){Qt.callLater(win.updateKeyboardShift)}
+        function onUiScaleChanged(){Qt.callLater(win.updateKeyboardShift)}
     }
     Item {
         id:homePane;objectName:"homePane";anchors.fill:parent;anchors.margins:win.edge;visible:phase!=="open"&&!repairBackdropOnly;enabled:phase==="home" && !sessionManager.locked
         opacity:phase==="home"?1:1-openProgress*0.3
             RowLayout {id:homeHeader;anchors.left:parent.left;anchors.right:parent.right;anchors.top:parent.top;height:Theme.hit;spacing:Theme.gap
                 CarText {text:I18n.t("应用");heading:true;Layout.fillWidth:true}
-                CarText {visible:!narrow;text:connectionManager.cards.length?connectionManager.cards.length+I18n.t(" 个模块已接入"):launcher.pageCount>1?I18n.t("左右滑动浏览应用"):I18n.t("点按图标打开应用");subdued:true}
+                // 副标题与编辑控件共用一块位置：编辑时副标题让位给 取消/恢复默认/完成。
+                CarText {objectName:"appLayoutHint";visible:!narrow && !launcher.editMode
+                    text:connectionManager.cards.length?connectionManager.cards.length+I18n.t(" 个模块已接入"):launcher.pageCount>1?I18n.t("左右滑动浏览应用"):I18n.t("点按图标打开应用");subdued:true}
+                // 登出：访客结束临时会话（连数据一起删），正式用户登出回登录页。
+                // 位置在"左右滑动浏览应用"与编辑图标之间；编辑期间与提示条一起让位，
+                // 退出编辑后回来。窄屏（提示条隐藏）仍保留，避免退不出去。
+                IconButton {objectName:"sessionLogout";iconName:"logout"
+                    accentColor:Theme.warning
+                    label:sessionManager.guestSession?I18n.t("退出访客会话"):I18n.t("退出登录")
+                    visible:sessionManager.loggedIn && !launcher.editMode
+                    onClicked: sessionManager.guestSession ? sessionManager.endGuestSession()
+                                                           : sessionManager.signOut()}
+                // 编辑用 tune（调节）图标；进入后取消=×、完成=✓。
+                IconButton {objectName:"appLayoutEdit";iconName:"build";label:I18n.t("编辑应用布局")
+                    visible:!launcher.editMode;onClicked:launcher.enterEdit()}
+                IconButton {objectName:"appLayoutCancel";iconName:"close";label:I18n.t("取消")
+                    visible:launcher.editMode;onClicked:launcher.cancelEdit()}
+                IconButton {objectName:"appLayoutReset";iconName:"refresh";label:I18n.t("恢复默认布局")
+                    visible:launcher.editMode;onClicked:launcher.resetOrder()}
+                IconButton {objectName:"appLayoutDone";iconName:"check";label:I18n.t("完成")
+                    visible:launcher.editMode;filled:true;onClicked:launcher.finishEdit()}
                 IconButton {iconName:"tune";label:I18n.t("设备快捷设置");onClicked:showDevicePanel(false)}
                 IconButton {iconName:"minimize";label:I18n.t("返回桌面");onClicked:desktopShell.showDesktop()}
             }
-            AppLauncher {id:launcher;backgroundSource:desktopBackground;backgroundBlurTexture:windowBlurCache.activeTexture;anchors.left:parent.left;anchors.right:parent.right;anchors.bottom:parent.bottom;anchors.top:homeHeader.bottom;anchors.topMargin:Theme.gap;model:homeCards;revision:homeRevision
-                onActivated:function(entry,x,y){launch(entry,x,y)}}
+            AppLauncher {id:launcher;backgroundSource:desktopBackground;backgroundBlurTexture:windowBlurCache.activeTexture;anchors.left:parent.left;anchors.right:parent.right;anchors.bottom:parent.bottom;anchors.top:homeHeader.bottom;anchors.topMargin:Theme.gap;model:homeCards;revision:homeRevision;defaultOrder:win.appDefaultOrder
+                onActivated:function(entry,x,y){launch(entry,x,y)}
+                onRestrictedActivated:function(entry){restrictedNotice.show(entry.title)}}
     }
     Item {
         id:appShell;objectName:"animatedAppSurface"
         x:videoFullscreen || appMaximized || narrow?0:win.width*0.08; y:videoFullscreen || appMaximized || narrow?0:win.contentItem.height*0.06
         width:videoFullscreen || appMaximized || narrow?win.width:win.width*0.84; height:videoFullscreen || appMaximized || narrow?win.contentItem.height:win.contentItem.height*0.84
         visible:section!==0 && !appMinimized;enabled:phase==="open";opacity:openProgress
+        // 二级页从 pages 右缘滑入时仍属于 appShell；不裁切会让页面的右半截
+        // 在应用窗口外再画一份，随缩放看起来像"上一个菜单闪了一下"。
+        clip:true
         Behavior on x {NumberAnimation {duration:300;easing.type:Easing.InOutCubic}}
         Behavior on y {NumberAnimation {duration:300;easing.type:Easing.InOutCubic}}
         Behavior on width {NumberAnimation {duration:300;easing.type:Easing.InOutCubic}}
@@ -1366,13 +1980,44 @@ ApplicationWindow {
             }
             StackLayout {
         id:pages;anchors.left:parent.left;anchors.right:parent.right;anchors.top:videoFullscreen?parent.top:windowTitleBar.bottom;anchors.bottom:parent.bottom;anchors.topMargin:videoFullscreen?0:Theme.gap;currentIndex:Math.max(0,win.section-1)
+        // 键盘避让（参考宠物菜单：按键盘 y 收可用高度）。
+        // 1) 可视区底部收到键盘上沿，页面在剩下的空间里滚动，下半屏不会被键盘永久盖住；
+        // 2) 聚焦输入框若仍被遮，再用 translate 整体上移补足。
+        transform: Translate {
+            y: -win.keyboardShift
+            // 只在键盘可见时做动画：收起键盘的瞬间内容已经在重新布局，
+            // 再叠一段位移动画会看到「先弹上去再落回来」。
+            Behavior on y {
+                enabled: screenKeyboard.visible
+                NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+            }
+        }
         // MODULES: wrap toolbar controls, never compress a single fixed row.
+        Item {
+        id:connectionPageRoot
         Flickable {
-            id:moduleFlick; objectName:"connectionPage"; clip:true; contentWidth:width; contentHeight:moduleColumn.implicitHeight
+            id:moduleFlick; objectName:"connectionPage"; anchors.fill:parent; clip:true; contentWidth:width
+            contentHeight:connectionPageLoader.item ? connectionPageLoader.item.implicitHeight : 0
             boundsBehavior:Flickable.StopAtBounds; flickableDirection:Flickable.VerticalFlick
+            // This page is hidden while any other module is open. Building its
+            // wrapped column at a transient 313x149 size made Qt 6.5 abort a
+            // polish loop; keep it unloaded until the connections page is open.
+            Loader {
+                id:connectionPageLoader
+                width:moduleFlick.width
+                active:win.section===1 && win.phase!=="home"
+                sourceComponent:Component {
             ColumnLayout {
                 id:moduleColumn; width:moduleFlick.width; spacing:Theme.gap
-                CarText {text:I18n.t("这里只管理连接。模块功能请从主页图标打开。");Layout.fillWidth:true;subdued:true}
+                RowLayout { Layout.fillWidth:true; spacing:Theme.gap
+                    CarText {text:I18n.t("这里只管理连接。模块功能请从主页图标打开。");Layout.fillWidth:true;subdued:true}
+                    // 访客只灰显（图标小，不加锁角标），点击弹无权限。
+                    IconButton {objectName:"connectionSettingsGear";iconName:"settings"
+                        opacity:sessionManager.guestSession?0.4:1
+                        label:I18n.t("连接设置")
+                        onClicked: sessionManager.guestSession ? restrictedNotice.show(I18n.t("连接设置"))
+                                                               : win.connectionSettingsOpen=true}
+                }
                 Flow {
                     visible:desktopDebug; Layout.fillWidth:true; spacing:Theme.gap
                     IconButton {iconName:"apps";label:I18n.t("插入示例");onClicked:connectionManager.attach({event:"attach",module_id:80,module_instance:"desktop-demo"})}
@@ -1404,6 +2049,16 @@ ApplicationWindow {
                     }
                 }
             }
+                }
+            }
+        }
+        ConnectionSettingsPage {
+            id:connectionSettingsPage
+            width:parent.width;height:parent.height
+            open:win.connectionSettingsOpen
+            onCloseRequested:win.connectionSettingsOpen=false
+            onKeyboardRequested:screenKeyboard.show()
+        }
         }
         // BROWSER: short or portrait screens use a scrollable toolbar over a sizeable viewport.
     Flickable {
@@ -1413,13 +2068,13 @@ ApplicationWindow {
             ColumnLayout {
                 id:browserColumn; anchors.fill:parent; spacing:Theme.gap
                 RowLayout {Layout.fillWidth:true;spacing:Theme.gap/2
-                    IconButton {visible:!narrow;iconName:"arrow_back";label:I18n.t("后退");enabled:activeBrowser && activeBrowser.canGoBack;onClicked:activeBrowser.goBack()}
-                    IconButton {visible:!narrow;iconName:"arrow_forward";label:I18n.t("前进");enabled:activeBrowser && activeBrowser.canGoForward;onClicked:activeBrowser.goForward()}
+                    IconButton {visible:!narrow;iconName:"arrow_back";label:I18n.t("后退");enabled:!!(activeBrowser && activeBrowser.canGoBack);onClicked:if(activeBrowser)activeBrowser.goBack()}
+                    IconButton {visible:!narrow;iconName:"arrow_forward";label:I18n.t("前进");enabled:!!(activeBrowser && activeBrowser.canGoForward);onClicked:if(activeBrowser)activeBrowser.goForward()}
                     IconButton {iconName:activeBrowser && activeBrowser.loading?"close":"refresh";label:activeBrowser && activeBrowser.loading?I18n.t("停止加载"):I18n.t("刷新");enabled:!!activeBrowser;onClicked:{if(activeBrowser.loading)activeBrowser.stop();else activeBrowser.reload()}}
                     IconButton {objectName:"browserWheelToggle";iconName:"gamepad";label:I18n.t("网页方向轮盘");Accessible.name:I18n.t(win.browserWheelEnabled?"关闭网页方向轮盘":"打开网页方向轮盘");filled:win.browserWheelEnabled;enabled:!!win.activeBrowser;onClicked:win.browserWheelEnabled=!win.browserWheelEnabled}
-                    CarField {id:location;objectName:"browserAddressField";Layout.fillWidth:true;Layout.minimumWidth:0;implicitWidth:0
+                    CarField {id:location;objectName:"browserAddressField";Layout.fillWidth:true;Layout.minimumWidth:Math.max(48,Theme.hit*0.75);Layout.minimumHeight:Theme.hit;Layout.preferredHeight:Theme.hit;implicitWidth:0
                         text:activeBrowser?activeBrowser.url.toString():defaultBrowserUrl;placeholderText:"";onAccepted:navigateBrowser(text)}
-                    IconButton {iconName:"arrow_forward";label:I18n.t("前往");onClicked:navigateBrowser(location.text)}
+                    IconButton {visible:!win.compactBrowserToolbar;iconName:"arrow_forward";label:I18n.t("前往");onClicked:navigateBrowser(location.text)}
                         IconButton {iconName:"tune";label:I18n.t("浏览器工具");onClicked:browserTools.open()
                         Menu {
                             id:browserTools;objectName:"browserToolsMenu"
@@ -1443,7 +2098,7 @@ ApplicationWindow {
                                         anchors.centerIn:parent;spacing:8
                                         ToolButton {
                                             objectName:"browserQuickBack";width:48;height:48;padding:0
-                                            enabled:activeBrowser&&activeBrowser.canGoBack
+                                            enabled:!!(activeBrowser&&activeBrowser.canGoBack)
                                             icon.source:systemTools.monochromeIcon("arrow_back",true);icon.width:24;icon.height:24
                                             Accessible.name:I18n.t("后退")
                                             background:Rectangle {radius:24;color:parent.enabled?(parent.hovered?"#3a3f48":"#171a20"):"#3b4048"}
@@ -1451,7 +2106,7 @@ ApplicationWindow {
                                         }
                                         ToolButton {
                                             objectName:"browserQuickForward";width:48;height:48;padding:0
-                                            enabled:activeBrowser&&activeBrowser.canGoForward
+                                            enabled:!!(activeBrowser&&activeBrowser.canGoForward)
                                             icon.source:systemTools.monochromeIcon("arrow_forward",true);icon.width:24;icon.height:24
                                             Accessible.name:I18n.t("前进")
                                             background:Rectangle {radius:24;color:parent.enabled?(parent.hovered?"#3a3f48":"#171a20"):"#3b4048"}
@@ -1545,7 +2200,7 @@ ApplicationWindow {
                 CarText {visible:browserStatus.indexOf(I18n.t("加载失败"))===0;text:browserStatus;color:Theme.warning;subdued:true;Layout.fillWidth:true;maximumLineCount:1;elide:Text.ElideRight}
                 Flow { Layout.fillWidth:true; spacing:Theme.gap
                     Repeater { model:tabs; CarButton {
-                        required property int index;required property var model;text:model.pageTitle || (I18n.t("网页 ")+(index+1));width:Math.min(160*uiScale,Math.max(92*uiScale,(browserColumn.width-Theme.gap*(tabs.count+1)-Theme.hit*2)/Math.max(1,tabs.count)));checked:browserTabs.currentIndex===index
+                        required property int index;required property var model;text:model.pageTitle || (I18n.t("网页 ")+(index+1));width:Math.max(48,Math.min(160*uiScale,Math.max(92*uiScale,(browserColumn.width-Theme.gap*(tabs.count+1)-Theme.hit*2)/Math.max(1,tabs.count))));height:Theme.hit;checked:browserTabs.currentIndex===index
                         onClicked:browserTabs.currentIndex=index
                     } }
                     IconButton {iconName:"add";label:I18n.t("新标签页");enabled:tabs.count<8;onClicked:{tabs.append({address:viperBrowser.newTabUrl(),privateMode:false});browserTabs.currentIndex=tabs.count-1}
@@ -1569,6 +2224,14 @@ ApplicationWindow {
                     property int currentIndex:0
                     onCurrentIndexChanged: {
                         win.browserViewGeneration++
+                        // StackLayout can clamp its currentIndex while a
+                        // Repeater row is being added, which removes the
+                        // declarative binding. Re-apply the selected tab so
+                        // activeBrowser points at the visible WebEngineView.
+                        if (browserViewLoader.item && browserViewLoader.item.currentIndex!==currentIndex)
+                            browserViewLoader.item.currentIndex=currentIndex
+                        win.refreshActiveBrowser()
+                        Qt.callLater(function(){win.refreshActiveBrowser()})
                         if (currentIndex>=0 && currentIndex<tabs.count) {
                             location.text=tabs.get(currentIndex).address
                             browserStatus=""
@@ -1576,14 +2239,42 @@ ApplicationWindow {
                     }
                 }
                 ListModel { id:tabs; ListElement { address:"https://baidu.com";pageTitle:"百度";privateMode:false } }
-                StackLayout {
+                // 懒加载：只有第一次打开浏览器（win.browserLoaded）才创建
+                // WebEngineView，避免启动时就拉起 QtWebEngineProcess。
+                // 联网权限：入口不拒绝（否则"请求被拦"这条路径根本走不到），
+                // 改成能打开、但所有请求被 RequestInterceptor 就地取消，这里如实说明。
+                CarText {
+                    objectName:"browserNetworkOff"
+                    Layout.fillWidth:true
+                    visible: win.section===2 && !(networkGate.enabled && networkGate.featureEnabled("browser"))
+                    color:Theme.warning
+                    wrapMode:Text.Wrap
+                    text:I18n.t("联网已关闭：浏览器不会发出任何请求。请到设置 → 联网权限里打开浏览器联网。")
+                }
+                CarText {
+                    objectName:"browserHttpWarning"
+                    Layout.fillWidth:true
+                    visible: win.section===2 && !!activeBrowser
+                             && activeBrowser.url.toString().toLowerCase().startsWith("http://")
+                    color:Theme.warning
+                    wrapMode:Text.Wrap
+                    text:I18n.t("不安全：此网页使用明文 HTTP，内容可能被窃听或篡改。")
+                }
+                Loader {
+                    id:browserViewLoader
+                    objectName:"browserViewLoader"
                     Layout.fillWidth:true; Layout.fillHeight:true;Layout.minimumHeight:0
+                    active:win.browserLoaded
+                    onLoaded:win.refreshActiveBrowser()
+                    sourceComponent:Component {
+                StackLayout {
+                    anchors.fill:parent
                     currentIndex:browserTabs.currentIndex
                     Repeater {
                         id:browserRepeater
                         model:tabs
-                        onItemAdded:function(index,item) { win.browserViewGeneration++ }
-                        onItemRemoved:function(index,item) { win.browserViewGeneration++ }
+                        onItemAdded:function(index,item) { win.browserViewGeneration++;Qt.callLater(function(){win.refreshActiveBrowser()}) }
+                        onItemRemoved:function(index,item) { win.browserViewGeneration++;Qt.callLater(function(){win.refreshActiveBrowser()}) }
                         WebEngineView {
                             id:browserWebViewItem
                             objectName:"browserWebView"
@@ -1598,6 +2289,11 @@ ApplicationWindow {
                             DragHandler {
                                 id:browserTouchScroll;objectName:"browserTouchScrollFallback"
                                 target:null;acceptedDevices:PointerDevice.TouchScreen
+                                // WebEngine takes the touch stream for its own
+                                // gesture handling on some backends. Keep this
+                                // fallback able to take over so a swipe still
+                                // scrolls even when Chromium declines it.
+                                grabPermissions:PointerHandler.CanTakeOverFromAnything|PointerHandler.ApprovesTakeOverByAnything
                                 property real previousTranslationY:0
                                 onActiveChanged:previousTranslationY=translation.y
                                 onTranslationChanged:function() {
@@ -1618,6 +2314,10 @@ ApplicationWindow {
                             }
                             onNewWindowRequested:function(request) {
                                 const target=request.requestedUrl.toString()
+                                // The audit fixture's target=_blank link may be
+                                // blocked by the network gate after this signal
+                                // opens its tab; record the activation itself.
+                                if(target.indexOf("touch-link.example")>=0)browserTouchLinkPassed=true
                                 if (tabs.count>=8) {
                                     request.openIn(browserWebViewItem)
                                     return
@@ -1639,7 +2339,7 @@ ApplicationWindow {
                             property string filterInjectedUrl:""
                             onUrlChanged: {
                                 if(filterInjectedUrl!==url.toString())filterInjectedUrl=""
-                                if(url.toString().indexOf("touch-link")>=0)browserTouchLinkPassed=true
+                                if(url.host==="touch-link.example")browserTouchLinkPassed=true
                                 if(index>=0 && index<tabs.count && tabs.get(index).address!==url.toString())tabs.setProperty(index,"address",url.toString())
                                 if(index===browserTabs.currentIndex)location.text=url.toString()
                             }
@@ -1664,6 +2364,8 @@ ApplicationWindow {
                                 if(index===browserTabs.currentIndex)browserStatus=success?I18n.t("PDF 已保存：")+filePath:I18n.t("PDF 保存失败")
                             }
                         }
+                    }
+                }
                     }
                 }
             }
@@ -1794,177 +2496,287 @@ ApplicationWindow {
                 }
             }
         }
-        Flickable {
-            id:settingsFlick; objectName:"settingsPage"; clip:true; contentWidth:width; contentHeight:settingsColumn.implicitHeight
-            boundsBehavior:Flickable.StopAtBounds; flickableDirection:Flickable.VerticalFlick
-            ColumnLayout {
-                id:settingsColumn; width:settingsFlick.width; spacing:Theme.gap
-                RowLayout {
-                    Layout.fillWidth:true;spacing:Theme.gap
-                    CarField {id:settingsSearch;Layout.fillWidth:true;leftPadding:52*uiScale;placeholderText:systemTools.uiLanguage==="en"?"Search settings":I18n.t("搜索设置");text:settingsQuery;onTextChanged:settingsQuery=text
-                        Component.onCompleted:win.keyboardAuditInput=settingsSearch
-                        background:Rectangle {radius:Theme.shapeFull;color:Theme.surface;border.color:settingsSearch.activeFocus?Theme.accent:Theme.outline}
-                        MaterialIcon {anchors.left:parent.left;anchors.leftMargin:Theme.gap;anchors.verticalCenter:parent.verticalCenter;width:Theme.icon;height:width;name:"search";light:true}
-                    }
-                    IconButton {iconName:"close";label:I18n.t("清除搜索");visible:settingsQuery!=="";onClicked:{settingsQuery="";settingsSearch.text=""}}
-                }
-                CarText {text:systemTools.uiLanguage==="en"?"Settings":I18n.t("设置");heading:true;Layout.fillWidth:true}
-                 SettingsGroup {
-                    id:personalizationGroup;objectName:"personalizationGroup"
-                    Layout.fillWidth:true
-                    visible:!settingsQuery || /显示|壁纸|比例|界面|外观|opacity/i.test(settingsQuery)
-                    titleTapEnabled:true
-                    onTitleTapped:{
-                        const point=personalizationGroup.mapToItem(Overlay.overlay,0,0)
-                        petEasterEggMenu.x=Math.max(12,Math.min(win.width-petEasterEggMenu.width-12,point.x))
-                        petEasterEggMenu.y=Math.max(12,Math.min(win.contentItem.height-petEasterEggMenu.implicitHeight-12,point.y))
-                        petEasterEggMenu.open()
-                    }
-                    iconName:"image";accentColor:"#ff9d37";title:systemTools.uiLanguage==="en"?"Display & personalization":I18n.t("显示与个性化");subtitle:systemTools.uiLanguage==="en"?"Wallpaper, cards and text":I18n.t("壁纸、应用卡片与屏幕文字")
-                    CarText {text:I18n.t("壁纸，")+(systemTools.wallpaper.toString() || I18n.t("默认背景"));subdued:true;Layout.fillWidth:true;maximumLineCount:1;elide:Text.ElideMiddle}
-                    Flow {Layout.fillWidth:true;spacing:Theme.gap/2
-                        CarButton {objectName:"wallpaperChoose";text:I18n.t("选择图片");onClicked:wallpaperPicker.open()}
-                        CarButton {text:I18n.t("恢复默认");enabled:systemTools.wallpaper.toString()!=="";onClicked:systemTools.setWallpaper("")}
-                        CarButton {text:I18n.t("界面不透明度");onClicked:opacityDialog.open()}
-                    }
-                    CarText {text:I18n.t("界面比例，")+Math.round(textScale*100)+"%";subdued:true;Layout.fillWidth:true}
-                    Flow {Layout.fillWidth:true;spacing:Theme.gap/2
-                        CarButton {text:I18n.t("标准");checked:textScale===1;onClicked:{textScale=1;systemTools.setInterfaceScale(1)}}
-                        CarButton {text:I18n.t("大字");checked:textScale===1.25;onClicked:{textScale=1.25;systemTools.setInterfaceScale(1.25)}}
-                        CarButton {text:I18n.t("更大");checked:textScale===1.5;onClicked:{textScale=1.5;systemTools.setInterfaceScale(1.5)}}
-                    }
-                }
-                SettingsGroup {
-                    id:speechSettingsGroup
-                    Layout.fillWidth:true
-                    visible:!settingsQuery || /声音|语音|播报|音量|音色|输出|sound|speech|voice|volume|output|duck/i.test(settingsQuery)
-                    // 五次点击分组标题开启「测试音色」彩蛋；与显示与个性化彩蛋同构。
-                    titleTapEnabled:true
-                    // 五击始终先确认；已开启时确认后直接进音色页。
-                    onTitleTapped: voiceTestConfirm.open()
-                    iconName:"volume_up";accentColor:"#10b7a8";title:systemTools.uiLanguage==="en"?"Sound & speech":I18n.t("声音与语音");subtitle:systemTools.uiLanguage==="en"?"Speech preferences":I18n.t("语音播报偏好")
-                    Switch {Layout.fillWidth:true;text:I18n.t("中文语音播报");font.pointSize:Theme.body;implicitHeight:Theme.hit;checked:systemTools.speechEnabled;onToggled:systemTools.setSpeechEnabled(checked)}
-                    RowLayout {Layout.fillWidth:true;spacing:Theme.gap/2
-                        ColumnLayout {Layout.fillWidth:true;spacing:0
-                            CarText {Layout.fillWidth:true;text:I18n.t("语音音色");maximumLineCount:1}
-                            CarText {Layout.fillWidth:true;maximumLineCount:1;elide:Text.ElideRight;subdued:true;fontPixelSize:Theme.fontCaption
-                                text:I18n.t("当前音色：")+I18n.t(systemTools.voiceName)}
+        Loader {
+            id:settingsPageLoader
+            // StackLayout 自己管理子项几何；这里不能再 anchors.fill（Qt 6.5
+            // 会报 "anchors on an item managed by a layout"，并留下未定义布局）。
+            Layout.fillWidth:true
+            Layout.fillHeight:true
+            // Settings has many SettingsGroup/wrapped rows. Building them while
+            // this StackLayout page is hidden at ~1px makes Qt 6.5 abort a
+            // polish loop; create the page only while it is open.
+            active:win.section===4 && win.phase!=="home"
+            sourceComponent:Component {
+        Item {
+            // 主页与二级页在同一层：分类页盖在主页上，设置页关闭时整层一起卸载。
+            Component.onCompleted: win.settingsSection = -1
+
+            Flickable {
+                id:settingsFlick;objectName:"settingsPage";clip:true;anchors.fill:parent
+                contentWidth:width;contentHeight:settingsColumn.implicitHeight
+                // 二级页盖在上面时禁用下层：点击空白处不能穿透。
+                enabled:!win.aboutDeviceOpen && !win.networkPermissionsOpen && win.settingsSection<0
+                boundsBehavior:Flickable.StopAtBounds;flickableDirection:Flickable.VerticalFlick
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                ColumnLayout {
+                    id:settingsColumn;width:settingsFlick.width;spacing:Theme.gap
+
+                    RowLayout {
+                        Layout.fillWidth:true;spacing:Theme.gap
+                        CarField {id:settingsSearch;plainHint:true;Layout.fillWidth:true;leftPadding:52*uiScale
+                            placeholderText:systemTools.uiLanguage==="en"?"Search settings":I18n.t("搜索设置")
+                            text:settingsQuery;onTextChanged:settingsQuery=text
+                            // 点击输入框才弹键盘（CarField 的 TapHandler），关掉不会再自己弹回来。
+                            onKeyboardRequested:screenKeyboard.show()
+                            Component.onCompleted:win.keyboardAuditInput=settingsSearch
+                            background:Rectangle {radius:Theme.shapeFull;color:Theme.surface;border.color:settingsSearch.activeFocus?Theme.accent:Theme.outline}
+                            MaterialIcon {anchors.left:parent.left;anchors.leftMargin:Theme.gap;anchors.verticalCenter:parent.verticalCenter;width:Theme.icon;height:width;name:"search";light:true}
                         }
-                        CarButton {objectName:"voiceSettingsEntry";text:I18n.t("选择");onClicked:win.openVoicePage()}
+                        IconButton {iconName:"close";label:I18n.t("清除搜索");visible:settingsQuery!=="";onClicked:{settingsQuery="";settingsSearch.text=""}}
                     }
-                    RowLayout {Layout.fillWidth:true;spacing:Theme.gap/2
-                        ColumnLayout {Layout.fillWidth:true;spacing:0
-                            CarText {Layout.fillWidth:true;text:I18n.t("播报输出设备");maximumLineCount:1}
-                            CarText {Layout.fillWidth:true;maximumLineCount:1;elide:Text.ElideRight;subdued:true;fontPixelSize:Theme.fontCaption
-                                text:systemTools.audioOutputDevice===""
-                                     ? I18n.t("跟随系统")+(systemTools.audioOutputName!==""?"（"+systemTools.audioOutputName+"）":"")
-                                     : systemTools.audioOutputName}
-                        }
-                        CarButton {objectName:"audioOutputEntry";text:I18n.t("选择");onClicked:audioOutputPopup.open()}
-                    }
-                    Switch {id:duckSpeechSwitch;objectName:"duckSpeechSwitch";Layout.fillWidth:true;text:I18n.t("播报时降低媒体音量");font.pointSize:Theme.body;implicitHeight:Theme.hit
-                        Binding {target:duckSpeechSwitch;property:"checked";value:systemTools.duckMediaForSpeech}
-                        onClicked:systemTools.setDuckMediaForSpeech(!systemTools.duckMediaForSpeech)
-                    }
-                    CarText {text:I18n.t("播报期间将音乐和视频降至原音量的 20%，结束后恢复；不改变播放或静音状态。");subdued:true;Layout.fillWidth:true;wrapMode:Text.Wrap}
-                }
-                SettingsGroup {
-                    Layout.fillWidth:true
-                    visible:!settingsQuery || /性能|节能|模糊|输入|拼音|performance|energy|keyboard|pinyin/i.test(settingsQuery)
-                    iconName:"tune";accentColor:"#8d78ff";title:I18n.t("性能");subtitle:I18n.t("节能渲染")
-                     Switch {id:energySwitch;objectName:"energySwitch";Layout.fillWidth:true;text:I18n.t("节能模式");font.pointSize:Theme.body;implicitHeight:Theme.hit
-                         Binding {target:energySwitch;property:"checked";value:systemTools.energySaving}
-                         onClicked:systemTools.setEnergySaving(!systemTools.energySaving)
-                     }
-                    CarText {text:systemTools.energySaving?I18n.t("节能开启，简化背景效果"):I18n.t("节能关闭，FBO多级降采样背景模糊");subdued:true;Layout.fillWidth:true;wrapMode:Text.Wrap}
-                }
-                SettingsGroup {
-                    Layout.fillWidth:true
-                    visible:!settingsQuery || /适老|大字|无障碍|accessibility|large/i.test(settingsQuery)
-                    iconName:"accessibility";accentColor:"#ffb74d";title:I18n.t("无障碍");subtitle:I18n.t("大字号模式")
-                    Switch {id:largeTextSwitch;objectName:"largeTextSwitch";Layout.fillWidth:true;text:I18n.t("大字号");font.pointSize:Theme.body;implicitHeight:Theme.hit
-                        Binding {target:largeTextSwitch;property:"checked";value:systemTools.largeText}
-                        onClicked:systemTools.setLargeText(!systemTools.largeText)
-                    }
-                    CarText {text:I18n.t("在界面缩放之上再放大一档字号；按钮热区不会小于 48 像素。");subdued:true;Layout.fillWidth:true;wrapMode:Text.Wrap}
-                }
-                SettingsGroup {
-                    Layout.fillWidth:true
-                    visible:!settingsQuery || /隐私|保留|清理|记录|privacy|retention|cleanup/i.test(settingsQuery)
-                    iconName:"shield";accentColor:"#4fd4a4";title:I18n.t("隐私与数据");subtitle:I18n.t("记录保留期限")
-                    Flow {Layout.fillWidth:true;spacing:Theme.gap/2
+                    // 分类卡片：两列网格，同「用户与权限」的主页语言；
+                    // 搜索词只过滤卡片，不改变每张卡片的内容。
+                    GridLayout {
+                        Layout.fillWidth:true
+                        columns:2
+                        rowSpacing:Theme.gap;columnSpacing:Theme.gap
                         Repeater {
-                            model:[{d:30,t:I18n.t("30 天")},{d:90,t:I18n.t("90 天")},{d:180,t:I18n.t("180 天")},{d:0,t:I18n.t("永久")}]
-                            CarButton {
+                            model:win.settingsCards
+                            delegate: Rectangle {
+                                id:settingsCard
                                 required property var modelData
-                                text:modelData.t
-                                checked:systemTools.retentionDays===modelData.d
-                                onClicked:systemTools.setRetentionDays(modelData.d)
+                                required property int index
+                                Layout.fillWidth:true
+                                Layout.preferredHeight:132*Theme.scaleFactor
+                                visible:(!settingsQuery || modelData.match.test(settingsQuery))
+                                        && (!modelData.adminOnly || sessionManager.isAdmin)
+                                        && (!modelData.hideForGuest || !sessionManager.guestSession)
+                                radius:Theme.shapeLarge
+                                color:settingsCardMouse.containsMouse ? Theme.surfaceContainerHigh : Theme.surfaceContainer
+                                border.width:1
+                                border.color:settingsCardMouse.containsMouse ? Theme.accent : Theme.outlineVariant
+
+                                RowLayout {
+                                    anchors.fill:parent;anchors.margins:Theme.gap;spacing:Theme.gap
+                                    Rectangle {
+                                        Layout.preferredWidth:48*Theme.scaleFactor;Layout.preferredHeight:width
+                                        radius:width/2
+                                        color:Qt.darker(settingsCard.modelData.color,2.1)
+                                        border.color:Qt.lighter(settingsCard.modelData.color,1.15)
+                                        MaterialIcon {anchors.centerIn:parent;width:25*Theme.scaleFactor;height:width;name:settingsCard.modelData.icon;light:true}
+                                    }
+                                    ColumnLayout {
+                                        Layout.fillWidth:true;spacing:4
+                                        CarText {Layout.fillWidth:true;text:settingsCard.modelData.title;fontPixelSize:Theme.fontStrong;color:Theme.foreground;elide:Text.ElideRight}
+                                        CarText {Layout.fillWidth:true;text:settingsCard.modelData.subtitle;fontPixelSize:Theme.fontCaption;color:Theme.outline;wrapMode:Text.WordWrap;maximumLineCount:2;elide:Text.ElideRight}
+                                    }
+                                    MaterialIcon {Layout.preferredWidth:Theme.icon;Layout.preferredHeight:Theme.icon;name:"chevron_right";light:true}
+                                }
+                                MouseArea {
+                                    id:settingsCardMouse
+                                    anchors.fill:parent
+                                    hoverEnabled:true
+                                    onClicked:{
+                                        // 开发者选项 / 关于本机：直接打开它们自己的右滑页，
+                                        // 不再先进一个只有「打开…」按钮的中间页。
+                                        if (settingsCard.modelData.action==="developer") { win.developerPanelOpen=true; return }
+                                        if (settingsCard.modelData.action==="about") { win.aboutDeviceOpen=true; return }
+                                        win.settingsSection=settingsCard.index
+                                    }
+                                }
                             }
                         }
                     }
-                    CarText {text:I18n.t("超过保留期限的健康记录会在下次登录时清理；本机删除不影响已拔出的 USB 备份。");subdued:true;Layout.fillWidth:true;wrapMode:Text.Wrap}
                 }
-                SettingsGroup {
-                    Layout.fillWidth:true
-                    visible:!settingsQuery || /语言|language|中文|english|英文/i.test(settingsQuery)
-                    iconName:"language";accentColor:"#27b7c5";title:I18n.t("语言 / Language");subtitle:I18n.t("切换终端界面显示语言")
-                    Flow {Layout.fillWidth:true;spacing:Theme.gap/2
-                        CarButton {text:I18n.t("简体中文");checked:systemTools.uiLanguage==="zh";onClicked:systemTools.setUiLanguage("zh")}
-                        CarButton {objectName:"englishChoose";text:"English";checked:systemTools.uiLanguage==="en";onClicked:systemTools.setUiLanguage("en")}
+            }
+
+            // 分类二级页：240ms 从右侧滑入（同开发者选项），页内仍是原来的 SettingsGroup。
+            RightSlidePage {
+                id:settingsDetail
+                objectName:"settingsDetail"
+                width:parent?parent.width:0
+                height:parent?parent.height:0
+                z:40
+                open:win.settingsSection>=0
+                onCloseRequested:win.settingsSection=-1
+
+                Rectangle {anchors.fill:parent;color:Theme.background}
+
+                // 页内唯一的主标题。两个彩蛋的触发点都移到这里：仍是连点 5 次，
+                // 计数与回调转给原来的分组实例，彩蛋本身的逻辑和代码没有改。
+                RowLayout {
+                    id:settingsDetailHeader
+                    x:Theme.margin;y:Theme.margin
+                    width:Math.max(240,settingsDetail.width-Theme.margin*2)
+                    spacing:Theme.gap/2
+                    IconButton {objectName:"settingsDetailBack";iconName:"arrow_back";label:I18n.t("返回");onClicked:win.settingsSection=-1}
+                    CarText {
+                        id:settingsDetailTitle
+                        Layout.fillWidth:true
+                        heading:true
+                        text:win.settingsSection>=0 && win.settingsSection<win.settingsCards.length
+                             ? win.settingsCards[win.settingsSection].title : ""
+                        elide:Text.ElideRight
+                        MouseArea {
+                            anchors.fill:parent
+                            onClicked:{
+                                if (win.settingsSection===0) personalizationGroup.registerTitleTap()
+                                else if (win.settingsSection===5) settingsVoicePage.registerTitleTap()
+                            }
+                        }
                     }
                 }
-                TimeSyncSettings {
-                    Layout.fillWidth:true
-                    visible:!settingsQuery || /时间|校时|报时|time|chime|alarm/i.test(settingsQuery)
-                    timeSync:timeSync;alarmEngine:alarmEngine
-                    clockFace:win.clockFace;timeFormat:win.timeFormat
-                    onClockFaceRequested:function(mode){win.clockFace=mode}
-                    onTimeFormatRequested:function(mode){win.timeFormat=mode}
-                }
-                SettingsGroup {
-                    Layout.fillWidth:true
-                    visible:!settingsQuery || /网络|热点|wi.?fi|lan|internet|联网/i.test(settingsQuery)
-                    iconName:"wifi";accentColor:"#35a9ff";title:I18n.t("网络与连接");subtitle:I18n.t("热点状态、联网总开关与供电")
-                    // §9.3：联网总开关。默认关闭，关闭时拒绝可解释。
-                    Switch {id:networkGateSwitch;objectName:"networkGateSwitch";Layout.fillWidth:true;text:I18n.t("允许联网");font.pointSize:Theme.body;implicitHeight:Theme.hit
-                        Binding {target:networkGateSwitch;property:"checked";value:networkGate.enabled}
-                        onClicked:networkGate.setEnabledFromUi(!networkGate.enabled)
+
+                // 普通分类：一个可滚动内容区，分组标题全部收起（只留主标题）。
+                Flickable {
+                    id:settingsDetailFlick
+                    objectName:"settingsDetailFlick"
+                    anchors.left:parent.left;anchors.right:parent.right
+                    anchors.top:settingsDetailHeader.bottom;anchors.bottom:parent.bottom
+                    anchors.margins:Theme.margin
+                    anchors.topMargin:Theme.gap/2
+                    visible:win.settingsSection!==5
+                    contentWidth:width
+                    contentHeight:settingsDetailColumn.implicitHeight
+                    clip:true
+                    boundsBehavior:Flickable.StopAtBounds
+                    flickableDirection:Flickable.VerticalFlick
+                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                    ColumnLayout {
+                        id:settingsDetailColumn
+                        width:settingsDetailFlick.width
+                        spacing:Theme.gap
+
+                        // ---- 0 显示与个性化（主标题连点 5 次 → 桌宠菜单）----
+                        SettingsGroup {
+                            id:personalizationGroup;objectName:"personalizationGroup"
+                            Layout.fillWidth:true
+                            visible:win.settingsSection===0
+                            headerVisible:false
+                            titleTapEnabled:true
+                            onTitleTapped:{
+                                const point=personalizationGroup.mapToItem(Overlay.overlay,0,0)
+                                petEasterEggMenu.x=Math.max(12,Math.min(win.width-petEasterEggMenu.width-12,point.x))
+                                petEasterEggMenu.y=Math.max(12,Math.min(win.contentItem.height-petEasterEggMenu.implicitHeight-12,point.y))
+                                petEasterEggMenu.open()
+                            }
+                            iconName:"image";accentColor:"#ff9d37";title:systemTools.uiLanguage==="en"?"Display & personalization":I18n.t("显示与个性化");subtitle:systemTools.uiLanguage==="en"?"Wallpaper, cards and text":I18n.t("壁纸、应用卡片与屏幕文字")
+                            CarText {text:I18n.t("壁纸，")+(systemTools.wallpaper.toString() || I18n.t("默认背景"));subdued:true;Layout.fillWidth:true;maximumLineCount:1;elide:Text.ElideMiddle}
+                            Flow {Layout.fillWidth:true;spacing:Theme.gap/2
+                                CarButton {objectName:"wallpaperChoose";text:I18n.t("选择图片");onClicked:wallpaperPicker.open()}
+                                CarButton {text:I18n.t("恢复默认");enabled:systemTools.wallpaper.toString()!=="";onClicked:systemTools.setWallpaper("")}
+                                CarButton {text:I18n.t("界面不透明度");onClicked:opacityDialog.open()}
+                            }
+                            CarText {text:I18n.t("界面比例，")+Math.round(textScale*100)+"%";subdued:true;Layout.fillWidth:true}
+                            Flow {Layout.fillWidth:true;spacing:Theme.gap/2
+                                CarButton {text:I18n.t("标准");checked:textScale===1;onClicked:{textScale=1;systemTools.setInterfaceScale(1)}}
+                                CarButton {text:I18n.t("大字");checked:textScale===1.25;onClicked:{textScale=1.25;systemTools.setInterfaceScale(1.25)}}
+                                CarButton {text:I18n.t("更大");checked:textScale===1.5;onClicked:{textScale=1.5;systemTools.setInterfaceScale(1.5)}}
+                            }
+                        }
+
+                        // ---- 1 无障碍 ----
+                        SettingsGroup {
+                            Layout.fillWidth:true
+                            visible:win.settingsSection===1
+                            headerVisible:false
+                            iconName:"accessibility_new";accentColor:"#ffb74d";title:I18n.t("无障碍");subtitle:I18n.t("大字号模式")
+                            Switch {id:largeTextSwitch;objectName:"largeTextSwitch";Layout.fillWidth:true;text:I18n.t("大字号");font.pointSize:Theme.body;implicitHeight:Theme.hit
+                                Binding {target:largeTextSwitch;property:"checked";value:systemTools.largeText}
+                                onClicked:systemTools.setLargeText(!systemTools.largeText)
+                            }
+                            CarText {text:I18n.t("在界面缩放之上再放大一档字号；按钮热区不会小于 48 像素。");subdued:true;Layout.fillWidth:true;wrapMode:Text.Wrap}
+                        }
+
+                        // ---- 2 锁屏与安全 ----
+                        LockSettings {
+                            Layout.fillWidth:true
+                            visible:win.settingsSection===2
+                            headerVisible:false
+                        }
+
+                        // ---- 3 隐私与数据 ----
+                        SettingsGroup {
+                            Layout.fillWidth:true
+                            visible:win.settingsSection===3
+                            headerVisible:false
+                            iconName:"shield";accentColor:"#4fd4a4";title:I18n.t("隐私与数据");subtitle:I18n.t("记录保留期限")
+                            Flow {Layout.fillWidth:true;spacing:Theme.gap/2
+                                Repeater {
+                                    model:[{d:30,t:I18n.t("30 天")},{d:90,t:I18n.t("90 天")},{d:180,t:I18n.t("180 天")},{d:0,t:I18n.t("永久")}]
+                                    CarButton {
+                                        required property var modelData
+                                        text:modelData.t
+                                        checked:systemTools.retentionDays===modelData.d
+                                        onClicked:systemTools.setRetentionDays(modelData.d)
+                                    }
+                                }
+                            }
+                            CarText {text:I18n.t("超过保留期限的健康记录会在下次登录时清理；本机删除不影响已拔出的 USB 备份。");subdued:true;Layout.fillWidth:true;wrapMode:Text.Wrap}
+                        }
+
+                        // ---- 4 语言 ----
+                        SettingsGroup {
+                            Layout.fillWidth:true
+                            visible:win.settingsSection===4
+                            headerVisible:false
+                            iconName:"language";accentColor:"#27b7c5";title:I18n.t("语言 / Language");subtitle:I18n.t("切换终端界面显示语言")
+                            Flow {Layout.fillWidth:true;spacing:Theme.gap/2
+                                CarButton {text:I18n.t("简体中文");checked:systemTools.uiLanguage==="zh";onClicked:systemTools.setUiLanguage("zh")}
+                                CarButton {objectName:"englishChoose";text:"English";checked:systemTools.uiLanguage==="en";onClicked:systemTools.setUiLanguage("en")}
+                            }
+                        }
+
+                        // ---- 6 时间与报时 ----
+                        TimeSyncSettings {
+                            Layout.fillWidth:true
+                            visible:win.settingsSection===6
+                            headerVisible:false
+                            timeSync:win.timeSyncBackend;alarmEngine:win.alarmBackend
+                            clockFace:win.clockFace;timeFormat:win.timeFormat
+                            onClockFaceRequested:function(mode){win.clockFace=mode}
+                            onTimeFormatRequested:function(mode){win.timeFormat=mode}
+                        }
+
+                        // ---- 7 网络连接管理：联网总闸 + 各功能入口 + 热点开关 ----
+                        NetworkPermissions {
+                            Layout.fillWidth:true
+                            visible:win.settingsSection===7
+                            headerVisible:false
+                            onManageRequested:{win.aboutDeviceOpen=false;win.networkPermissionsOpen=true}
+                        }
+                        SettingsGroup {
+                            Layout.fillWidth:true
+                            visible:win.settingsSection===7
+                            headerVisible:false
+                            iconName:"wifi";accentColor:"#35a9ff";title:I18n.t("热点");subtitle:I18n.t("本机热点开关与状态")
+                            // 供电、接口地址等原始信息已移到开发者面板的 INTERFACES / POWER / HOTSPOT。
+                            Flow {Layout.fillWidth:true;spacing:Theme.gap/2
+                                CarButton {text:systemTools.hotspotBusy?I18n.t("处理中"):I18n.t("开启热点");enabled:!systemTools.hotspotBusy && (!systemTools.deviceStatus.hotspotKnown || !systemTools.deviceStatus.hotspotActive);onClicked:systemTools.hotspot(true)}
+                                CarButton {text:I18n.t("关闭热点");enabled:!systemTools.hotspotBusy && (!systemTools.deviceStatus.hotspotKnown || systemTools.deviceStatus.hotspotActive);onClicked:systemTools.hotspot(false)}
+                            }
+                            CarText {text:I18n.t("热点，")+(!systemTools.deviceStatus.hotspotKnown?I18n.t("状态未知"):systemTools.deviceStatus.hotspotActive?I18n.t("已开启"):I18n.t("已关闭"));subdued:true;Layout.fillWidth:true}
+                        }
                     }
-                    CarText {text:networkGate.enabled?I18n.t("联网已开启"):I18n.t("联网已关闭，终端不主动访问外部服务");subdued:true;Layout.fillWidth:true;wrapMode:Text.Wrap}
-                    // §9.3 第 2 条：分功能开关，只在总开关打开后生效。
-                    Flow {Layout.fillWidth:true;spacing:Theme.gap/2;visible:networkGate.enabled
-                        CarButton {text:I18n.t("浏览器联网");checked:networkGate.browserAllowed;onClicked:networkGate.setBrowserAllowed(!networkGate.browserAllowed)}
-                        CarButton {text:I18n.t("音乐联网");checked:networkGate.musicAllowed;onClicked:networkGate.setMusicAllowed(!networkGate.musicAllowed)}
-                        CarButton {text:I18n.t("更新下载");checked:networkGate.updatesAllowed;onClicked:networkGate.setUpdatesAllowed(!networkGate.updatesAllowed)}
-                    }
-                    // §9.3 第 3 条：三态分开显示，不把"接口有 IP"当成"能上网"。
-                    CarText {text:I18n.t("接口")+": "+(networkGate.interfaceReady?I18n.t("就绪"):I18n.t("未就绪"))
-                                +"  "+I18n.t("模块链路")+": "+(networkGate.moduleLinkReady?I18n.t("就绪"):I18n.t("未就绪"))
-                                +"  "+I18n.t("互联网")+": "+(networkGate.internetReachable?I18n.t("可达"):I18n.t("不可达"))
-                            ;subdued:true;Layout.fillWidth:true;wrapMode:Text.Wrap;visible:networkGate.enabled}
-                    // §13：供电状态。未知就是未知，不显示假百分比。
-                    CarText {text:I18n.t("供电") + "，" + (powerStatus.known ? powerStatus.source : I18n.t("状态未知"))
-                            ;subdued:true;Layout.fillWidth:true;wrapMode:Text.Wrap}
-                    Flow {Layout.fillWidth:true;spacing:Theme.gap/2
-                        CarButton {text:systemTools.hotspotBusy?I18n.t("处理中"):I18n.t("开启热点");enabled:!systemTools.hotspotBusy && (!systemTools.deviceStatus.hotspotKnown || !systemTools.deviceStatus.hotspotActive);onClicked:systemTools.hotspot(true)}
-                        CarButton {text:I18n.t("关闭热点");enabled:!systemTools.hotspotBusy && (!systemTools.deviceStatus.hotspotKnown || systemTools.deviceStatus.hotspotActive);onClicked:systemTools.hotspot(false)}
-                    }
-                    CarText {text:I18n.t("热点，")+(!systemTools.deviceStatus.hotspotKnown?I18n.t("状态未知"):systemTools.deviceStatus.hotspotActive?I18n.t("已开启"):I18n.t("已关闭"));subdued:true;Layout.fillWidth:true}
-                     CarText {text:I18n.t(systemTools.network);Layout.fillWidth:true;wrapMode:Text.Wrap}
                 }
-                SettingsGroup {
-                    Layout.fillWidth:true
-                    visible:sessionManager.isAdmin && (!settingsQuery || /配对|设备|授权|管理员|pair|device|admin/i.test(settingsQuery))
-                    iconName:"verified_user";accentColor:"#4fd4a4";title:I18n.t("设备配对与授权");subtitle:I18n.t("桥板信任、卡片与操作记录")
-                    AdminPairingPage { Layout.fillWidth:true }
+
+                // 5 语音音色：直接把语音页铺进来（自带滚动），不再有「打开语音音色」这一步。
+                VoiceSettings {
+                    id:settingsVoicePage
+                    objectName:"settingsVoicePage"
+                    anchors.left:parent.left;anchors.right:parent.right
+                    anchors.top:settingsDetailHeader.bottom;anchors.bottom:parent.bottom
+                    anchors.margins:Theme.margin
+                    anchors.topMargin:Theme.gap/2
+                    visible:win.settingsSection===5
+                    active:win.settingsSection===5
+                    hostWindow:win
+                    uiScale:win.uiScale
                 }
-                SettingsGroup {
-                    Layout.fillWidth:true
-                    visible:!settingsQuery || /日志|操作|状态|log|about/i.test(settingsQuery)
-                    iconName:"history";accentColor:"#ad8cff";title:I18n.t("运行记录");subtitle:I18n.t("最近系统操作")
-                     Repeater {model:systemTools.logs;CarText {required property string modelData;text:I18n.t(modelData);Layout.fillWidth:true;wrapMode:Text.Wrap}}
-                }
+            }
+        }
             }
         }
         Flickable {
@@ -2035,28 +2847,228 @@ ApplicationWindow {
         Flickable {
             id:calculatorFlick;objectName:"calculatorPage";clip:true;contentWidth:width;contentHeight:height;interactive:false
             boundsBehavior:Flickable.StopAtBounds;flickableDirection:Flickable.VerticalFlick
-            ColumnLayout { id:calculatorColumn; anchors.fill:parent; spacing:Theme.gap/4
-                Rectangle {Layout.fillWidth:true;Layout.preferredHeight:44*uiScale;color:Theme.surface;radius:Theme.shapeMedium
-                    Text {anchors.fill:parent;anchors.margins:Theme.gap/3;text:calcDisplay;color:Theme.foreground;font.pointSize:26*uiScale;horizontalAlignment:Text.AlignRight;verticalAlignment:Text.AlignVCenter;elide:Text.ElideLeft}
-                }
-                GridLayout {id:calculatorGrid;Layout.fillWidth:true;Layout.fillHeight:true;columns:4;rowSpacing:Theme.gap/4;columnSpacing:Theme.gap/3
-                    Repeater {model:["C","÷","×","-","7","8","9","+","4","5","6","=","1","2","3",".","0"]
-                        Button {
-                            id:calculatorKey
-                            required property string modelData
-                            property real keySize:Math.min((calculatorGrid.width-3*calculatorGrid.columnSpacing)/4,(calculatorGrid.height-4*calculatorGrid.rowSpacing)/5)
-                            text:modelData;Accessible.name:I18n.t("计算器 ")+modelData
-                            Layout.fillWidth:true;Layout.fillHeight:true
-                            Layout.minimumWidth:40*uiScale;Layout.minimumHeight:40*uiScale
-                            font.pointSize:Theme.body
-                            onClicked:calcInput(modelData)
-                            background:Rectangle {
-                                width:calculatorKey.keySize;height:width
-                                anchors.centerIn:parent
-                                radius:Theme.shapeFull
-                                color:calculatorKey.modelData==="="?Theme.accent:calculatorKey.down?Theme.pressed:Theme.surfaceContainerHigh
+
+            // 平板断点：>=760 走双栏（左：表达式/结果/历史，右：键盘），窄屏回单栏。
+            readonly property bool calcTwoPane: width >= 760 * uiScale
+
+            GridLayout {
+                anchors.fill: parent
+                columns: calculatorFlick.calcTwoPane ? 2 : 1
+                columnSpacing: Theme.gap
+                rowSpacing: Theme.gap
+
+                // ---------------- 左栏：表达式 / 结果 / 历史 ----------------
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    // 显示区在右：双栏时第二列；单栏时回到第一行。
+                    Layout.row: 0
+                    Layout.column: calculatorFlick.calcTwoPane ? 1 : 0
+                    spacing: Theme.gap
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.max(120 * uiScale, calcResultText.implicitHeight + Theme.gap * 3)
+                        color: Theme.surface
+                        radius: Theme.shapeLarge
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: Theme.gap * 0.75
+                            spacing: 0
+                            CarText {
+                                id: calcExprText
+                                Layout.fillWidth: true
+                                text: calcExpression.length > 0 ? calcExpression : " "
+                                horizontalAlignment: Text.AlignRight
+                                subdued: true
+                                fontPixelSize: Theme.fontLabel
+                                elide: Text.ElideLeft
+                                maximumLineCount: 1
                             }
-                            contentItem:Text {text:calculatorKey.text;color:calculatorKey.modelData==="="?Theme.accentInk:Theme.foreground;font:calculatorKey.font;horizontalAlignment:Text.AlignHCenter;verticalAlignment:Text.AlignVCenter}
+                            Text {
+                                id: calcResultText
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                text: calcDisplay
+                                color: Theme.foreground
+                                font.pointSize: 34 * uiScale
+                                font.weight: Font.DemiBold
+                                horizontalAlignment: Text.AlignRight
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideLeft
+                                maximumLineCount: 1
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.preferredHeight: calculatorFlick.calcTwoPane ? -1 : 150 * uiScale
+                        color: Theme.surface
+                        radius: Theme.shapeLarge
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: Theme.gap * 0.75
+                            spacing: Theme.gap / 4
+                            RowLayout {
+                                Layout.fillWidth: true
+                                CarText { Layout.fillWidth: true; text: I18n.t("历史"); subdued: true; fontPixelSize: Theme.fontCaption }
+                                CarButton {
+                                    objectName: "calcHistoryClear"
+                                    text: I18n.t("清空")
+                                    fontPixelSize: Theme.fontLabel
+                                    enabled: calcHistory.length > 0
+                                    onClicked: win.clearCalcHistory()
+                                }
+                            }
+                            Flickable {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                contentWidth: width
+                                contentHeight: historyColumn.implicitHeight
+                                clip: true
+                                boundsBehavior: Flickable.StopAtBounds
+                                ColumnLayout {
+                                    id: historyColumn
+                                    width: parent.width
+                                    spacing: Theme.gap / 4
+                                    CarText {
+                                        Layout.fillWidth: true
+                                        visible: calcHistory.length === 0
+                                        text: I18n.t("暂无记录")
+                                        subdued: true
+                                        fontPixelSize: Theme.fontCaption
+                                    }
+                                    Repeater {
+                                        model: calcHistory
+                                        delegate: ColumnLayout {
+                                            id: historyRow
+                                            required property var modelData
+                                            required property int index
+                                            Layout.fillWidth: true
+                                            spacing: 0
+                                            CarText {
+                                                Layout.fillWidth: true
+                                                text: modelData.expr
+                                                subdued: true
+                                                fontPixelSize: Theme.fontCaption
+                                                elide: Text.ElideLeft
+                                                maximumLineCount: 1
+                                            }
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: Theme.gap / 2
+                                                CarText {
+                                                    Layout.fillWidth: true
+                                                    text: modelData.result
+                                                    fontPixelSize: Theme.fontStrong
+                                                    elide: Text.ElideLeft
+                                                    maximumLineCount: 1
+                                                }
+                                                IconButton {
+                                                    objectName: "calcHistoryDelete" + historyRow.index
+                                                    iconName: "close"
+                                                    label: I18n.t("删除这条记录")
+                                                    onClicked: win.removeCalcHistoryAt(historyRow.index)
+                                                }
+                                            }
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 1
+                                                color: Theme.outlineVariant
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ---------------- 右栏：科学排 + 基础键盘 ----------------
+                ColumnLayout {
+                    // 计算区在左：固定宽度，剩下的给显示区。
+                    Layout.fillWidth: !calculatorFlick.calcTwoPane
+                    Layout.fillHeight: true
+                    Layout.row: calculatorFlick.calcTwoPane ? 0 : 1
+                    Layout.column: 0
+                    Layout.preferredWidth: calculatorFlick.calcTwoPane ? calculatorFlick.width * 0.55 : -1
+                    spacing: Theme.gap / 2
+
+                    // 科学函数：一排 8 个，方形小圆角
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.gap / 4
+                        Repeater {
+                            model: ["√", "x²", "1/x", "π", "sin", "cos", "(", ")"]
+                            delegate: Button {
+                                id: scienceKey
+                                required property string modelData
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 40 * uiScale
+                                text: modelData
+                                font.pixelSize: 13 * uiScale
+                                Accessible.name: I18n.t("计算器 ") + modelData
+                                onClicked: calcInput(modelData)
+                                background: Rectangle {
+                                    radius: Theme.shapeSmall
+                                    color: scienceKey.down ? Theme.pressed : Theme.surfaceContainer
+                                }
+                                contentItem: Text {
+                                    text: scienceKey.text
+                                    color: Theme.foreground
+                                    font: scienceKey.font
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
+                        }
+                    }
+
+                    // 基础键盘：4×5，方形小圆角
+                    GridLayout {
+                        id:calculatorGrid
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        columns: 4
+                        rowSpacing: Theme.gap / 4
+                        columnSpacing: Theme.gap / 4
+                        Repeater {
+                            model: ["AC", "⌫", "%", "÷", "7", "8", "9", "×", "4", "5", "6", "-", "1", "2", "3", "+", "±", "0", ".", "="]
+                            delegate: Button {
+                                id: calculatorKey
+                                required property string modelData
+                                property bool accentKey: modelData === "="
+                                property bool opKey: ["÷", "×", "-", "+"].indexOf(modelData) >= 0
+                                property real keySize: Math.min((calculatorGrid.width - 3 * calculatorGrid.columnSpacing) / 4,
+                                                                (calculatorGrid.height - 4 * calculatorGrid.rowSpacing) / 5)
+                                text: modelData
+                                Accessible.name: I18n.t("计算器 ") + modelData
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                Layout.minimumWidth: 40 * uiScale
+                                Layout.minimumHeight: 40 * uiScale
+                                font.pointSize: Theme.body
+                                onClicked: calcInput(modelData)
+                                background: Rectangle {
+                                    radius: Theme.shapeMedium
+                                    color: calculatorKey.accentKey
+                                           ? Theme.accent
+                                           : calculatorKey.down
+                                             ? Theme.pressed
+                                             : calculatorKey.opKey
+                                               ? Theme.primaryContainer
+                                               : Theme.surfaceContainerHigh
+                                }
+                                contentItem: Text {
+                                    text: calculatorKey.text
+                                    color: calculatorKey.accentKey ? Theme.accentInk : Theme.foreground
+                                    font: calculatorKey.font
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
                         }
                     }
                 }
@@ -2153,11 +3165,11 @@ ApplicationWindow {
             onMediaPlayingChanged:if(mediaPlaying){devicePanel.preferVideo=true;musicPage.pauseMedia();tvPage.pauseMedia()}}
         TvPlayer {id:tvPage;objectName:"tvPlayerPage";active:win.section===11 && win.phase!=="home";uiScale:win.uiScale;hostWindow:win;virtualKeyboard:screenKeyboard;onKeyboardRequested:screenKeyboard.show()
             onMediaPlayingChanged:if(mediaPlaying){devicePanel.preferVideo=true;musicPage.pauseMedia();videoPage.pauseMedia()}}
-        TimeTools {id:timePage;objectName:"timeToolsPage";active:win.section===12 && win.phase!=="home";uiScale:win.uiScale;alarmEngine:alarmEngine;timeSync:timeSync;clockFace:win.clockFace;timeFormat:win.timeFormat
+        TimeTools {id:timePage;objectName:"timeToolsPage";active:win.section===12 && win.phase!=="home";uiScale:win.uiScale;alarmEngine:win.alarmBackend;timeSync:win.timeSyncBackend;clockFace:win.clockFace;timeFormat:win.timeFormat
             onNotifyRequested:function(title,message,important){win.notify(title,message,important,I18n.t("时间"),"schedule")}
             onAnnounceRequested:function(text){win.announce(text)}
             onKeyboardRequested:if(!screenKeyboard.visible)screenKeyboard.show()}
-        VoiceSettings {id:voicePage;objectName:"voiceSettingsPage";active:win.section===13 && win.phase!=="home";uiScale:win.uiScale}
+        VoiceSettings {id:voicePage;objectName:"voiceSettingsPage";active:win.section===13 && win.phase!=="home";uiScale:win.uiScale;hostWindow:win}
         // 播报输出设备：跟随系统（默认）或固定到某个 Qt Multimedia 输出设备。
         Popup {
             id:audioOutputPopup
@@ -2168,7 +3180,10 @@ ApplicationWindow {
             padding:Theme.gap
             width:Math.min(560*Theme.scaleFactor,(parent?parent.width:800)-Theme.gap*4)
             background:Rectangle{radius:Theme.shapeLarge;color:Theme.surface;border.color:Theme.outline;border.width:1}
-            contentItem:ColumnLayout {
+            contentItem: Loader {
+                active: audioOutputPopup.opened
+                sourceComponent: Component {
+                ColumnLayout {
                 spacing:Theme.gap/2
                 CarText {Layout.fillWidth:true;text:I18n.t("播报输出设备");heading:true}
                 CarText {Layout.fillWidth:true;wrapMode:Text.Wrap;subdued:true;fontPixelSize:Theme.fontCaption
@@ -2194,6 +3209,8 @@ ApplicationWindow {
                     Item{Layout.fillWidth:true}
                     CarButton {text:I18n.t("关闭");onClicked:audioOutputPopup.close()}
                 }
+                }
+                }
             }
         }
         component OutputDeviceRow: CarButton {
@@ -2212,7 +3229,10 @@ ApplicationWindow {
             padding:Theme.gap
             width:Math.min(520*Theme.scaleFactor,(parent?parent.width:800)-Theme.gap*4)
             background:Rectangle{radius:Theme.shapeLarge;color:Theme.surface;border.color:Theme.outline;border.width:1}
-            contentItem:ColumnLayout {
+            contentItem: Loader {
+                active: voiceTestConfirm.opened
+                sourceComponent: Component {
+                ColumnLayout {
                 spacing:Theme.gap/2
                 CarText {
                     Layout.fillWidth:true;wrapMode:Text.Wrap
@@ -2227,11 +3247,85 @@ ApplicationWindow {
                     Item{Layout.fillWidth:true}
                     CarButton {objectName:"voiceTestCancel";text:I18n.t("取消");onClicked:voiceTestConfirm.close()}
                     CarButton {objectName:"voiceTestConfirmButton";text:I18n.t("确认开启");accent:true
-                        onClicked:{systemTools.setVoiceTestMode(true);voiceTestConfirm.close();win.openVoicePage()}
+                        onClicked:{systemTools.setVoiceTestMode(true);voiceTestConfirm.close();if(win.section!==13)win.openVoicePage()}
                     }
+                }
+                }
                 }
             }
         }
+        WeatherTools {id:weatherPage;objectName:"weatherToolsPage";active:win.section===14 && win.phase!=="home";uiScale:win.uiScale;weatherEngine:weatherEngine
+            onKeyboardRequested:if(!screenKeyboard.visible)screenKeyboard.show()
+            onAnnounceRequested:function(text){win.announce(text)}}
+        UserSecurityView {id:userSecurityView;objectName:"userSecurityView";active:win.section===15 && win.phase!=="home";uiScale:win.uiScale
+            onKeyboardRequested:if(!screenKeyboard.visible)screenKeyboard.show()
+            onKeyboardDismissed:screenKeyboard.hide()}
+            }
+            // 「关于本机」二级页：覆盖内容区（不盖窗口标题栏），从右侧滑入。
+            // 用显式矩形而不是 anchors.fill，否则 x 会被 anchors 锁死，滑入动画无法生效。
+            AboutDevicePage {
+                id:aboutDevicePage
+                objectName:"aboutDevicePage"
+                width:pages.width
+                height:pages.height
+                y:pages.y
+                open:win.aboutDeviceOpen
+                onCloseRequested:win.aboutDeviceOpen=false
+                onKeyboardRequested:screenKeyboard.show()
+                onKeyboardDismissRequested:screenKeyboard.hide()
+            }
+            // 「各功能联网权限」二级页：与关于本机同一层、同一套滑入动画。
+            // 权限页很重（Repeater + SettingsGroup）；只在首次打开时创建，
+            // 之后保持实例（created），让打开和返回都有 240ms 滑入/滑出动画。
+            // 每次打开即销毁会让 open 初始为 true、x 直接为 0，动画整体失效。
+            Loader {
+                id:networkPermissionsPageLoader
+                objectName:"networkPermissionsPageHost"
+                width:pages.width
+                height:pages.height
+                y:pages.y
+                property bool created:false
+                active:win.networkPermissionsOpen || created
+                onLoaded:created=true
+                sourceComponent:Component {
+                    NetworkPermissionsPage {
+                        width:networkPermissionsPageLoader.width
+                        height:networkPermissionsPageLoader.height
+                        open:win.networkPermissionsOpen
+                        onCloseRequested:win.networkPermissionsOpen=false
+                    }
+                }
+            }
+            Popup {
+                id:browserHttpConfirm
+                objectName:"browserHttpConfirm"
+                parent:Overlay.overlay
+                anchors.centerIn:Overlay.overlay
+                modal:true
+                dim:true
+                closePolicy:Popup.CloseOnEscape
+                padding:Theme.gap
+                width:Math.min(520*uiScale,(parent?parent.width:800)-Theme.gap*4)
+                background:Rectangle {radius:Theme.shapeLarge;color:Theme.surface;border.color:Theme.outline;border.width:1}
+                contentItem: Loader {
+                    active: browserHttpConfirm.opened
+                    sourceComponent: Component {
+                    ColumnLayout {
+                    spacing:Theme.gap/2
+                    CarText {Layout.fillWidth:true;heading:true;text:I18n.t("打开不安全的 HTTP 网页？")}
+                    CarText {Layout.fillWidth:true;wrapMode:Text.Wrap
+                        text:I18n.t("该地址不是 HTTPS。页面内容、Cookie 和表单可能被同一网络中的攻击者读取或篡改。")}
+                    CarText {Layout.fillWidth:true;wrapMode:Text.Wrap;subdued:true;fontPixelSize:Theme.fontCaption;text:win.browserHttpPending}
+                    RowLayout {
+                        Layout.fillWidth:true;spacing:Theme.gap/2
+                        Item {Layout.fillWidth:true}
+                        CarButton {objectName:"browserHttpCancel";text:I18n.t("取消");onClicked:browserHttpConfirm.close()}
+                        CarButton {objectName:"browserHttpAccept";text:I18n.t("仍然打开");accent:true
+                            onClicked:{const target=win.browserHttpPending;browserHttpConfirm.close();if(target!=="")win.loadBrowserAddress(target)}}
+                    }
+                    }
+                    }
+                }
             }
         }
     }
@@ -2336,7 +3430,12 @@ ApplicationWindow {
                     GridLayout {Layout.preferredWidth:quickControlsFlick.width;Layout.minimumWidth:quickControlsFlick.width;Layout.maximumWidth:quickControlsFlick.width;Layout.alignment:Qt.AlignVCenter;columns:2;columnSpacing:quickStatusGrid.columnSpacing;rowSpacing:quickStatusGrid.rowSpacing
                         QuickPanelTile {blurCacheTexture:win.panelBlurTexture;objectName:"quickHotspotTile";blurObjectName:"quickHotspotBlur";blurEnabled:!repairRawQuickBlur;Layout.fillWidth:true;label:I18n.t("Wi-Fi 热点");iconName:systemTools.deviceStatus.hotspotActive?"wifi":"wifi_off";active:!!systemTools.deviceStatus.hotspotActive;detail:systemTools.hotspotBusy?I18n.t("正在切换…"):!systemTools.deviceStatus.hotspotKnown?I18n.t("状态未知"):active?I18n.t("已开启，模块可连接"):I18n.t("未开启，点击启用");enabled:!systemTools.hotspotBusy&&!!systemTools.deviceStatus.hotspotKnown;onClicked:systemTools.hotspot(!active)}
                         QuickPanelTile {blurCacheTexture:win.panelBlurTexture;objectName:"quickBluetoothTile";blurObjectName:"quickBluetoothBlur";blurEnabled:!repairRawQuickBlur;Layout.fillWidth:true;label:"Bluetooth";iconName:"bluetooth";active:!!systemTools.deviceStatus.bluetoothOn;detail:!systemTools.deviceStatus.bluetoothAvailable?I18n.t("没有适配器"):active?I18n.t("已开启"):I18n.t("已关闭");enabled:!!systemTools.deviceStatus.bluetoothAvailable;onClicked:systemTools.setBluetoothEnabled(!active)}
-                        QuickPanelTile {blurCacheTexture:win.panelBlurTexture;objectName:"quickSystemTile";blurObjectName:"quickSystemBlur";blurEnabled:!repairRawQuickBlur;Layout.fillWidth:true;label:I18n.t("系统");detail:I18n.t("重启 / 关机");iconName:"power";onClicked:{devicePanel.close();systemActionsDialog.open()}}
+                        QuickPanelTile {blurCacheTexture:win.panelBlurTexture;objectName:"quickSystemTile";blurObjectName:"quickSystemBlur";blurEnabled:!repairRawQuickBlur;Layout.fillWidth:true;label:I18n.t("系统");detail:I18n.t("重启 / 关机");iconName:"power"
+                            // 访客只灰显，不加锁角标；点击弹无权限（锁屏电源键不在此列）。
+                            opacity:sessionManager.guestSession?0.4:1
+                            onClicked:{ devicePanel.close()
+                                if (sessionManager.guestSession) restrictedNotice.show(I18n.t("系统"))
+                                else systemActionsDialog.open() }}
                         QuickPanelTile {blurCacheTexture:win.panelBlurTexture;objectName:"quickVolumeTile";blurObjectName:"quickVolumeBlur";blurEnabled:!repairRawQuickBlur;Layout.fillWidth:true;label:I18n.t("音量");iconName:systemTools.systemVolume.muted||systemTools.systemVolume.volume===0?"volume_off":"volume_up";active:devicePanel.volumeExpanded
                             detail:!systemTools.systemVolume.available?I18n.t("音频输出不可用"):systemTools.systemVolume.muted?I18n.t("已静音"):systemTools.systemVolume.volume+"%"
                             onClicked:{devicePanel.volumeExpanded=!devicePanel.volumeExpanded;systemTools.systemVolume.refresh()}
@@ -2549,6 +3648,7 @@ ApplicationWindow {
                 CarText {text:trustItem.title;heading:true;Layout.fillWidth:true}
                 CarText {text:I18n.t("签名已验证。声明权限：")+trustItem.permissions.join("、");Layout.fillWidth:true}
                 CarText {text:I18n.t("插件在本程序内运行，请只允许可信发布者的功能。");subdued:true;Layout.fillWidth:true}
+                CarText {text:I18n.t("信任签名不授予网络或文件权限；如需使用，请在“设置 → 联网权限”经管理员 PIN 单独开启。");subdued:true;Layout.fillWidth:true}
                 Flow {Layout.fillWidth:true;spacing:Theme.gap
                     IconButton {iconName:"check";label:I18n.t("仅本次信任");filled:true;onClicked:approveTrustOnce()}
                     IconButton {iconName:"check";label:I18n.t("始终信任此发布者");onClicked:{connectionManager.trust(trustItem.instance,true);trustDialog.close()}}

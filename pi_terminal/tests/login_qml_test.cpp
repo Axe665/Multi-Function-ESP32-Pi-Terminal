@@ -3,6 +3,9 @@
 // 关键：任何 QML 警告都算失败 —— 否则 I18n.t 是 undefined 时组件照样"创建成功"，
 // 那种测试是假绿。
 #include <QQmlComponent>
+#include <QQuickWindow>
+#include <QQuickItem>
+#include <functional>
 #include <QQmlEngine>
 #include <QFile>
 #include <QRegularExpression>
@@ -30,6 +33,10 @@ private:
 
 private slots:
     void initTestCase() {
+        // Qt 6.4 不会自动把 qrc:/qt/qml 加进导入路径，只加模块目录本身会解析不到
+        // qmldir（"module's qmldir file not found"），单例 Theme/I18n 就成了未定义。
+        // 两个路径都加：6.4 走资源根，6.5+ 两种都能命中。
+        engine_.addImportPath(QStringLiteral("qrc:/qt/qml"));
         engine_.addImportPath(QStringLiteral("qrc:/qt/qml/OrangePiTerminal/LoginTest"));
     }
 
@@ -71,9 +78,29 @@ QtObject { property string label: I18n.t("登录") }
             QMetaObject::invokeMethod(pad.data(), "press", Q_ARG(QVariant, QString(digit)));
         QCOMPARE(submitted.count(), 0);
 
+        // 输满不再自动提交：KDF 很贵，必须由用户点「确认」才开算。
         QMetaObject::invokeMethod(pad.data(), "press", Q_ARG(QVariant, QString("6")));
+        QCOMPARE(submitted.count(), 0);
+        QCOMPARE(pad->property("value").toString(), QStringLiteral("123456"));
+
+        QMetaObject::invokeMethod(pad.data(), "confirm");
         QCOMPARE(submitted.count(), 1);
         QCOMPARE(submitted.first().first().toString(), QStringLiteral("123456"));
+        // 提交后清空，避免连点两次重复提交。
+        QCOMPARE(pad->property("value").toString(), QString());
+
+        // 未输满时确认必须无效。
+        submitted.clear();
+        QMetaObject::invokeMethod(pad.data(), "press", Q_ARG(QVariant, QString("7")));
+        QMetaObject::invokeMethod(pad.data(), "confirm");
+        QCOMPARE(submitted.count(), 0);
+
+        // 第 6 位之后不再接受输入。
+        for (const char *digit : {"1", "2", "3", "4", "5"})
+            QMetaObject::invokeMethod(pad.data(), "press", Q_ARG(QVariant, QString(digit)));
+        QCOMPARE(pad->property("value").toString(), QStringLiteral("712345"));
+        QMetaObject::invokeMethod(pad.data(), "press", Q_ARG(QVariant, QString("9")));
+        QCOMPARE(pad->property("value").toString(), QStringLiteral("712345"));
     }
 
     void pinPadBackspaceWorks() {
@@ -86,6 +113,42 @@ QtObject { property string label: I18n.t("登录") }
         QCOMPARE(pad->property("value").toString(), QString());
     }
 
+    // 忙碌标记必须真的渲染出「正在解锁…」：这是把 KDF 挪到后台线程的唯一用户可见收益。
+    // 用 BusyIndicator 的 running 与可见文案双重断言，避免"加了文案但没人看得到"。
+    void pinPadShowsUnlockingWhileBusy() {
+        QString error;
+        QScopedPointer<QObject> pad(instantiate(QStringLiteral("PinPad.qml"), &error));
+        QVERIFY2(pad, qPrintable(error));
+        auto *item = qobject_cast<QQuickItem *>(pad.data());
+        QVERIFY(item);
+
+        QQuickWindow window;
+        window.resize(600, 600);
+        item->setParentItem(window.contentItem());
+        item->setWidth(600);
+        item->setHeight(600);
+        window.show();
+        QTest::qWait(120);
+
+        auto texts = [&]() {
+            QStringList out;
+            std::function<void(QQuickItem *)> walk = [&](QQuickItem *node) {
+                if (!node) return;
+                const QVariant text = node->property("text");
+                if (node->isVisible() && text.isValid() && !text.toString().isEmpty())
+                    out << text.toString();
+                for (QQuickItem *child : node->childItems()) walk(child);
+            };
+            walk(item);
+            return out.join(QStringLiteral("\n"));
+        };
+
+        QVERIFY2(!texts().contains(QStringLiteral("正在解锁")), "idle pad must not claim to unlock");
+        pad->setProperty("busy", true);
+        QTest::qWait(120);
+        QVERIFY2(texts().contains(QStringLiteral("正在解锁")), qPrintable(texts()));
+    }
+
     void userPickerShowsNoSensitiveFields() {
         QString error;
         QScopedPointer<QObject> picker(instantiate(QStringLiteral("UserPicker.qml"), &error));
@@ -95,11 +158,44 @@ QtObject { property string label: I18n.t("登录") }
         QVERIFY(!picker->property("dbKey").isValid());
     }
 
+    void carFieldPlainHintIsOptIn() {
+        QString error;
+        QScopedPointer<QObject> field(instantiate(QStringLiteral("CarField.qml"), &error));
+        QVERIFY2(field, qPrintable(error));
+        // 默认不动：非设置页仍由 Material 负责上浮标签。
+        QVERIFY(!field->property("plainHint").toBool());
+
+        field->setProperty("placeholderText", QStringLiteral("Hint"));
+        field->setProperty("plainHint", true);
+        // 占位文字交给自定义提示，Material 标签设为透明（不再上浮）。
+        const QColor color = field->property("placeholderTextColor").value<QColor>();
+        QCOMPARE(color.alpha(), 0);
+        QObject *hint = field->findChild<QObject *>(QStringLiteral("carFieldHint"));
+        QVERIFY(hint);
+        QCOMPARE(hint->property("text").toString(), QStringLiteral("Hint"));
+        // 未聚焦且为空时提示可见。
+        QVERIFY(hint->property("visible").toBool());
+    }
+
+    void avatarFallsBackToInitial() {
+        QString error;
+        QScopedPointer<QObject> avatar(instantiate(QStringLiteral("Avatar.qml"), &error));
+        QVERIFY2(avatar, qPrintable(error));
+        QCOMPARE(avatar->property("initial").toString(), QStringLiteral("?"));
+        avatar->setProperty("displayName", QStringLiteral("zoe"));
+        QCOMPARE(avatar->property("initial").toString(), QStringLiteral("Z"));
+        avatar->setProperty("displayName", QString::fromUtf8("验收员"));
+        QCOMPARE(avatar->property("initial").toString(), QString::fromUtf8("验"));
+    }
+
     void loginPageStartsWithoutSelectedUser() {
         QString error;
         QScopedPointer<QObject> login(instantiate(QStringLiteral("LoginPage.qml"), &error));
         QVERIFY2(login, qPrintable(error));
         QCOMPARE(login->property("selectedUserId").toString(), QString());
+        // 未选人时是用户列表态；版本号始终可显示（测试进程版本为空）。
+        QVERIFY(login->property("choosing").toBool());
+        QVERIFY(login->property("versionText").toString().startsWith(QString::fromUtf8("树莓派终端")));
     }
 
     void lockScreenStartsIdle() {

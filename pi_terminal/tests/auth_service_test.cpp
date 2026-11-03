@@ -3,6 +3,7 @@
 #include "security/AuthService.h"
 #include "security/KeyWrap.h"
 #include "security/PinPolicy.h"
+#include "security/RecoveryCode.h"
 #include "security/SessionManager.h"
 #include "security/UserDatabase.h"
 #include "security/UserService.h"
@@ -142,6 +143,50 @@ private slots:
         QVERIFY(!PinPolicy::validPin("12345a"));       // 非 ASCII 数字
         QVERIFY(!PinPolicy::validPin(QString::fromUtf8("１２３４５６")));   // 全角数字
         QVERIFY(!PinPolicy::validPin(""));
+    }
+
+    // 恢复码是独立凭据：失败计数不占 PIN 的额度，锁定也不互相连坐。
+    void recoveryCodeHasItsOwnLockoutAndResetsPin() {
+        UserService users(registry_());
+        const QString code = RecoveryCode::generate();
+        const QString wrong = RecoveryCode::generate();
+        const QString id = users.createInitialAdmin(QStringLiteral("R"),
+                                                    QStringLiteral("246810"), code);
+        QVERIFY(!id.isEmpty());
+        AuthService auth(users, locks_());
+        for (int i = 0; i < PinPolicy::kMaxAccountFailures; ++i) {
+            QTest::qWait(PinPolicy::kTerminalMinIntervalMs + 20);
+            QCOMPARE(auth.verifyRecoveryCode(id, wrong).code,
+                     QString::fromLatin1(AuthResult::AuthFailed));
+        }
+        QTest::qWait(PinPolicy::kTerminalMinIntervalMs + 20);
+        const auto limited = auth.verifyRecoveryCode(id, code);
+        QCOMPARE(limited.code, QString::fromLatin1(AuthResult::RateLimited));
+        QVERIFY(limited.retryAfterMs > 0);
+
+        // 恢复码锁定不影响 PIN：PIN 仍然可以登录。
+        QTest::qWait(PinPolicy::kTerminalMinIntervalMs + 20);
+        QCOMPARE(auth.verifyPin(id, QStringLiteral("246810")).code,
+                 QString::fromLatin1(AuthResult::Ok));
+
+        auth.clearLockState(id);
+        QTest::qWait(PinPolicy::kTerminalMinIntervalMs + 20);
+        const auto ok = auth.verifyRecoveryCode(id, code);
+        QCOMPARE(ok.code, QString::fromLatin1(AuthResult::Ok));
+        QCOMPARE(ok.dbKey.size(), 32);
+        QVERIFY(auth.resetPinWithDbKey(id, ok.dbKey, QStringLiteral("654321")));
+        QTest::qWait(PinPolicy::kTerminalMinIntervalMs + 20);
+        QCOMPARE(auth.verifyPin(id, QStringLiteral("654321")).code,
+                 QString::fromLatin1(AuthResult::Ok));
+
+        // 设置页“用恢复码重置 PIN”依赖两条语义：旧 PIN 立即失效、
+        // 恢复码本身不轮换（它封装的是同一个 DB key，用户手里那份继续有效）。
+        QTest::qWait(PinPolicy::kTerminalMinIntervalMs + 20);
+        QCOMPARE(auth.verifyPin(id, QStringLiteral("246810")).code,
+                 QString::fromLatin1(AuthResult::AuthFailed));
+        QTest::qWait(PinPolicy::kTerminalMinIntervalMs + 20);
+        QCOMPARE(auth.verifyRecoveryCode(id, code).code,
+                 QString::fromLatin1(AuthResult::Ok));
     }
 
     void createInitialAdminOnlyOnce() {

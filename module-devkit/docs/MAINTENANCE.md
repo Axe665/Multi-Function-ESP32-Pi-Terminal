@@ -21,11 +21,16 @@ python3 tools/sync_module_devkit.py --write
 ```
 
 工具使用明确映射，校验每个源文件和副本SHA256，清单位于 `sdk/SOURCE-MANIFEST.json`。
+主仓库快照若没有 `esp/`（独立仓库），缺失的 canonical source 会输出 `SKIP` 而不是
+让整条闸门失败；仍会校验 `pi_module_api.h`、`package_tool.py`、`mock_module.py`
+三份实际存在的副本。`ctest -R module_devkit_sync_check` 已接入同一检查。
 
 - `--check` 只读。
 - `--write` 只更新尚未被手工修改的已登记副本，或新增缺失文件。
 - SDK副本与上次登记哈希不符时拒绝覆盖，需维护者先审查合并。
 - 多余文件只报告，不自动删除；不复制 sdkconfig、密钥或嵌入包。
+- 公开 SDK 的 ESP 数据面目前只有裸 TCP/BLE 无 HMAC，不能对接强制 TLS+挑战应答的
+  当前 Pi；LAN TLS/BLE 认证由正式 `esp/S3_Pi_Module` 线推进，导出副本尚未带上。
 - 固件顶层/main CMake 各有必要差异：正式工程使用仓库组件及外部包目录；SDK示例使用自带SDK组件及构建脚本准备的包文件。它们不做逐字同步。
 
 ## SDK目录说明

@@ -6,6 +6,8 @@ Rectangle {
     id: root
     property string iconName: "settings"
     property string title: ""
+    // 页面已经有主标题时用它把分组标题收起来（彩蛋逻辑与 titleTapEnabled 不受影响）。
+    property bool headerVisible: true
     property string subtitle: ""
     property color accentColor: Theme.accent
     property int titleTapCount: 0
@@ -32,11 +34,16 @@ Rectangle {
         id: column
         x: Theme.gap
         y: Theme.gap
-        width: Math.max(1, root.width - Theme.gap * 2)
+        // Hidden settings pages can be laid out at 1px during startup. A
+        // 1px body makes Qt 6.5's ColumnLayout polish oscillate on wrapped
+        // rows, so keep a usable measuring width for the off-screen card.
+        width: Math.max(240, root.width - Theme.gap * 2)
         spacing: Theme.gap
         Item {
             width: column.width
-            implicitHeight: Math.max(48 * Theme.scaleFactor, headingColumn.implicitHeight)
+            visible: root.headerVisible
+            implicitHeight: root.headerVisible
+                ? Math.max(48 * Theme.scaleFactor, headingColumn.implicitHeight) : 0
             Rectangle {
                 width: 48 * Theme.scaleFactor; height: width
                 anchors.verticalCenter: parent.verticalCenter
@@ -68,6 +75,9 @@ Rectangle {
                 CarText { visible: root.subtitle !== ""; text: root.subtitle; subdued: true; width: parent.width; wrapMode: Text.Wrap }
             }
         }
-        ColumnLayout { id: body; width: column.width; spacing: Theme.gap / 2 }
+        // 隐式宽度必须跟实际宽度一致：隐藏页初始化时 root.width 可能是 0，
+        // body 被钳到测量宽度，而 implicitWidth 仍按内容算（更宽）。两者不一致时
+        // Qt 6.5 的 ColumnLayout 两轮迭代算不出稳定高度，报 polish loop。
+        ColumnLayout { id: body; width: column.width; implicitWidth: width; spacing: Theme.gap / 2; visible: root.width >= 240 }
     }
 }

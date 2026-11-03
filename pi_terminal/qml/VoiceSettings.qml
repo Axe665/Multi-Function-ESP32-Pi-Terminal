@@ -18,6 +18,8 @@ Item {
 
     property bool active: false
     property real uiScale: 1
+    // 宿主窗口：输出设备与测试音色确认浮层挂在 Main 的 Overlay 上，由本页触发。
+    property var hostWindow: null
 
     // 列表在页面创建时取一次快照：语言切换、选中态都不重建 Repeater 模型
     //（重建模型会在布局 polish 中销毁带 Layout 的委托，Qt 6.4 下会崩）。
@@ -66,9 +68,80 @@ Item {
                 text: I18n.t("点「试听」会用该音色播报一句话；中文走本地引擎，英文或音色缺失时自动回退系统语音。")
             }
 
+            // ------------------------------------------------------ 语音播报
+            // 语音播报的全部配置都在这里：开关、输出设备、降音与引擎就绪状态。
+            // 设置页不再保留「声音与语音」分区（2026-10-29 迁移）。
+            SettingsGroup {
+                id: speechGroup
+                Layout.fillWidth: true
+                // 页面已有主标题，分组标题收起来；彩蛋仍是这一组的 5 连击逻辑。
+                headerVisible: false
+                iconName: "volume_up"
+                accentColor: "#10b7a8"
+                title: I18n.t("语音播报")
+                subtitle: I18n.t("开关、输出设备与降音")
+                // 五连击标题开启「测试音色」彩蛋；未触发时测试音色不展示也不可用。
+                titleTapEnabled: true
+                onTitleTapped: { if (root.hostWindow) root.hostWindow.openVoiceTestConfirm() }
+
+                Switch {
+                    objectName: "speechEnabledSwitch"
+                    Layout.fillWidth: true
+                    text: I18n.t("中文语音播报")
+                    font.pointSize: Theme.body
+                    implicitHeight: Theme.hit
+                    checked: systemTools.speechEnabled
+                    onToggled: systemTools.setSpeechEnabled(checked)
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.gap / 2
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        CarText { Layout.fillWidth: true; text: I18n.t("播报输出设备"); maximumLineCount: 1; elide: Text.ElideRight }
+                        CarText {
+                            Layout.fillWidth: true; maximumLineCount: 1; elide: Text.ElideRight
+                            subdued: true; fontPixelSize: Theme.fontCaption
+                            text: systemTools.audioOutputDevice === ""
+                                  ? I18n.t("跟随系统") + (systemTools.audioOutputName !== "" ? "（" + systemTools.audioOutputName + "）" : "")
+                                  : systemTools.audioOutputName
+                        }
+                    }
+                    CarButton {
+                        objectName: "audioOutputEntry"
+                        text: I18n.t("选择")
+                        onClicked: { if (root.hostWindow) root.hostWindow.openAudioOutputPopup() }
+                    }
+                }
+                Switch {
+                    id: duckSpeechSwitch
+                    objectName: "duckSpeechSwitch"
+                    Layout.fillWidth: true
+                    text: I18n.t("播报时降低媒体音量")
+                    font.pointSize: Theme.body
+                    implicitHeight: Theme.hit
+                    Binding { target: duckSpeechSwitch; property: "checked"; value: systemTools.duckMediaForSpeech }
+                    onClicked: systemTools.setDuckMediaForSpeech(!systemTools.duckMediaForSpeech)
+                }
+                CarText {
+                    Layout.fillWidth: true; wrapMode: Text.Wrap; subdued: true
+                    text: I18n.t("播报期间将音乐和视频降至原音量的 20%，结束后恢复；不改变播放或静音状态。")
+                }
+                CarText {
+                    objectName: "speechReadyStatus"
+                    Layout.fillWidth: true; wrapMode: Text.Wrap; fontPixelSize: Theme.fontCaption
+                    color: Speech.ready ? Theme.outline : Theme.warning
+                    text: Speech.ready
+                          ? I18n.t("语音引擎就绪")
+                          : I18n.t("语音引擎不可用：缺少 flite 或声库，播报不会出声")
+                }
+            }
+
             // ------------------------------------------------------ 微软声音
             SettingsGroup {
                 Layout.fillWidth: true
+                headerVisible: false
                 iconName: "volume_up"
                 accentColor: "#10b7a8"
                 title: I18n.t("微软声音")
@@ -89,6 +162,7 @@ Item {
             // ------------------------------------------------ 测试音色（彩蛋）
             SettingsGroup {
                 Layout.fillWidth: true
+                headerVisible: false
                 visible: systemTools.voiceTestMode
                 iconName: "volume_up"
                 accentColor: "#d889e8"
@@ -133,7 +207,10 @@ Item {
             border.color: Theme.outline
             border.width: 1
         }
-        contentItem: ColumnLayout {
+        contentItem: Loader {
+            active: disableTestMode.opened
+            sourceComponent: Component {
+                ColumnLayout {
             spacing: Theme.gap / 2
             CarText {
                 Layout.fillWidth: true
@@ -157,6 +234,8 @@ Item {
                         systemTools.setVoiceTestMode(false)
                         disableTestMode.close()
                     }
+                }
+            }
                 }
             }
         }
@@ -201,4 +280,8 @@ Item {
             onClicked: systemTools.setVoice(voiceRow.rowData ? voiceRow.rowData.id : "")
         }
     }
+
+    // 设置页的主标题连点 5 次时调用：转给「语音播报」分组原有的计数与回调，
+    // 彩蛋本身的逻辑与代码不变。
+    function registerTitleTap() { speechGroup.registerTitleTap() }
 }

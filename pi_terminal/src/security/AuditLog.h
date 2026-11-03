@@ -25,6 +25,7 @@ constexpr auto RevokeBridge = "bridge.revoke";
 // 用户与凭据
 constexpr auto CreateUser = "user.create";
 constexpr auto DisableUser = "user.disable";
+constexpr auto DeleteUser = "user.delete";
 constexpr auto ChangePin = "pin.change";
 // 数据生命周期（§6.4 / §7）
 constexpr auto ExportData = "data.export";

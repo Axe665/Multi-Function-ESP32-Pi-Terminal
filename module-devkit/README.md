@@ -2,6 +2,23 @@
 
 面向固定 ESP32-S3 / LinkIt / Pi 终端平台的独立 SDK。复制本目录即可开发，不需要主仓库源码。主机 `.so` 在 Pi 上运行，ESP 负责传感器、控制面、数据面及插件包提供。
 
+## 能力边界（先读）
+
+这份公开 SDK 覆盖“打包、签名、验签、清单校验、明文 mock 联调”，**不等于**能直接
+对接当前 Pi 终端：
+
+- Pi 的 LAN 业务面强制 **TLS 1.2+ + 证书指纹 pin + CN == module_id**；
+- Pi 的 BLE 业务面强制 **32 字节 session key + `0xB1‖challenge` HMAC 挑战应答**；
+- 公开 SDK 的 ESP 数据面仍是裸 TCP / 无 HMAC 实现（`module_data_service`）。
+
+因此用本 SDK 的 `examples/` 或 `template/` 构建的固件，在当前 Pi 上会停在
+`session_ready` 之前。正式 `esp/S3_Pi_Module` 是否已带安全数据面不在本快照内；
+在补齐前，请把本文的“离线包验证”与“业务面联调”分开验收。
+
+另外注意：BLE 示例配置的 write/notify UUID 是
+`9b860002-214c-4de0-a9f4-f70e6a100002` / `9b860003-214c-4de0-a9f4-f70e6a100003`；
+此前示例误写成两个 `…100001`，按旧示例接真实硬件会找不到特征（已修）。
+
 ## 目录导航
 
 | 路径 | 内容 |

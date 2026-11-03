@@ -76,4 +76,8 @@ enum class Verdict { Ok, BadTtlField, Expired, MissingClock };
 
 Verdict evaluate(qint64 ttlMs, qint64 senderUptimeMs, qint64 receiverUptimeMs,
                  bool hasBothClocks);
+// 带握手 offset 的严格判定（§3.5/§6.4）：age = sender - (receiver + offset)。
+// 只接受 0..kMaxAgeMs；offset 缺失/负年龄一律拒绝。
+Verdict evaluateWithOffset(qint64 ttlMs, qint64 senderUptimeMs, qint64 receiverUptimeMs,
+                           qint64 offsetMs, bool hasOffset);
 }  // namespace EventTtl

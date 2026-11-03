@@ -1,13 +1,18 @@
 #pragma once
 #include <QObject>
 #include <QJsonObject>
+#include <QVariantMap>
 #include <QHash>
 #include <QLibrary>
 #include <QSharedPointer>
 #include <functional>
+#include <memory>
 #include "modules/api/pi_module_api.h"
 
 namespace security { class ModuleWorkerClient; }
+class NetworkGate;
+class AppNetworkBroker;
+class FileApiBroker;
 
 // 模块不再在宿主进程里 QLibrary 加载（T-11）。
 // 每个 session 一个 worker 进程，模块代码在独立 UID 下运行。
@@ -24,6 +29,7 @@ public:
     void data(const QString &session, quint8 transport, const QByteArray &payload);
     void connected(const QString &session, quint8 transport);
     void action(const QString &session, const QString &action);
+    void setNetworkGate(NetworkGate *gate) { networkGate_ = gate; }
     void disconnectRequest(const QString &session, const QJsonObject &request);
     QJsonObject manifest(const QString &session) const;
     QString page(const QString &session) const;
@@ -31,6 +37,8 @@ public:
     QString packageVersion(const QString &session) const;
     // 页面的 schema 版本；模块未声明时为 1。
     int pageSchemaVersion(const QString &session) const;
+    // 诊断：worker 隔离模式/会话/错误与 IPC 契约常量（开发者面板用）。
+    Q_INVOKABLE QVariantMap workerInfo() const;
     std::function<bool(const QString &, quint8, const QByteArray &)> sender;
     std::function<bool(const QString &, quint8, const QByteArray &, quint16 *)> controlSender;
 
@@ -60,4 +68,7 @@ private:
     static const char *dataDirectory();
     static void emitEvent(void *, const char *, const char *);
     QHash<QString, QSharedPointer<Instance>> instances_;
+    NetworkGate *networkGate_ = nullptr;
+    AppNetworkBroker *appNetworkBroker_ = nullptr;
+    FileApiBroker *fileApiBroker_ = nullptr;
 };

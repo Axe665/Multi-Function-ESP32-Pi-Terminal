@@ -10,6 +10,7 @@
 #include "modules/api/pi_module_api.h"
 
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLibrary>
@@ -40,6 +41,9 @@ public:
         for (const auto *name : required) {
             if (!library_.resolve(name)) return false;
         }
+        const auto apiVersion = reinterpret_cast<uint32_t (*)()>(
+            library_.resolve("pi_module_api_version"));
+        if (!apiVersion || apiVersion() != PI_MODULE_API_VERSION) return false;
         create_ = reinterpret_cast<decltype(&pi_module_create)>(library_.resolve("pi_module_create"));
         destroy_ = reinterpret_cast<decltype(&pi_module_destroy)>(library_.resolve("pi_module_destroy"));
         onAttach_ = reinterpret_cast<decltype(&pi_module_on_attach)>(library_.resolve("pi_module_on_attach"));
@@ -55,7 +59,7 @@ public:
         if (!create_ || handle_) return false;
         // services 必须是成员：模块在 create 时保存这个指针，
         // 用栈上局部变量会在 attach 返回后变悬空（实测 SIGSEGV）。
-        services_.api_version = 1;
+        services_.api_version = PI_MODULE_API_VERSION;
         services_.context = this;
         // worker 内的模块不能直接访问宿主；这些回调只把事件写给宿主。
         services_.publish_event = &Worker::publishEvent;
@@ -67,6 +71,8 @@ public:
         services_.send_data = &Worker::sendDataCallback;
         services_.send_control = &Worker::sendControlCallback;
         services_.data_directory = &Worker::dataDirectoryCallback;
+        services_.network_request = &Worker::networkRequestCallback;
+        services_.file_request = &Worker::fileRequestCallback;
         handle_ = create_(&services_);
         if (!handle_) return false;
         const QByteArray json = QJsonDocument(transport).toJson(QJsonDocument::Compact);
@@ -103,6 +109,59 @@ public:
     static const char *dataDirectoryCallback() {
         static const QByteArray dir = qEnvironmentVariable("ORANGE_PI_WORKER_DATA_DIR").toUtf8();
         return dir.constData();
+    }
+
+    static const char *networkRequestCallback(void *context, const char *requestJson) {
+        auto *self = static_cast<Worker *>(context);
+        if (!self || !requestJson) return "{\"ok\":false,\"error\":\"bad request\"}";
+        return self->appRequest(QStringLiteral("network"), requestJson);
+    }
+
+    static const char *fileRequestCallback(void *context, const char *requestJson) {
+        auto *self = static_cast<Worker *>(context);
+        if (!self || !requestJson) return "{\"ok\":false,\"error\":\"bad request\"}";
+        return self->appRequest(QStringLiteral("file"), requestJson);
+    }
+
+    const char *appRequest(const QString &kind, const char *requestJson) {
+        networkResponse_ = "{\"ok\":false,\"error\":\"worker not connected\"}";
+        if (!peer || peer->state() != QLocalSocket::ConnectedState)
+            return networkResponse_.constData();
+        const quint64 id = nextAppRequest_++;
+        const QJsonObject body{{"kind", kind},
+                               {"app_request_id", static_cast<double>(id)},
+                               {"payload", QString::fromUtf8(requestJson)}};
+        peer->write(WorkerIpc::encode(WorkerIpc::request(0, QStringLiteral("appRequest"), body)));
+        peer->flush();
+
+        QByteArray buffer;
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 35000 && peer->state() == QLocalSocket::ConnectedState) {
+            if (peer->bytesAvailable() == 0 && !peer->waitForReadyRead(1000)) continue;
+            buffer += peer->readAll();
+            while (buffer.size() >= 4) {
+                const quint32 declared = quint32(quint8(buffer[0]))
+                    | (quint32(quint8(buffer[1])) << 8)
+                    | (quint32(quint8(buffer[2])) << 16)
+                    | (quint32(quint8(buffer[3])) << 24);
+                if (declared > quint32(WorkerIpc::kMaxMessageBytes)) {
+                    networkResponse_ = "{\"ok\":false,\"error\":\"response too large\"}";
+                    return networkResponse_.constData();
+                }
+                if (quint32(buffer.size()) < declared + 4) break;
+                const QByteArray frame = buffer.left(int(declared) + 4);
+                buffer.remove(0, int(declared) + 4);
+                const QJsonObject message = WorkerIpc::decode(frame);
+                if (message.value("op").toString() != QLatin1String("appResponse")) continue;
+                const QJsonObject response = message.value("body").toObject();
+                if (static_cast<quint64>(response.value("app_request_id").toDouble()) != id) continue;
+                networkResponse_ = response.value("response").toString().toUtf8();
+                return networkResponse_.constData();
+            }
+        }
+        networkResponse_ = "{\"ok\":false,\"error\":\"network request timed out\"}";
+        return networkResponse_.constData();
     }
 
     // 调用模块导出的 pi_module_action。动作名必须由宿主按 manifest 白名单
@@ -158,6 +217,8 @@ private:
     decltype(&pi_module_on_detach) onDetach_ = nullptr;
     decltype(&pi_module_stop) stop_ = nullptr;
     int (*onAction_)(pi_module_handle_t *, const char *) = nullptr;
+    quint64 nextAppRequest_ = 1;
+    QByteArray networkResponse_;
 };
 
 QLocalSocket *Worker::peer = nullptr;

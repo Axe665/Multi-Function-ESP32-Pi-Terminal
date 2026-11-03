@@ -9,7 +9,7 @@ Rectangle {
     color:"#102238";implicitHeight:600;implicitWidth:600
     onSampleChanged:{if(sample.temperature!==undefined){history=history.concat([sample.temperature]).slice(-40);chart.requestPaint()}}
     ColumnLayout {anchors.fill:parent;anchors.margins:16;spacing:16
-        Label {text:"环境监测 · 模拟数据";color:"white";font.pointSize:24;Layout.fillWidth:true;wrapMode:Text.Wrap}
+        Label {text:"环境监测 模拟数据";color:"white";font.pointSize:24;Layout.fillWidth:true;wrapMode:Text.Wrap}
         Label {text:"点击上方“开始”读取一组温湿度；“停止”暂停，“复位”清零采样序号。";color:"white";font.pointSize:18;wrapMode:Text.Wrap;Layout.fillWidth:true}
         Label {text:sample.temperature===undefined?"等待采样":("温度："+sample.temperature+" °C\n湿度："+sample.humidity+" %\n采样序号："+sample.sequence+" · "+sample.status);color:"white";font.pointSize:24;Layout.fillWidth:true;wrapMode:Text.Wrap}
         Canvas {id:chart;Layout.fillWidth:true;Layout.fillHeight:true;Layout.minimumHeight:160

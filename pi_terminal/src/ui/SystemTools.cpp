@@ -305,7 +305,12 @@ namespace {
 // share the same QSettings file, so an unscoped write from QML would be a way
 // around the plugin trust prompt.
 const QStringList &pageSettingPrefixes() {
-    static const QStringList prefixes{QStringLiteral("time/")};
+    // layout/：应用卡片顺序（编辑模式确认后由 AppLauncher 写入）。
+    // about/：本机名称（只落在应用设置里，不写 hostname）。
+    // calc/：计算器历史（持久化，重启后仍在）。
+    static const QStringList prefixes{QStringLiteral("time/"), QStringLiteral("weather/"),
+                                      QStringLiteral("layout/"), QStringLiteral("about/"),
+                                      QStringLiteral("calc/")};
     return prefixes;
 }
 constexpr int kPageSettingMaxKey = 96;
@@ -877,6 +882,33 @@ QString SystemTools::read(const QString &relative) const {
 QString SystemTools::fileDisplayPath(const QString &relative) const {
     if (relative.startsWith("@usb/")) return removableStorage_.resolve(relative, false, true);
     return filesRoot() + (relative.isEmpty() ? QString{} : '/' + relative);
+}
+bool SystemTools::writeRemovableText(const QString &location, const QString &text) const {
+    const auto path = removableStorage_.resolve(location, true);
+    if (path.isEmpty()) return false;
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
+    const auto bytes = text.toUtf8();
+    return file.write(bytes) == bytes.size() && file.flush();
+}
+QVariantList SystemTools::removableBackups(const QString &id) const {
+    QVariantList out;
+    QString root;
+    const auto devices = removableStorage_.devices();
+    for (const auto &entry : devices) {
+        const auto map = entry.toMap();
+        if (map.value("id").toString() == id) { root = map.value("path").toString(); break; }
+    }
+    if (root.isEmpty()) return out;
+    // 只扫根目录：用户在 U 盘上看到的备份就只有这一层，不递归翻子目录。
+    const auto entries = QDir(root).entryInfoList({QStringLiteral("*.optbk")}, QDir::Files, QDir::Time);
+    for (const auto &info : entries) {
+        out.append(QVariantMap{{"fileName", info.fileName()},
+                               {"location", "@usb/" + id + '/' + info.fileName()},
+                               {"modifiedMs", info.lastModified().toMSecsSinceEpoch()},
+                               {"sizeBytes", info.size()}});
+    }
+    return out;
 }
 bool SystemTools::editable(const QString &relative) const {
     const auto path = safePath(relative); if (path.isEmpty()) return false;

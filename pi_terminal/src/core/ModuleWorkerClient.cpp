@@ -212,6 +212,22 @@ bool ModuleWorkerClient::request(const QString &op, const QJsonObject &body, QJs
                 emit eventReceived(payload.value("type").toString(), payload.value("json").toString());
                 continue;
             }
+            if (message.value("op").toString() == QLatin1String("appRequest")) {
+                const QJsonObject body = message.value("body").toObject();
+                QJsonObject result;
+                if (appRequestHandler_)
+                    result = appRequestHandler_(body);
+                else
+                    result.insert(QStringLiteral("response"),
+                                  QStringLiteral("{\"ok\":false,\"error\":\"app API unavailable\"}"));
+                const QJsonObject reply{
+                    {QStringLiteral("app_request_id"), body.value(QStringLiteral("app_request_id"))},
+                    {QStringLiteral("response"), result.value(QStringLiteral("response")).toString()}};
+                socket_->write(WorkerIpc::encode(
+                    WorkerIpc::request(0, QStringLiteral("appResponse"), reply)));
+                socket_->flush();
+                continue;
+            }
             if (static_cast<quint64>(message.value("request_id").toDouble()) != id) continue;
             *response = message;
             return true;

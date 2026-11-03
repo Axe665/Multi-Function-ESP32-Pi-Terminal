@@ -48,7 +48,9 @@ int TerminalRuntime::run() {
             qCritical("Invalid window size (minimum 320x320 logical pixels)");
             return 2;
         }
-        window->resize(parts[0].toInt(), parts[1].toInt());
+        const int targetW = parts[0].toInt();
+        const int targetH = parts[1].toInt();
+        QTimer::singleShot(100, window, [window, targetW, targetH] { window->resize(targetW, targetH); });
     }
     if (window && !options_.isSet("window-size") && !options_.isSet("ui-audit") &&
         !options_.isSet("ui-test"))

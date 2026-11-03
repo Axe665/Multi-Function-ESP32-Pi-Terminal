@@ -3,12 +3,23 @@
 #include "UserAgentManager.h"
 #include "WebPage.h"
 
+#include <atomic>
+
 #include <QByteArray>
+#include <QDebug>
 #include <QWebEngineUrlRequestInfo>
 #include <QtWebEngineCoreVersion>
 #include <QtGlobal>
 
 const static QByteArray cUserAgentHeader = QByteArray("User-Agent");
+
+// 宿主总闸（见头文件）：只读一个 atomic，不做任何 Qt 对象访问，IO 线程安全。
+static std::atomic_bool s_networkBlocked { false };
+
+void RequestInterceptor::setNetworkBlocked(bool blocked)
+{
+    s_networkBlocked.store(blocked, std::memory_order_relaxed);
+}
 
 RequestInterceptor::RequestInterceptor(const ViperServiceLocator &serviceLocator, QObject *parent) :
     QWebEngineUrlRequestInterceptor(parent),
@@ -43,6 +54,20 @@ void RequestInterceptor::fetchServices()
 
 void RequestInterceptor::interceptRequest(QWebEngineUrlRequestInfo &info)
 {
+    // 总闸最先判：关掉联网后，浏览器里**任何**请求都不再放行，
+    // 包括已经在跑的页面的 XHR、子资源、导航与主文档。
+    if (s_networkBlocked.load(std::memory_order_relaxed))
+    {
+        // 限流日志：让"请求确实被拦了"可观测，又不刷屏。
+        static std::atomic_int s_blockedRequests { 0 };
+        const int count = ++s_blockedRequests;
+        if (count == 1 || count % 50 == 0)
+            qInfo("network gate: blocked %d request(s), latest %s",
+                  count, qPrintable(info.requestUrl().toString()));
+        info.block(true);
+        return;
+    }
+
     if (!m_adBlockManager)
         fetchServices();
 

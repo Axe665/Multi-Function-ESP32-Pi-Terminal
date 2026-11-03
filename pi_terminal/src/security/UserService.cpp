@@ -11,6 +11,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRandomGenerator>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QStandardPaths>
 
@@ -42,6 +43,8 @@ QJsonObject toJson(const UserRecord &record) {
             {"display_name", record.displayName},
             {"admin", record.admin},
             {"disabled", record.disabled},
+            {"avatar", record.avatar},
+            {"lock_timeout_minutes", record.lockTimeoutMinutes},
             {"salt", QString::fromLatin1(record.salt.toBase64())},
             {"verifier", QString::fromLatin1(record.verifier.toBase64())},
             {"wrapped_db_key", QString::fromLatin1(record.wrappedDbKey.toBase64())},
@@ -61,6 +64,8 @@ UserRecord fromJson(const QJsonObject &object) {
     record.displayName = object.value("display_name").toString();
     record.admin = object.value("admin").toBool();
     record.disabled = object.value("disabled").toBool();
+    record.avatar = object.value("avatar").toString();
+    record.lockTimeoutMinutes = object.value("lock_timeout_minutes").toInt(-1);
     record.salt = QByteArray::fromBase64(object.value("salt").toString().toLatin1());
     record.verifier = QByteArray::fromBase64(object.value("verifier").toString().toLatin1());
     record.wrappedDbKey = QByteArray::fromBase64(object.value("wrapped_db_key").toString().toLatin1());
@@ -224,10 +229,67 @@ bool UserService::disableUser(const QString &actorUserId, const QString &targetU
     return false;
 }
 
+bool UserService::setLockTimeout(const QString &userId, int minutes) {
+    static const QList<int> allowed{0, 1, 2, 5, 10, 15, 30};
+    if (userId.isEmpty() || !allowed.contains(minutes)) return false;
+    QList<UserRecord> records = load();
+    for (UserRecord &record : records) {
+        if (record.userId != userId) continue;
+        record.lockTimeoutMinutes = minutes;
+        return save(records);
+    }
+    return false;
+}
+
+bool UserService::removeRecord(const QString &userId) {
+    if (userId.isEmpty()) return false;
+    QList<UserRecord> records = load();
+    for (int i = 0; i < records.size(); ++i) {
+        if (records.at(i).userId != userId) continue;
+        records.removeAt(i);
+        return save(records);
+    }
+    return false;
+}
+
+bool UserService::setDisplayName(const QString &userId, const QString &displayName) {
+    const QString name = displayName.trimmed();
+    // 与创建用户时的约束保持一致：2..24 个字符。
+    if (name.size() < 2 || name.size() > 24) return false;
+    QList<UserRecord> records = load();
+    for (UserRecord &record : records) {
+        if (record.userId != userId) continue;
+        if (record.displayName == name) return true;
+        record.displayName = name;
+        return save(records);
+    }
+    return false;
+}
+
+bool UserService::setAvatar(const QString &userId, const QString &fileName) {
+    // 头像名会参与拼路径，因此这里只接受纯文件名；调用方已把文件放进 avatars/。
+    if (!fileName.isEmpty()) {
+        static const QRegularExpression allowed(QStringLiteral("^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$"));
+        if (fileName != QFileInfo(fileName).fileName()
+            || fileName.contains(QLatin1Char('/'))
+            || fileName.contains(QLatin1Char('\\'))
+            || !allowed.match(fileName).hasMatch())
+            return false;
+    }
+    QList<UserRecord> records = load();
+    for (UserRecord &record : records) {
+        if (record.userId != userId) continue;
+        record.avatar = fileName;
+        return save(records);
+    }
+    return false;
+}
+
 QList<UserService::PublicUser> UserService::listUsers() const {
     QList<PublicUser> users;
     for (const UserRecord &record : load()) {
-        users.append({record.userId, record.displayName, record.admin, record.disabled});
+        users.append({record.userId, record.displayName, record.admin, record.disabled,
+                      record.avatar, record.lockTimeoutMinutes});
     }
     return users;
 }

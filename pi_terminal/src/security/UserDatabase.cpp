@@ -127,6 +127,20 @@ QString UserDatabase::databasePathFor(const QString &userId) const {
     return root_ + QLatin1Char('/') + userId + QStringLiteral("/data.db");
 }
 
+bool UserDatabase::discardSession(const QString &userId)
+{
+    if (userId.isEmpty()) return false;
+    // 与 openForSession 同一套字符白名单：删目录比开库更不能容忍路径穿越。
+    for (const QChar c : userId) {
+        if (!(c.isLetterOrNumber() && c.unicode() < 128)) return false;
+    }
+    close();
+    const QString dir = root_ + QLatin1Char('/') + userId;
+    QDir target(dir);
+    if (!target.exists()) return false;
+    return target.removeRecursively();
+}
+
 bool UserDatabase::openForSession(const QString &userId, const QByteArray &dbKey) {
     close();
     // userId 不透明且由服务端给定；仍做一次字符集检查，防止路径穿越。
@@ -187,6 +201,18 @@ void UserDatabase::close() {
     delete store_;
     store_ = nullptr;
     openUserId_.clear();
+}
+
+bool UserDatabase::deleteUserData(const QString &userId) {
+    if (userId.isEmpty()) return false;
+    // userId 会拼进路径：与 openForSession 用同一套字符白名单。
+    for (const QChar c : userId)
+        if (!(c.isLetterOrNumber() || c == QLatin1Char('-') || c == QLatin1Char('_')))
+            return false;
+    if (isOpen() && openUserId_ == userId) close();
+    QDir dir(root_ + QLatin1Char('/') + userId);
+    if (!dir.exists()) return true;
+    return dir.removeRecursively();
 }
 
 bool UserDatabase::isOpen() const { return store_ && store_->isOpen(); }
@@ -630,13 +656,45 @@ QVector<UserDatabase::HistoryBucket> UserDatabase::historySeries(
 
 int UserDatabase::pruneHistory(qint64 nowMs, qint64 retentionMs) {
     if (!isOpen() || retentionMs <= 0) return 0;
-    void *stmt = nullptr;
-    if (!store_->prepare(QStringLiteral("DELETE FROM module_history WHERE bucket_ms < ?"), &stmt))
+    const qint64 cutoff = nowMs - retentionMs;
+    // 五张时间序列表在同一个事务里删；任何一张失败就整体回滚，
+    // 避免出现"历史清了、读数没清"的半清理状态。
+    static const struct TableCutoff {
+        const char *table;
+        const char *column;
+    } tables[] = {
+        {"module_history", "bucket_ms"},
+        {"samples", "received_at_ms"},
+        {"readings", "received_at_ms"},
+        {"measurements", "received_at_ms"},
+        {"audit", "at_ms"},
+    };
+    if (!store_->exec(QStringLiteral("BEGIN IMMEDIATE"))) return 0;
+    int removed = 0;
+    for (const auto &table : tables) {
+        void *stmt = nullptr;
+        const QString sql = QStringLiteral("DELETE FROM %1 WHERE %2 < ?")
+                                .arg(QString::fromLatin1(table.table),
+                                     QString::fromLatin1(table.column));
+        if (!store_->prepare(sql, &stmt)) {
+            store_->exec(QStringLiteral("ROLLBACK"));
+            return 0;
+        }
+        store_->bindInt(stmt, 1, cutoff);
+        const bool ok = !store_->step(stmt) && store_->lastSqliteCode() == 101;
+        const int changes = ok ? store_->changes() : 0;
+        store_->finalize(stmt);
+        if (!ok) {
+            store_->exec(QStringLiteral("ROLLBACK"));
+            return 0;
+        }
+        removed += changes;
+    }
+    if (!store_->exec(QStringLiteral("COMMIT"))) {
+        store_->exec(QStringLiteral("ROLLBACK"));
         return 0;
-    store_->bindInt(stmt, 1, nowMs - retentionMs);
-    const bool ok = !store_->step(stmt) && store_->lastSqliteCode() == 101;
-    store_->finalize(stmt);
-    return ok ? store_->changes() : 0;
+    }
+    return removed;
 }
 
 bool UserDatabase::legacyHistoryMigrated() const {

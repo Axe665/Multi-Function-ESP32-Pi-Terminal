@@ -46,10 +46,12 @@ def main():
     modes.add_argument("--write", action="store_true", help="export; refuse unrecorded SDK edits")
     args = parser.parse_args()
     previous = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {"files": {}}
-    expected, pending, issues = {}, [], []
+    expected, pending, issues, skips = {}, [], [], []
     for source, target in mappings():
         if not source.exists():
-            issues.append(f"missing canonical source: {source.relative_to(ROOT)}")
+            # 快照可能不含 esp/（独立仓库）。缺 canonical source 时明确 SKIP，
+            # 不把整个闸门判红；--write 只导出存在的副本。
+            skips.append(source.relative_to(ROOT).as_posix())
             continue
         files = sorted(source.rglob("*")) if source.is_dir() else [source]
         targets = set()
@@ -73,6 +75,8 @@ def main():
             for f in target.rglob("*"):
                 if f.is_file() and f not in targets:
                     issues.append(f"extra SDK file (not deleted): {f.relative_to(KIT)}")
+    for skip in skips:
+        print(f"SKIP missing canonical source: {skip}")
     if issues:
         for issue in issues: print(issue)
         raise SystemExit(1)
@@ -82,7 +86,8 @@ def main():
         MANIFEST.write_text(json.dumps({"format": 1, "files": expected}, ensure_ascii=False, indent=2) + "\n")
     elif not MANIFEST.exists() or previous.get("files") != expected:
         raise SystemExit("source copies match but manifest needs refresh: run --write")
-    print(f"SDK canonical export {'updated' if args.write else 'verified'}: {len(expected)} files")
+    print(f"SDK canonical export {'updated' if args.write else 'verified'}: {len(expected)} files"
+          + (f", skipped {len(skips)} missing sources" if skips else ""))
 
 
 if __name__ == "__main__":

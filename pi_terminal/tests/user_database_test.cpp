@@ -152,13 +152,20 @@ private slots:
             QVERIFY(db.openForSession(QStringLiteral("userF"), keyOf('f')));
             QVERIFY(db.appendSample(sampleWith(22.0, 1)));
         }
-        // 篡改 meta 里的大版本，模拟"在 4.x 建库、拿到 3.x 上打开"。
+        // 篡改 meta 里的大版本，模拟"在一代 SQLCipher 建库、拿到另一代上打开"。
+        // 不能写死 '4'：本机是 4.x 时改成 '4' 等于没改，用例会假红；3.x 主机上
+        // 写死 '4' 才是原意。从实际运行库派生另一个大版本，两种环境都成立。
         const QString path = UserDatabase(root_()).databasePathFor(QStringLiteral("userF"));
         {
             SqlCipherStore store;
             QVERIFY(store.open(path, keyOf('f')));
-            QVERIFY(store.exec(QStringLiteral(
-                "UPDATE meta SET value='4' WHERE key='cipher_version'")));
+            const QString actual = store.cipherVersion().section(QLatin1Char(' '), 0, 0)
+                                       .section(QLatin1Char('.'), 0, 0);
+            QVERIFY2(!actual.isEmpty(), "PRAGMA cipher_version must report a version");
+            const QString other = actual == QLatin1String("4") ? QStringLiteral("3")
+                                                               : QStringLiteral("4");
+            QVERIFY(store.exec(QStringLiteral("UPDATE meta SET value='%1' WHERE key='cipher_version'")
+                                   .arg(other)));
         }
         // 大版本不符必须拒绝打开，不能读出乱码当数据。
         UserDatabase db(root_());
@@ -226,9 +233,37 @@ private slots:
         const qint64 week = 7LL * 24 * 60 * 60000;
         QVERIFY(db.addHistorySample(now - week - 120000, 21.0));   // 太旧
         QVERIFY(db.addHistorySample(now - 60000, 22.0));           // 保留
-        QCOMPARE(db.pruneHistory(now, week), 1);
+
+        SensorSample oldSample;
+        oldSample.receivedAtMs = now - week - 120000;
+        oldSample.sampleSeq = 1;
+        oldSample.deviceId = QStringLiteral("planter-1");
+        oldSample.hasTemperature = true;
+        oldSample.temperatureC = 20.0;
+        QVERIFY(db.appendSample(oldSample));
+        SensorSample newSample = oldSample;
+        newSample.receivedAtMs = now - 60000;
+        newSample.sampleSeq = 2;
+        QVERIFY(db.appendSample(newSample));
+
+        UserDatabase::Measurement oldMeasurement;
+        oldMeasurement.receivedAtMs = now - week - 120000;
+        oldMeasurement.source = QStringLiteral("device.auto");
+        oldMeasurement.deviceId = QStringLiteral("bp-1");
+        oldMeasurement.unit = QStringLiteral("mmHg");
+        oldMeasurement.hasSystolic = true;
+        oldMeasurement.systolic = 120;
+        QVERIFY(db.appendMeasurement(oldMeasurement));
+        UserDatabase::Measurement newMeasurement = oldMeasurement;
+        newMeasurement.receivedAtMs = now - 60000;
+        QVERIFY(db.appendMeasurement(newMeasurement));
+
+        // 同一事务里清 module_history + samples + measurements（+ audit/readings）。
+        QCOMPARE(db.pruneHistory(now, week), 3);
         const auto remaining = db.historySeries(now, week, 60000);
         QCOMPARE(remaining.size(), 1);
+        QCOMPARE(db.queryRecent(10).size(), 1);
+        QCOMPARE(db.queryMeasurements(10).size(), 1);
     }
 
 

@@ -38,6 +38,15 @@ void EventDedup::clear() { seen_.clear(); }
 
 namespace EventTtl {
 
+Verdict evaluateWithOffset(qint64 ttlMs, qint64 senderUptimeMs, qint64 receiverUptimeMs,
+                           qint64 offsetMs, bool hasOffset) {
+    if (ttlMs != kExpectedTtlMs) return Verdict::BadTtlField;
+    if (!hasOffset) return Verdict::MissingClock;
+    const qint64 age = senderUptimeMs - (receiverUptimeMs + offsetMs);
+    if (age < 0 || age > kMaxAgeMs) return Verdict::Expired;
+    return Verdict::Ok;
+}
+
 Verdict evaluate(qint64 ttlMs, qint64 senderUptimeMs, qint64 receiverUptimeMs,
                  bool hasBothClocks) {
     if (ttlMs != kExpectedTtlMs) return Verdict::BadTtlField;

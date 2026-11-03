@@ -64,6 +64,16 @@ public:
     QString identityPath() const;
     bool uidKeyReady() const;
 
+    // ── PBR 握手用的宿主身份接点（mbedtls 缺失时全部失败关闭）──
+    // 首次使用时生成 Pi 身份（0600）；之后只读。
+    bool ensureIdentity();
+    QByteArray identityPublicKey() const;
+    quint8 identityKeyIdByte() const;
+    bool signIdentity(const QByteArray &hash, QByteArray *signature) const;
+    // 用完整公钥验 r‖s；静态，便于传输层回调。
+    static bool verifyIdentity(const QByteArray &publicKey, const QByteArray &hash,
+                               const QByteArray &signature);
+
     // 槽位快照（只读）。0/1 两个槽各一条，未绑定时 bound=false。
     Q_INVOKABLE QVariantList slotSnapshot() const;
 

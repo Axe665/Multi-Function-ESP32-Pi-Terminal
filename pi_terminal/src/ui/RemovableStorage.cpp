@@ -62,8 +62,14 @@ void RemovableStorage::refresh() {
         if (systemVolume) continue;
         if (label.isEmpty() || label.startsWith('/')) label = readStorageText(physicalNode + "/device/model");
         if (label.isEmpty()) label = "USB " + id;
+        // 只读标记与容量：界面要据此禁用「导出/备份」，并给用户一个能认出的盘。
+        const bool readOnly = readStorageText(node + "/ro") == "1";
+        bool sizeOk = false;
+        const qint64 sectors = readStorageText(node + "/size").toLongLong(&sizeOk);
         next.append(QVariantMap{{"id", id}, {"physical", physical}, {"device", device}, {"name", label},
-                                {"path", path}, {"mounted", !path.isEmpty()}, {"location", "@usb/" + id}});
+                                {"path", path}, {"mounted", !path.isEmpty()}, {"location", "@usb/" + id},
+                                {"readOnly", readOnly},
+                                {"sizeBytes", sizeOk ? sectors * 512 : qint64(0)}});
     }
     QSet<QString> oldPhysical;
     for (const auto &entry : devices_) oldPhysical.insert(entry.toMap().value("physical").toString());

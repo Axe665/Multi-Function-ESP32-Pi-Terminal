@@ -109,6 +109,26 @@ private slots:
         QCOMPARE(EventTtl::evaluate(3000, 1000, 1000 + 3001, true), EventTtl::Verdict::Expired);
         QCOMPARE(EventTtl::evaluate(3000, 1000, 1000, false), EventTtl::Verdict::MissingClock);
     }
+
+    // §3.5/§6.4：offset 由 hello_ok.uptime_ms 建立，age 必须落在 0..3000。
+    void offsetAgeRejectsFutureAndStaleEvents()
+    {
+        const qint64 offset = 5000;   // bridge uptime 比 Pi 单调时钟快 5s
+        const qint64 local = 1200;
+        // 事件年龄 0、3000 都合法。
+        QCOMPARE(EventTtl::evaluateWithOffset(3000, local + offset, local, offset, true),
+                 EventTtl::Verdict::Ok);
+        QCOMPARE(EventTtl::evaluateWithOffset(3000, local + offset + 3000, local, offset, true),
+                 EventTtl::Verdict::Ok);
+        // 晚 1ms 或早 1ms 都拒绝。
+        QCOMPARE(EventTtl::evaluateWithOffset(3000, local + offset + 3001, local, offset, true),
+                 EventTtl::Verdict::Expired);
+        QCOMPARE(EventTtl::evaluateWithOffset(3000, local + offset - 1, local, offset, true),
+                 EventTtl::Verdict::Expired);
+        // 没有 offset 不能当新鲜事件。
+        QCOMPARE(EventTtl::evaluateWithOffset(3000, local, local, 0, false),
+                 EventTtl::Verdict::MissingClock);
+    }
 };
 
 QTEST_GUILESS_MAIN(PbrSessionTest)

@@ -2,7 +2,7 @@
 #include "example_manifest.h"
 #include <string>
 struct pi_module_handle { const pi_host_services_t *host; uint8_t transport = PI_TRANSPORT_HOTSPOT_LAN; };
-extern "C" uint32_t pi_module_api_version() { return 1; }
+extern "C" uint32_t pi_module_api_version() { return PI_MODULE_API_VERSION; }
 extern "C" const char *pi_module_manifest_json() { return EXAMPLE_MANIFEST; }
 extern "C" pi_module_handle_t *pi_module_create(const pi_host_services_t *host) { return new pi_module_handle{host}; }
 extern "C" void pi_module_destroy(pi_module_handle_t *m) { delete m; }

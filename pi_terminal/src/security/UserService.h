@@ -17,6 +17,11 @@ struct UserRecord {
     QString displayName;     // 低敏显示名
     bool admin = false;
     bool disabled = false;
+    // 头像文件名（不含路径），文件位于注册表同目录的 avatars/ 下。
+    // 只是文件名，不是可执行内容；缺省为空表示用首字母占位。
+    QString avatar;
+    // 无操作自动锁屏分钟数：-1=未设置（默认 5），0=永不，其余为 1/2/5/10/15/30。
+    int lockTimeoutMinutes = -1;
     QByteArray salt;         // 16B
     QByteArray verifier;     // verifyValue(KEK)，不是 KEK
     QByteArray wrappedDbKey; // AES-256-GCM(KEK, dbKey)
@@ -63,12 +68,29 @@ public:
 
     bool disableUser(const QString &actorUserId, const QString &targetUserId);
 
+    // 从注册表移除一条记录。鉴权/最后管理员/任务检查由 SessionManager 负责；
+    // 数据文件清理也由调用方在移除记录前后完成。
+    bool removeRecord(const QString &userId);
+
+    // 只改显示名（2..24 字符，去首尾空白后比较）。显示名不参与鉴权，
+    // 也不需要重新封装任何密钥；审计与日志都用 userId。
+    bool setDisplayName(const QString &userId, const QString &displayName);
+
+    // 只改头像文件名（空表示移除）。文件名必须是纯文件名，且只允许
+    // [A-Za-z0-9._-]；不负责搬运文件，落盘由 SessionManager 做。
+    bool setAvatar(const QString &userId, const QString &fileName);
+
+    // 每人独立的自动锁屏时长；非法值拒绝。只影响该用户的会话。
+    bool setLockTimeout(const QString &userId, int minutes);
+
     // 低敏视图：不含 salt/verifier/wrapped key。
     struct PublicUser {
         QString userId;
         QString displayName;
         bool admin = false;
         bool disabled = false;
+        QString avatar;
+        int lockTimeoutMinutes = -1;
     };
     QList<PublicUser> listUsers() const;
 

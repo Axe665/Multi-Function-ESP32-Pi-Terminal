@@ -45,7 +45,7 @@ Rectangle {
         Flickable {
             objectName:"taskbarTasks";Layout.fillWidth:true;Layout.minimumWidth:Theme.hit;Layout.preferredHeight:Theme.hit
             contentWidth:taskIcons.implicitWidth;contentHeight:height;clip:true;boundsBehavior:Flickable.StopAtBounds;flickableDirection:Flickable.HorizontalFlick
-        RowLayout {
+        Row {
             id:taskIcons;height:parent.height;spacing:Theme.gap/2
             Repeater {model:dock.recentModel
                 IconButton {

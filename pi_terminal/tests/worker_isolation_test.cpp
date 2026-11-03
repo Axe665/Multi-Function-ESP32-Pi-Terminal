@@ -91,10 +91,9 @@ private slots:
         QVERIFY2(file.open(QIODevice::ReadOnly), qPrintable(path));
         const QString text = QString::fromUtf8(file.readAll());
         // §0.4 的六条必须全部在 unit 里真正声明。
-        // ProtectHome 用 read-only 而不是 yes：模块 .so 解包在用户数据目录下，
-        // 完全屏蔽会让 worker 加载不到库。写权限仍然没有。
+        // 文件 API 落地后 worker 完全看不到 home，模块包只能从 root 只读目录加载。
         for (const auto *directive : {"DynamicUser=yes", "PrivateNetwork=yes", "PrivateTmp=yes",
-                                      "ProtectHome=read-only", "ProtectSystem=strict",
+                                      "ProtectHome=yes", "ProtectSystem=strict",
                                       "NoNewPrivileges=yes", "RestrictAddressFamilies=AF_UNIX"}) {
             QVERIFY2(text.contains(QLatin1String(directive)), directive);
         }
