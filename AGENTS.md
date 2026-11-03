@@ -10,11 +10,11 @@
 cd pi_terminal && source scripts/env.sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 8                  # 2. 到退出码 0
-cd .. && sudo ./scripts/deploy.sh                 # 3. 必须执行
+cd .. && ./scripts/deploy.sh                      # 3. 必须执行（脚本自己申请 root）
 ```
 
-**需要 root 的命令直接执行 sudo，让用户输密码。** sudo 弹出来是正确行为，
-不要因为它要密码就跳过部署、或者只编译不安装。
+第 3 步**必须执行，没有替代路径**。脚本会自己 `exec sudo` 申请提权，终端弹出密码提示后输密码即可。
+不要只编译不安装，不要跳过部署，权限申请失败就停下报告。
 
 第 3 步跳过会出现：`net-policy-helper` 不存在、模块沙箱不生效（沙箱由
 `orange-pi-worker@.service` 提供，不是应用代码）、网络策略不生效、helper 缺失。

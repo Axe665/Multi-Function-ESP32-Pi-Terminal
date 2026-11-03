@@ -16,9 +16,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD="${1:-$ROOT/pi_terminal/build}"
 PREFIX=/usr
 
+# 没有 root 就自己申请提权：这一步是必须的，不能跳过。
+# 直接跑 ./scripts/deploy.sh 即可，脚本会弹出权限申请。
 if [ "$(id -u)" -ne 0 ]; then
-    echo "需要 root：sudo $0 $*" >&2
-    exit 1
+    echo "== 需要 root：正在申请提权（会提示输入密码）==" >&2
+    exec sudo -- "$0" "$@"
 fi
 if [ ! -f "$BUILD/CMakeCache.txt" ]; then
     echo "找不到构建目录 $BUILD，先编译：" >&2
