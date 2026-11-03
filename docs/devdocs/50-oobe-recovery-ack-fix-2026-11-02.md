@@ -46,6 +46,4 @@ Item {
 2. 点击 → 弹出确认卡片「确认已保存恢复码？」，带「冷静期 3 秒」倒计时，背景变暗但**不卡死**；
 3. 等待倒计时结束后确认 → 正常进入第 4 步「网络连接」。
 
-![确认层](orpi-study/orpi-terminal-complete-20261101/orpi-terminal-20261031/pi-terminal/docs/devdocs/account-shots/onboarding-ack-layer.png)
 
-![确认后进入第 4 步](orpi-study/orpi-terminal-complete-20261101/orpi-terminal-20261031/pi-terminal/docs/devdocs/account-shots/onboarding-step4.png)

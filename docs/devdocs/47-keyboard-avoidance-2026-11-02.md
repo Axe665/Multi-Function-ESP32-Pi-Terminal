@@ -70,9 +70,7 @@ StackLayout {
 
 页面整体上移约 136px（物理），输入框和「保存 / 取消」都完整露在键盘上方。
 
-![聚焦前](orpi-study/orpi-terminal-complete-20261101/orpi-terminal-20261031/pi-terminal/docs/devdocs/account-shots/keyboard-before.png)
 
-![聚焦后：整页上移，输入框露出](orpi-study/orpi-terminal-complete-20261101/orpi-terminal-20261031/pi-terminal/docs/devdocs/account-shots/keyboard-after.png)
 
 ## 5. 已知未做
 

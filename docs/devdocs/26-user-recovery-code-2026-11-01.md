@@ -2,7 +2,6 @@
 
 > 范围：`设置 → 用户与权限`（section 15）。只改设置页与 `SessionManager` 门面，
 > 不碰首次开机向导与登录页的既有路径。
-> 截图见 `user-recovery-shots/`。
 
 ## 1. 两个需求
 

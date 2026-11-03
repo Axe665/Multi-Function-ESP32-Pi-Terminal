@@ -1,7 +1,6 @@
 # 用户与权限：单一主标题 + 改名字 + 其他用户重做（2026-11-01）
 
 > 范围：`设置 → 用户与权限`（section 15）的二级页与 `SessionManager` / `UserService`。
-> 截图见 `user-security-shots/`。
 
 ## 1. 只保留最上面的主标题
 

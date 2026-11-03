@@ -2,7 +2,6 @@
 
 > 范围：`WeatherTools.qml`（天气主页）与 `WeatherSettings.qml`（右上角齿轮的设置层）。
 > 只改界面；数据源、缓存、单位与请求仍归 `WeatherEngine.qml`。
-> 截图见 `weather-shots/`。
 
 ## 1. 天气主页
 
