@@ -89,6 +89,24 @@ cmake --build build --parallel 8
 5. `systemctl enable --now` 启动 net-proxy 与 file-daemon；
 6. 自检 11 项并打印 `[ok]/[缺]`。
 
+## 3.5 必须验收：沙箱与网络策略是否真的生效
+
+```bash
+./scripts/verify-install.sh
+```
+
+这不是"文件在不在"的检查，而是**能力检查**：
+
+| 检查 | 含义 |
+| --- | --- |
+| `orange-pi-worker@.service` 的 `DynamicUser/PrivateNetwork/ProtectHome/ProtectSystem/NoNewPrivileges` | 模块沙箱是否真的存在 |
+| `orange-pi-net-proxy`、`orange-pi-file-daemon` active | 代理与文件守护是否在跑 |
+| polkit 策略文件 | `net-policy-helper` 能否被授权改 nftables |
+| `/run/orpi-net-proxy` | 网络策略文件的落点是否就绪 |
+
+**任何 `[FAIL]` 都表示部署不完整**：此时程序能启动，但沙箱与网络策略缺失，
+必须修完再宣称完成。
+
 ## 4. 验收
 
 ```bash

@@ -16,6 +16,24 @@ cd .. && ./scripts/deploy.sh                      # 3. 必须执行（脚本自�
 第 3 步**必须执行，没有替代路径**。脚本会自己 `exec sudo` 申请提权，终端弹出密码提示后输密码即可。
 不要只编译不安装，不要跳过部署，权限申请失败就停下报告。
 
+## 一·半、编译完成 ≠ 完成
+
+部署之后**必须**跑验收，且必须全绿：
+
+```bash
+./scripts/verify-install.sh
+```
+
+它检查的不是"文件在不在"，而是能力是否真的可用：
+
+- `orange-pi-worker@.service` 的沙箱属性：`DynamicUser=yes`、`PrivateNetwork=yes`、
+  `ProtectHome=yes`、`ProtectSystem=strict`、`NoNewPrivileges=yes`；
+- `orange-pi-net-proxy` 与 `orange-pi-file-daemon` 处于 active；
+- polkit 策略存在（`net-policy-helper` 的授权前提）；
+- net-proxy 的 runtime 目录存在。
+
+**任何一项 `[FAIL]` 都意味着模块沙箱或网络策略不完整**，此时不允许说"编译好了"。
+
 第 3 步跳过会出现：`net-policy-helper` 不存在、模块沙箱不生效（沙箱由
 `orange-pi-worker@.service` 提供，不是应用代码）、网络策略不生效、helper 缺失。
 应用照样能启动，所以很容易被误判成"程序有 bug"。
@@ -25,6 +43,7 @@ cd .. && ./scripts/deploy.sh                      # 3. 必须执行（脚本自�
 ## 二、验收必须看结果
 
 ```bash
+./scripts/verify-install.sh        # 沙箱 + 网络策略 + 服务，必须全绿
 systemctl status orange-pi-net-proxy --no-pager
 systemctl status orange-pi-file-daemon --no-pager
 
