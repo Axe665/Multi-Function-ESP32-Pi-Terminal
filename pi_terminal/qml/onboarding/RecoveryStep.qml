@@ -84,18 +84,43 @@ Item {
         // 不能只铺满 parent：步骤页在向导的窄内容列里（约 720px），
         // 那样遮罩只有中间一块，四周留出黑色边框（真机截图可见）。
         // 这里把它对齐全窗，并用负偏移抵消内容列的位置。
-        readonly property var hostWizard: (typeof wizard !== "undefined" && wizard) ? wizard : null
-        x: hostWizard ? -step.mapToItem(hostWizard, 0, 0).x : 0
-        y: hostWizard ? -step.mapToItem(hostWizard, 0, 0).y : 0
-        width: hostWizard ? hostWizard.width : parent.width
-        height: hostWizard ? hostWizard.height : parent.height
+        // 直接对到窗口内容上：向导是 Loader 动态加载的，Overlay.overlay 解析不到；
+        // 只对 parent（窄内容列）会留出黑边，而且遮罩盖不满时用户点别处没反应，
+        // 看起来就是卡死。
+        readonly property Item hostItem: step.Window.window ? step.Window.window.contentItem : null
+        x: hostItem ? -step.mapToItem(hostItem, 0, 0).x : 0
+        y: hostItem ? -step.mapToItem(hostItem, 0, 0).y : 0
+        width: hostItem ? hostItem.width : parent.width
+        height: hostItem ? hostItem.height : parent.height
         z: 10
         visible: false
 
         property int cooldown: 5
+        property double startedAt: 0
 
-        function open() { cooldown = 5; visible = true }
-        function close() { visible = false }
+        function open() {
+            cooldown = 5
+            startedAt = Date.now()
+            visible = true
+            ackTimer.start()
+        }
+        function close() {
+            ackTimer.stop()
+            visible = false
+        }
+
+        // 用时间戳算剩余，不依赖 Timer.running 绑定：某些环境下 running
+        // 绑定没被求值，倒计时永远停着，确认按钮一直是灰的（表现为卡死）。
+        Timer {
+            id: ackTimer
+            interval: 250
+            repeat: true
+            onTriggered: {
+                const left = 5 - Math.floor((Date.now() - ackOverlay.startedAt) / 1000)
+                ackOverlay.cooldown = Math.max(0, left)
+                if (ackOverlay.cooldown <= 0) stop()
+            }
+        }
 
         Rectangle {
             anchors.fill: parent
@@ -164,11 +189,5 @@ Item {
             }
         }
 
-        Timer {
-            interval: 1000
-            repeat: true
-            running: ackOverlay.visible && ackOverlay.cooldown > 0
-            onTriggered: ackOverlay.cooldown--
-        }
     }
 }
