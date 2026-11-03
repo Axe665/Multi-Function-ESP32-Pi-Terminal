@@ -385,12 +385,12 @@ int TerminalApplication::initialize(const QCommandLineParser &options) {
                      &securityService_, [this](const QString &userId) {
         securityService_.forgetUser(userId);
     });
-    // 最后一名用户（可能也是最后一名管理员）删掉自己后注册表为空：把首次
-    // 开机向导重新拉起来，用户不用重启终端就能重建管理员。OOBE 的 QML
-    // 由 Main.qml 的 Loader 以 onboarding.active 驱动，重新置 true 即可。
+    // 最后一名管理员被删掉后把首次开机向导重新拉起来，用户不用重启就能重建管理员。
+    // 判定必须是「没有管理员」而不是「没有用户」：删掉管理员但还留着普通用户时，
+    // 注册表非空，旧条件不会触发，界面会直接落到锁屏（实测）。
     QObject::connect(&session_, &security::SessionManager::userDeleted,
                      &onboarding_, [this](const QString &) {
-        if (!userService_.hasAnyUser()) onboarding_.rearm();
+        if (!userService_.hasAdminUser()) onboarding_.rearm();
     });
     // 当前用户加密库的指针必须跟着登录/退出/删号走：
     // SecurityService 的 bindCard/备份/审计都以 database_->isOpen() 为前提，
