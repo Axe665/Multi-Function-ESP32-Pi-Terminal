@@ -62,3 +62,14 @@ pi_terminal/assets/tv/.cache/
 
 # 模块构建产物：由 configure_file 从 module_manifest.h.in + manifest.json 生成
 module-devkit/examples/*/module_manifest.h
+
+# 构建/打包产物
+/obj-*/
+/debian/tmp/
+/debian/qt-runtime/
+/debian/orange-pi-terminal/
+/debian/orange-pi-terminal-dev/
+/debian/.debhelper/
+/debian/debhelper-build-stamp
+/debian/files
+/debian/*.substvars

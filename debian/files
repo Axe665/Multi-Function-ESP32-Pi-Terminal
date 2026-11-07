@@ -1,0 +1,4 @@
+orange-pi-terminal-dbgsym_1.0.0_arm64.ddeb debug optional automatic=yes
+orange-pi-terminal-dev_1.0.0_arm64.deb libdevel optional
+orange-pi-terminal_1.0.0_arm64.buildinfo embedded optional
+orange-pi-terminal_1.0.0_arm64.deb embedded optional

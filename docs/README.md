@@ -17,9 +17,12 @@
 |---|---|
 | [build-from-scratch.md](build-from-scratch.md) | 从零编译：依赖、Qt 6.4/6.5 两套、交叉工具链 |
 | [DEPLOY.md](DEPLOY.md) | 部署引导（给下一台电脑的 AI / 运维） |
-| [deployment-20261018.md](deployment-20261018.md) | 当前 Pi 的部署与维护细节 |
+| [handover.md](handover.md) | **交接指南**：新机器从零到编译/部署/出 deb |
+| [deb-packaging.md](deb-packaging.md) | DEB 打包：两个包、/opt 布局、构建与校验 |
+| [archive/deployment-20261018.md](archive/deployment-20261018.md) | 当前 Pi 的部署与维护细节 |
 | [../build_scripts/](../build_scripts/) | 构建/检查依赖/部署/验证/打包脚本 |
-| [../sdk/README.md](../sdk/README.md) | Qt 6.5.3 aarch64 与 ESP 固件完整仓库 |
+| [../toolchain/README.md](../toolchain/README.md) | Qt 6.5.3 aarch64 交叉 SDK（完整仓库） |
+| [../sdk/README.md](../sdk/README.md) | ESP 固件完整仓库 |
 | [../module-devkit/docs/ESP-TOOLCHAIN.md](../module-devkit/docs/ESP-TOOLCHAIN.md) | ESP-IDF 5.5.4 工具链安装与构建 |
 
 ## 3. 运行、安全与网络
@@ -61,6 +64,8 @@
 | [../hardware/enclosure/](../hardware/enclosure/) | STL / STEP / 3MF |
 
 ## 7. 开发记录
+
+历史归档在 [`archive/`](archive/)（早期 P0 任务、MR 评审、旧部署快照）。
 
 - [`devdocs/`](devdocs/)：按日期的轮次记录，含任务清单、评审意见、验证结论；
 - 最近一轮：[`devdocs/51-pbr-ttl-and-egress-2026-11-07.md`](devdocs/51-pbr-ttl-and-egress-2026-11-07.md)。

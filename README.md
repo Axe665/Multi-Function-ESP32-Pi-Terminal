@@ -225,19 +225,20 @@ python3 -m http.server 8000 --bind 127.0.0.1
 ├── module-devkit/     可独立使用的模块 SDK、模板与智能盆栽完整示例
 ├── hardware/
 │   └── enclosure/    外壳 CAD、STL / STEP / 3MF、打印和装配资料
-├── build_scripts/     主机与设备构建入口（构建/检查依赖/部署/验证/打包）
-├── sdk/               完整外部仓库快照：Qt 6.5.3 aarch64 + ESP 固件
+├── build_scripts/     构建/依赖检查/部署/验证/打包/出 deb
+├── toolchain/         交叉编译 SDK：Qt 6.5.3 aarch64 完整仓库快照
+├── sdk/               设备固件：ESP 固件完整仓库快照
 ├── docs/              架构、专项实现、验证记录和项目展示
 ├── tools/             配包、维护、数据生成和文档素材工具
 └── third_party/       Viper、媒体参考代码、GStreamer（头文件 + 运行期插件）等第三方内容
 ```
 
-`sdk/` 里是两个**完整仓库内容**（不含各自的 `.git`），随主仓一起分发，保证下一台
-开发机不需要再猜版本：
+`toolchain/` 与 `sdk/` 里是两个**完整仓库内容**（不含各自的 `.git`），随主仓一起分发，
+保证下一台开发机不需要再猜版本：
 
 | 目录 | 内容 | 固定版本 |
 |---|---|---|
-| `sdk/qt-6.5.3-aarch64/` | Qt 6.5.3 aarch64 交叉 SDK：sysroot、Qt 库、host 工具、构建脚本 | `d8c0c52` |
+| `toolchain/qt-6.5.3-aarch64/` | Qt 6.5.3 aarch64 交叉 SDK：sysroot、Qt 库、host 工具、构建脚本 | `d8c0c52` |
 | `sdk/esp-firmware/` | 桥板 / 模块 ESP-IDF 固件工程（替代旧 `esp/` 引用） | `16aebdd` |
 
 固件工具链（ESP-IDF / xtensa 编译器）的安装与版本要求见

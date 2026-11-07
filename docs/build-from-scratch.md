@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | `third_party/deps/` | OpenSSL 3.0.13、mbedTLS、SQLCipher 的头文件与库 | **不需要** |
 | `third_party/flite/`、`gst/`、`vlc/`、`Viper-Browser/`、`YesPlayMusic/`、`sqlite-amalgamation/` | 第三方源码；`gst/<arch>/plugins/` 已带运行期插件 | **不需要** |
-| `sdk/qt-6.5.3-aarch64/` | Qt 6.5.3 aarch64 交叉 SDK 完整仓库（含 artifacts/sysroot） | **不需要**（交叉编译用） |
+| `toolchain/qt-6.5.3-aarch64/` | Qt 6.5.3 aarch64 交叉 SDK 完整仓库（含 artifacts/sysroot） | **不需要**（交叉编译用） |
 | `sdk/esp-firmware/` | ESP 固件完整仓库 | **不需要**（固件用） |
 | `pi_terminal/assets/` | 界面资源、电视源、语音声库（`voices/`） | **不需要** |
 | `pi_terminal/tts/` | flite 声库构建材料 | **不需要** |
@@ -66,9 +66,9 @@ cmake --build --preset linux-qt653 --parallel 8
 ### 交叉编译到 Pi（使用仓库内 SDK，免下载）
 
 ```bash
-# sdk/qt-6.5.3-aarch64 里带 sysroot 与 Qt 运行库
-export ORPI_SYSROOT=$PWD/../sdk/qt-6.5.3-aarch64/sysroot
-export ORPI_QT_PREFIX=$PWD/../sdk/qt-6.5.3-aarch64/qt653-arm64
+# toolchain/qt-6.5.3-aarch64 里带 sysroot 与 Qt 运行库
+export ORPI_SYSROOT=$PWD/../toolchain/qt-6.5.3-aarch64/sysroot
+export ORPI_QT_PREFIX=$PWD/../toolchain/qt-6.5.3-aarch64/qt653-arm64
 export ORPI_HOST_QT=/opt/Qt/6.5.3/gcc_64        # 只用于 moc/qmlcachegen
 
 cd pi_terminal
