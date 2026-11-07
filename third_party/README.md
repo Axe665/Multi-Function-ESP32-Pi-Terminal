@@ -47,9 +47,16 @@ gst-inspect-1.0 playbin
 自身位置重定位插件目录，复制后所有 element 都会 `no element`。`lib/` 里只能是
 指向系统运行库的符号链接（`fetch_gst_headers.sh` 已按此设计）。
 
-本仓库已预置 `gst/arm64/plugins/`（255 个插件，约 27 MB），Pi 上无需联网即可解码
-mp3/aac/hls；基础库（glib、libav 等）仍由系统提供，缺失时按
-`MANIFEST.json` 里的包名安装对应运行时包。
+本仓库已预置两套运行期插件：
+
+| 目录 | 插件数 | 体积 | 用途 |
+|---|---|---|---|
+| `gst/arm64/plugins/` | 255 | 27 MB | Pi 3B（目标机） |
+| `gst/amd64/plugins/` | 264 | 22 MB | 开发机 / 测试机 |
+
+它们只包含**插件本身**，链接的系统库由目标机提供。Pi 基线已确认具备：
+`libmpg123.so.0`、`libavcodec/libavformat/libavfilter/libavutil`（若目标机缺，按
+`MANIFEST.json` 里的包名安装 `libmpg123-0`、`libavcodec59` 等运行时包即可）。
 
 ## 内置开发依赖（`deps/`）
 

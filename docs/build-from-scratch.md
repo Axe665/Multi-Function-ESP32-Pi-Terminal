@@ -8,7 +8,9 @@
 | 目录 | 内容 | 需要安装吗 |
 | --- | --- | --- |
 | `third_party/deps/` | OpenSSL 3.0.13、mbedTLS、SQLCipher 的头文件与库 | **不需要** |
-| `third_party/flite/`、`gst/`、`vlc/`、`Viper-Browser/`、`YesPlayMusic/`、`sqlite-amalgamation/` | 原作者已有的第三方源码 | **不需要** |
+| `third_party/flite/`、`gst/`、`vlc/`、`Viper-Browser/`、`YesPlayMusic/`、`sqlite-amalgamation/` | 第三方源码；`gst/<arch>/plugins/` 已带运行期插件 | **不需要** |
+| `sdk/qt-6.5.3-aarch64/` | Qt 6.5.3 aarch64 交叉 SDK 完整仓库（含 artifacts/sysroot） | **不需要**（交叉编译用） |
+| `sdk/esp-firmware/` | ESP 固件完整仓库 | **不需要**（固件用） |
 | `pi_terminal/assets/` | 界面资源、电视源、语音声库（`voices/`） | **不需要** |
 | `pi_terminal/tts/` | flite 声库构建材料 | **不需要** |
 
@@ -23,7 +25,7 @@ OpenSSL、mbedTLS、SQLCipher 都在这里找到，**不用装 `libssl-dev` / `l
 | **GStreamer 运行时** | 与系统多媒体栈绑定 | 同上 |
 | **X11 / OpenGL 开发包** | 系统库 | 同上 |
 | Node.js（可选，仅在线音乐） | 运行时可选 | 同上 |
-| `nft` / `python3` / `espeak-ng` | 功能级依赖：网络策略兜底 / 宠物库 / 语音播报 | 同上（`bootstrap-deps.sh` 会逐项检查） |
+| `nft` / `python3` / `espeak-ng` | 功能级依赖：网络策略兜底 / 宠物库 / 语音播报 | 同上（`build_scripts/check_deps.sh` 会逐项检查） |
 
 ### Qt 版本
 
@@ -57,8 +59,21 @@ export CMAKE_PREFIX_PATH=/path/to/qt/6.5.3/gcc_64
 
 cd pi_terminal
 source scripts/env.sh              # 把 SDK 的 Qt 加进 PATH / CMAKE_PREFIX_PATH
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --parallel 8
+cmake --preset linux-qt653         # 或 linux-qt642（系统 Qt 6.4.2 基线）
+cmake --build --preset linux-qt653 --parallel 8
+```
+
+### 交叉编译到 Pi（使用仓库内 SDK，免下载）
+
+```bash
+# sdk/qt-6.5.3-aarch64 里带 sysroot 与 Qt 运行库
+export ORPI_SYSROOT=$PWD/../sdk/qt-6.5.3-aarch64/sysroot
+export ORPI_QT_PREFIX=$PWD/../sdk/qt-6.5.3-aarch64/qt653-arm64
+export ORPI_HOST_QT=/opt/Qt/6.5.3/gcc_64        # 只用于 moc/qmlcachegen
+
+cd pi_terminal
+cmake --preset aarch64-cross        # A53；aarch64-lto / aarch64-pgo-* 同理
+cmake --build --preset aarch64-cross --parallel 8
 ```
 
 或者直接用作者脚本（等价）：
