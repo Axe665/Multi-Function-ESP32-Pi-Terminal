@@ -2,6 +2,7 @@
 # 把 cmake --install 的树拆成两个 deb 目录：运行时 + dev。
 set -euo pipefail
 ROOT=$1; TMP=$2; PREFIX=$3
+MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)"
 PKG="$ROOT/debian/orange-pi-terminal"
 DEV="$ROOT/debian/orange-pi-terminal-dev"
 SDKROOT="$ROOT/toolchain/qt-6.5.3-aarch64"
@@ -9,7 +10,7 @@ QT_CACHE="$ROOT/debian/qt-runtime"
 
 install -d "$PKG/usr/bin" "$PKG/usr/lib/systemd/system" "$PKG/usr/lib/systemd/user" \
           "$PKG/usr/share/polkit-1/actions" "$PKG/etc/polkit-1/rules.d" \
-          "$PKG/usr/share/applications" "$DEV/usr/include" "$DEV/usr/lib/aarch64-linux-gnu"
+          "$PKG/usr/share/applications" "$DEV/usr/include" "$DEV/usr/lib/"
 
 # 1) 运行时树
 install -d "$PKG$PREFIX"
@@ -22,21 +23,25 @@ if [ -d "$PKG$PREFIX/include/orange-pi-terminal" ]; then
     rmdir "$PKG$PREFIX/include/orange-pi-terminal" "$PKG$PREFIX/include" 2>/dev/null || true
 fi
 if [ -d "$PKG$PREFIX/lib/cmake/OrangePiModuleSDK" ]; then
-    install -d "$DEV/usr/lib/aarch64-linux-gnu/cmake"
-    mv "$PKG$PREFIX/lib/cmake/OrangePiModuleSDK" "$DEV/usr/lib/aarch64-linux-gnu/cmake/"
+    install -d "$DEV/usr/lib/cmake"
+    mv "$PKG$PREFIX/lib/cmake/OrangePiModuleSDK" "$DEV/usr/lib/cmake/"
     rmdir "$PKG$PREFIX/lib/cmake" 2>/dev/null || true
 fi
 for f in "$PKG$PREFIX"/lib/libpi_module_sdk*; do
-    [ -e "$f" ] && mv "$f" "$DEV/usr/lib/aarch64-linux-gnu/"
+    [ -e "$f" ] && mv "$f" "$DEV/usr/lib/$MULTIARCH/"
 done
 
 # 3) Qt 运行时：解包一次并缓存
-QT_SRC="$(find "$QT_CACHE" -maxdepth 3 -type d -path '*/opt/qt653-arm64' 2>/dev/null | head -1 || true)"
-if [ -z "$QT_SRC" ]; then
-    install -d "$QT_CACHE"
-    echo "解包 Qt 运行时（首次约 1 分钟）..."
-    cat "$SDKROOT"/artifacts/orpi-qt653-pi3.tar.zst.part* | zstd -d | tar -x -C "$QT_CACHE"
+if [ -n "${QT_BUNDLE_SRC:-}" ] && [ -d "$QT_BUNDLE_SRC" ]; then
+    QT_SRC="$QT_BUNDLE_SRC"
+else
     QT_SRC="$(find "$QT_CACHE" -maxdepth 3 -type d -path '*/opt/qt653-arm64' 2>/dev/null | head -1 || true)"
+    if [ -z "$QT_SRC" ]; then
+        install -d "$QT_CACHE"
+        echo "解包 Qt 运行时（首次约 1 分钟）..."
+        cat "$SDKROOT"/artifacts/orpi-qt653-pi3.tar.zst.part* | zstd -d | tar -x -C "$QT_CACHE"
+        QT_SRC="$(find "$QT_CACHE" -maxdepth 3 -type d -path '*/opt/qt653-arm64' 2>/dev/null | head -1 || true)"
+    fi
 fi
 [ -n "$QT_SRC" ] || { echo "Qt 运行时解包后找不到 opt/qt653-arm64" >&2; exit 1; }
 cp -a "$QT_SRC" "$PKG$PREFIX/qt"
@@ -44,11 +49,30 @@ cp -a "$QT_SRC" "$PKG$PREFIX/qt"
 rm -rf "$PKG$PREFIX/qt/include" "$PKG$PREFIX/qt/lib/cmake" "$PKG$PREFIX/qt/lib/pkgconfig" \
        "$PKG$PREFIX/qt/bin" "$PKG$PREFIX/qt/mkspecs" "$PKG$PREFIX/qt/lib/"*.a \
        "$PKG$PREFIX/qt/lib/"*.prl "$PKG$PREFIX/qt/doc"
+# 完整安装前缀（amd64 用 /opt/Qt）里的构建工具一律不带，只留 WebEngine 子进程
+if [ -d "$PKG$PREFIX/qt/libexec" ]; then
+    find "$PKG$PREFIX/qt/libexec" -mindepth 1 -maxdepth 1 ! -name 'QtWebEngineProcess' -exec rm -rf {} + 2>/dev/null || true
+fi
 find "$PKG$PREFIX/qt" -name '*.debug' -delete 2>/dev/null || true
+
+# 3.5) 完整 Qt 里带上但运行用不到、或依赖缺失的模块
+rm -rf "$PKG$PREFIX/qt/qml/QtQuick3D" "$PKG$PREFIX/qt/qml/QtWayland" \
+       "$PKG$PREFIX/qt/qml/Qt/test" "$PKG$PREFIX/qt/qml/QtTest" "$PKG$PREFIX/qt/plugins/designer"
+find "$PKG$PREFIX/qt/lib" -maxdepth 1 \( -name 'libQt6Quick3D*' -o -name 'libQt6Designer*' \
+       -o -name 'libQt6Help*' -o -name 'libQt6LanguageServer*' -o -name 'libQt6UiTools*' \
+       -o -name 'libQt6Test*' -o -name 'libQt6QuickTest*' \) -delete 2>/dev/null || true
+
+# 3.6) 仓库内置的开发依赖（SQLCipher 不在 Debian 主源，必须随包自带）
+if [ -d "$ROOT/third_party/deps/lib/x86_64-linux-gnu" ]; then
+    for lib in "$ROOT"/third_party/deps/lib/x86_64-linux-gnu/libsqlcipher*.so* \
+               "$ROOT"/third_party/deps/lib/x86_64-linux-gnu/libmbed*.so*; do
+        [ -e "$lib" ] && cp -a "$lib" "$PKG$PREFIX/lib/orange-pi-terminal/"
+    done
+fi
 
 # 4) RUNPATH 指向包内路径
 elf_fix() { file -b "$1" 2>/dev/null | grep -q '^ELF' && patchelf --set-rpath "$2" "$1" || true; }
-for f in "$PKG$PREFIX"/bin/*; do [ -f "$f" ] && elf_fix "$f" "\$ORIGIN/../lib:$PREFIX/qt/lib"; done
+for f in "$PKG$PREFIX"/bin/*; do [ -f "$f" ] && elf_fix "$f" "\$ORIGIN/../lib/orange-pi-terminal:$PREFIX/lib/orange-pi-terminal:$PREFIX/qt/lib"; done
 for f in "$PKG$PREFIX"/lib/*.so*; do [ -f "$f" ] && [ ! -L "$f" ] && elf_fix "$f" "\$ORIGIN:$PREFIX/qt/lib"; done
 for f in "$PKG$PREFIX"/libexec/orange-pi-terminal/module_worker "$PKG$PREFIX"/libexec/orange-pi-terminal/net-policy-helper; do
     [ -f "$f" ] && elf_fix "$f" "\$ORIGIN/../../lib:$PREFIX/qt/lib"
