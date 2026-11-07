@@ -67,5 +67,5 @@ lintian ../orange-pi-terminal_1.0.0_arm64.deb
 - Qt 裁剪按运行所需模块保留（Core/Gui/Quick/Controls2/Network/Sql/WebEngine/
   Multimedia/TextToSpeech/SerialPort/Bluetooth/Svg/Concurrent/DBus/Positioning/
   PrintSupport/OpenGL/Widgets/Qml/QuickWidgets + 常用插件），QML 模块全量保留；
-- 包体积约 400–500 MB（Qt 占大头），首次安装需要约 1.2 GB 磁盘；
+- 实测包体积 **243 MB**，安装后约 600 MB；`lintian` 0 error；
 - 尚未做 `multiarch`、`debug symbols` 包；后续可按需加 `-dbgsym`。

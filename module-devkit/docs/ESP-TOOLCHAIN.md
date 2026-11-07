@@ -44,6 +44,19 @@ export PI_MODULE_SDKCONFIG=$PWD/sdkconfig.private     # 私有配置，不入库
 ./build_scripts/build_esp32.sh S3_PiBridge_LinkIt_Host
 ```
 
+示例/模板固件（`module-devkit/*/firmware/`）需要显式指向组件 SDK：
+
+```sh
+. ~/esp/esp-idf/export.sh
+export MODULE_SDK_DIR=$PWD/module-devkit/sdk
+cd module-devkit/examples/smart-planter/firmware
+idf.py -B build set-target esp32s3 build
+```
+
+`sdkconfig.defaults` 已带 NimBLE（`CONFIG_BT_ENABLED` / `CONFIG_BT_NIMBLE_ENABLED`），
+否则 bt 组件会报 `host/ble_gap.h` 缺失。实测（2026-11-07，ESP-IDF 5.5.4）：
+`module_firmware.bin` 1.2 MB / `.elf` 12 MB，构建通过。
+
 `build_esp32.sh` 只做两件事：检查 `idf.py` 已在 PATH、把 `ESP_BUILD_DIR` 指到
 `~/esp32_workspace/builds/<project>`。它**不会**替你 source IDF。
 
