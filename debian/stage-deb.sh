@@ -79,6 +79,10 @@ for f in "$PKG$PREFIX"/libexec/orange-pi-terminal/module_worker "$PKG$PREFIX"/li
 done
 
 # 5) FHS 文件：wrapper / systemd / polkit / desktop
+# unit 的 ExecStart 是 /usr/libexec/...；deb 的 libexec 在 /opt，做兼容链接
+install -d "$PKG/usr/libexec/orange-pi-terminal"
+ln -sf "$PREFIX/libexec/orange-pi-terminal/module_worker" "$PKG/usr/libexec/orange-pi-terminal/module_worker"
+
 install -m755 "$ROOT/pi_terminal/packaging/orange-pi-terminal.sh" "$PKG/usr/bin/orange-pi-terminal"
 for u in orange-pi-worker@.service orange-pi-net-proxy.service orange-pi-file-daemon.service orpi-egress.service; do
     install -m644 "$ROOT/pi_terminal/packaging/$u" "$PKG/usr/lib/systemd/system/$u"
