@@ -2,8 +2,7 @@
 
 本文把散落在构建脚本、提交记录和实机验证里的性能工作收敛到一处，作为后续优化的
 基线。分四层：**目标硬件 → 构建级优化 → 运行时优化 → 测量与台账**。渲染/模糊的
-细节算法另见 [blur-performance.md](blur-performance.md)，供电对性能的影响见
-[POWER-DIAGNOSIS.md](POWER-DIAGNOSIS.md)（在交接文档里，未随主仓发布）。
+细节算法另见 [blur-performance.md](blur-performance.md)，供电影响见 §7。
 
 ## 1. 目标硬件与基线
 
@@ -191,7 +190,22 @@ perf record -g ./orange_pi_terminal --demo && perf report --stdio | head -40
 python3 pi_terminal/tests/screenshot_regression.py BINARY OUT --only blur-performance
 ```
 
-## 7. 已知限制
+## 7. 供电对性能的影响（先修电源，再谈优化）
+
+Pi 欠压时 PMIC 会降频，A53 的顺序执行更容易暴露延迟；此时任何代码优化都会被抵消。
+判定与处理：
+
+```sh
+vcgencmd get_throttled       # 0x0 正常；0/16 位=欠压，2/18=降频，3/19=过热
+vcgencmd measure_volts core  # 负载下不应低于 0.85 V（5V 输入端 >4.8 V）
+dmesg | grep -i undervoltage | tail
+```
+
+现场顺序：换 5 V/3 A 电源 → 换 ≤30 cm 短线 → 减少同时外设 → 再测
+`get_throttled`。本项目整轮验证中曾出现 `throttled=0x50005` 与多次无预警重启，
+所有性能数据都应在 `0x0` 下重采。
+
+## 8. 已知限制
 
 - **供电**是当前第一瓶颈：`throttled=0x50005` 时 A53 会降频，任何代码优化都会被
   抵消；测试/采集性能数据前先换 5 V/3 A 电源。
