@@ -16,5 +16,5 @@ polkit.addRule(function(action, subject) {
     var verb = action.lookup("verb");
     if (!unit || unit.indexOf("orange-pi-worker@") !== 0) return;
     if (verb !== "start" && verb !== "stop" && verb !== "restart") return;
-    if (subject.user === "raspberrypi") return polkit.Result.YES;
+    if (subject.user === "raspberrypi" || (subject.local && subject.active)) return polkit.Result.YES;
 });
