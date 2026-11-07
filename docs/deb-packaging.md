@@ -55,6 +55,24 @@ lintian ../orange-pi-terminal_1.0.0_arm64.deb
 - `no-manual-page`：kiosk 应用无 man page，可 override；
 - `package-contains-vcs-control-file`：确认没有 `.git` 打进包（stage 已排除）。
 
+## deb 专属路径修正（重要）
+
+unit 文件里的默认 `ExecStart` 是 `/usr/bin/*`，deb 把二进制放在 `/opt/orange-pi-terminal/bin/`。
+包内已经带两个 drop-in：
+
+```
+/usr/lib/systemd/system/orange-pi-net-proxy.service.d/10-deb-paths.conf
+/usr/lib/systemd/system/orange-pi-file-daemon.service.d/10-deb-paths.conf
+```
+
+worker 走 `/usr/libexec/orange-pi-terminal/module_worker` 兼容链接，无需 drop-in。
+
+### 代理不要开机自启
+
+`sudo systemctl disable --now orange-pi-net-proxy`。原因见
+[known-issues.md](known-issues.md) #4：system 代理与“应用自拉代理”用不同策略文件，
+system 那份是空的，会全拒；应用自己拉的那份才有实时策略。
+
 ## 升级与卸载
 
 - 升级：直接装新包，`/opt/orange-pi-terminal` 覆盖；用户数据在
