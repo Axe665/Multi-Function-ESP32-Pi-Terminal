@@ -1,0 +1,20 @@
+import QtQuick
+import QtQuick.Window
+import QtQuick.Controls
+
+Image {
+    id:icon
+    property string name: "apps"
+    property bool light: true
+    readonly property var available: ["build","home","logout","refresh","apps","language","folder","settings","extension","description","image","tv","text_snippet","code","archive","close","arrow_back","arrow_forward","chevron_left","chevron_right","notifications","wifi","wifi_off","lan","bluetooth","bluetooth_disabled","battery_full","battery_unknown","battery_0_bar","battery_1_bar","battery_2_bar","battery_3_bar","battery_4_bar","battery_5_bar","battery_6_bar","battery_charging_full","power","tune","volume_up","volume_off","memory","storage","refresh","check","fullscreen","close_fullscreen","minimize","search","view_list","undo","redo","brush","clear","save","backspace","bookmark","zoom_in","zoom_out","crop_square","play_arrow","pause","stop","add","remove","link_off","history","photo_camera","keyboard","gamepad","keyboard_tv","schedule","alarm","hourglass_empty","av_timer","public","wb_sunny","nights_stay","wb_cloudy","cloud","grain","thunderstorm","ac_unit","dehaze","air","water_drop","thermostat","umbrella","verified_user","shield","accessibility_new","person_add","lock","info","tag","system_update","developer_board","gpu"]
+    readonly property color contrastInk: {
+        const window=ApplicationWindow.window
+        return window && typeof window.textBackground==="function" ? Theme.textOn(window.textBackground(icon)) : (light?"#ffffff":"#000000")
+    }
+    source: systemTools.monochromeIcon(available.indexOf(name)>=0 || ["skip_previous","skip_next","check_circle","pending","download","print","sync","visibility_off","more_horiz","more_vert","delete"].indexOf(name)>=0 ?name:"extension",contrastInk.r>0.5)
+    sourceSize.width: Math.ceil(width * Screen.devicePixelRatio)
+    sourceSize.height: Math.ceil(height * Screen.devicePixelRatio)
+    fillMode: Image.PreserveAspectFit
+    smooth:true;antialiasing:true
+    Accessible.ignored:true
+}

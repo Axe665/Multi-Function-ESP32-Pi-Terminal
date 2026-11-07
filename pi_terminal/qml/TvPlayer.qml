@@ -21,6 +21,9 @@ Item {
 
     property bool muted: false
     property real volume: 0.8
+    // 与 MusicPlayer/VideoPlayer 同一套播报降音：播报期间把管线音量乘 0.2。
+    property real announcementGain: systemTools.mediaGain
+    Behavior on announcementGain { NumberAnimation { duration: 120 } }
 
     property bool loading: false
     property string statusText: ""
@@ -31,6 +34,19 @@ Item {
     property int channelIndex: -1
     property int sourceIndex: 0
     property string currentName: ""
+    // 仅用于提示，不阻断：HTTP 源没有传输层机密性/完整性。
+    readonly property bool insecureSource: {
+        if (sourceIndex < 0 || !currentSources || sourceIndex >= currentSources.length) return false
+        return String(currentSources[sourceIndex].url || "").toLowerCase().startsWith("http://")
+    }
+    function channelLogoSource(url) {
+        if (!url) return ""
+        const text = String(url)
+        // 只有 http(s) 台标受联网门控；本地资源照常显示。
+        if (!/^https?:\/\//i.test(text)) return text
+        return (typeof networkGate !== "undefined" && networkGate.enabled
+                && networkGate.featureEnabled("tv")) ? text : ""
+    }
 
     property int pendingSourceIndex: -1
     property string pendingSourceLabel: ""
@@ -73,6 +89,20 @@ Item {
     readonly property var channelModel: buildChannelModel()
 
     function pauseMedia() { if (playing) player.pause() }
+
+    // 最小化到桌面时保留管线与音频；只有关闭应用才 releaseMedia()。
+    property bool backgroundPlayback: false
+    function enterBackgroundPlayback() { backgroundPlayback = true }
+    function minimizeToBackground() {
+        backgroundPlayback = true
+        if (hostWindow && typeof hostWindow.minimizeApp === "function")
+            hostWindow.minimizeApp()
+    }
+    // 关闭路径：立即停播、释放解码器，不等页面 active 变 false。
+    function stopPlayback() {
+        backgroundPlayback = false
+        releaseMedia()
+    }
 
     function releaseMedia() {
         loading = false
@@ -352,23 +382,34 @@ Item {
 
     function togglePlay() {
         if (playing) { player.pause(); revealControls() }
-        else if (currentName !== "") { player.resume(); revealControls() }
+        else if (currentName !== "") {
+            // 管线已被释放时 resume() 不会重建（play() 在 source 为空时直接返回），
+            // 这里按当前频道重新起播，避免“暂停后无法开始”。
+            if (player.source === "" && currentChannel) startSource(currentChannel)
+            else player.resume()
+            revealControls()
+        }
     }
-
-    onVolumeChanged: player.setVolume(root.muted ? 0 : root.volume)
-    onMutedChanged: player.setVolume(root.muted ? 0 : root.volume)
 
     Component.onCompleted: {
         loadChannels()
-        player.setVolume(root.muted ? 0 : root.volume)
     }
 
     onActiveChanged: {
         if (!active) {
-            releaseMedia()
+            // 最小化：backgroundPlayback 为真时保留管线，音频继续；
+            // 关闭/切页：立即释放解码器。
+            if (!root.backgroundPlayback) releaseMedia()
             if (fullscreen) setFullscreen(false)
-        } else if (systemTools.tvForceFullscreen()) {
-            setFullscreen(true)
+        } else {
+            root.backgroundPlayback = false
+            // 切回前台时如果管线已被释放（旧路径/异常退出），自动重起当前频道。
+            if (!playing && currentName !== "" && player.source === "" && currentChannel)
+                Qt.callLater(function() {
+                    if (root.active && !root.playing && player.source === "")
+                        root.startSource(root.currentChannel)
+                })
+            if (systemTools.tvForceFullscreen()) setFullscreen(true)
         }
     }
 
@@ -592,7 +633,9 @@ Item {
                                     Image {
                                         id: channelLogo
                                         anchors.fill: parent
-                                        source: modelData.channel.logo ? modelData.channel.logo : ""
+                                        // 联网门控关闭时不要发起台标请求：既避免
+                                        // 代理拒绝连接刷日志，也保持默认拒绝。
+                                        source: root.channelLogoSource(modelData.channel.logo)
                                         sourceSize.width: 64
                                         sourceSize.height: 64
                                         asynchronous: true
@@ -658,13 +701,15 @@ Item {
                     id: player
                     objectName: "tvVideoItem"
                     anchors.fill: parent
+                    // 用户音量 × 播报增益；muted 直接归零。Behavior 在 root 上，
+                    // 所以这里每帧拿到的是渐变后的 announcementGain。
+                    volume: root.muted ? 0 : root.volume * root.announcementGain
                     onPlayingChanged: {
                         if (playing) {
                             root.loading = false
                             root.statusText = I18n.t("正在播放")
                             root.errorText = ""
                             root.revealControls()
-                            player.setVolume(root.muted ? 0 : root.volume)
                         }
                     }
                     onErrorTextChanged: {
@@ -674,6 +719,26 @@ Item {
                         root.errorText = errorText
                         root.controlsVisible = true
                         root.retryNextSource()
+                    }
+                }
+
+                Rectangle {
+                    objectName: "tvInsecureSourceBadge"
+                    visible: root.insecureSource
+                    z: 3
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.margins: 10 * root.uiScale
+                    radius: Theme.shapeSmall
+                    color: "#d98c1d18"
+                    implicitWidth: insecureLabel.implicitWidth + 16 * root.uiScale
+                    implicitHeight: insecureLabel.implicitHeight + 8 * root.uiScale
+                    CarText {
+                        id: insecureLabel
+                        anchors.centerIn: parent
+                        color: "#ffffff"
+                        fontPixelSize: Theme.fontCaption
+                        text: I18n.t("不安全：HTTP 源")
                     }
                 }
 
@@ -790,6 +855,15 @@ Item {
                             onMoved: { root.volume = value; if (value > 0) root.muted = false }
                         }
                         IconButton {
+                            objectName: "tvMinimize"
+                            iconName: "minimize"
+                            label: I18n.t("最小化并后台播放")
+                            implicitWidth: 56 * root.uiScale
+                            implicitHeight: 56 * root.uiScale
+                            enabled: root.playing
+                            onClicked: root.minimizeToBackground()
+                        }
+                        IconButton {
                             objectName: "tvFullscreen"
                             iconName: root.fullscreen ? "close_fullscreen" : "fullscreen"
                             label: root.fullscreen ? I18n.t("退出全屏") : I18n.t("全屏播放")
@@ -878,8 +952,9 @@ Item {
         modal: true
         dim: true
         padding: 18 * root.uiScale
-        width: Math.min(430 * root.uiScale, root.width - 40)
-        height: warningColumn.implicitHeight + 36 * root.uiScale
+        // The TV page is 0-wide while hidden in the StackLayout; a negative
+        // popup width makes its wrapped column oscillate in Qt 6.5.
+        width: Math.max(240 * root.uiScale, Math.min(430 * root.uiScale, root.width - 40))
         anchors.centerIn: parent
         closePolicy: Popup.CloseOnEscape
         onOpened: {
@@ -897,7 +972,13 @@ Item {
             border.width: 1
             border.color: Theme.outlineVariant
         }
-        contentItem: ColumnLayout {
+        // Do not build a wrapped layout for a dialog that has never opened.
+        // Hidden StackLayout pages resize to 0, and laying out this column at
+        // that size makes Qt 6.5 report implicitHeight binding loops.
+        contentItem: Loader {
+            active: switchWarning.opened
+            sourceComponent: Component {
+                ColumnLayout {
             id: warningColumn
             spacing: Theme.gap * 0.7
             CarText {
@@ -930,6 +1011,8 @@ Item {
                         switchWarning.close()
                         root.switchSource(index)
                     }
+                }
+            }
                 }
             }
         }

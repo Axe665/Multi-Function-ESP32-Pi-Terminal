@@ -1,0 +1,10 @@
+SQLCipher for Debian
+--------------------
+
+SQLCipher for Debian is split up in three packages:
+
+libsqlcipher-dev: 	Development files (headers, static library)
+libsqlcipher0: 		The database engine library itself
+sqlcipher: 		    The text-mode user interface
+
+ -- Hans-Christoph Steiner <hans@eds.org>, Sat, 31 Mar 2012 19:54:55 -0400

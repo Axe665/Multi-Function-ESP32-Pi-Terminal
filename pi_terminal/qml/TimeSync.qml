@@ -48,7 +48,6 @@ Item {
     property int syncIndex: -1
     property int syncToken: 0
     property double baseUtcMs: 0
-    property var xhr: null
     // 初值就是 true：QML 在 Component.onCompleted 之前就会把 zones/apiMode 的初值写进
     // 属性，若此时允许持久化，构造出的默认值会先覆盖磁盘上的真实设置，load() 再读回
     // 默认值——表现为“重启后城市/线路设置全丢”。load() 结束时才放开写入。
@@ -72,6 +71,21 @@ Item {
         running: sync.autoSync
         repeat: true
         onTriggered: if (!sync.syncing) sync.syncTimeSilently()
+    }
+
+    Connections {
+        target: typeof timeSyncClient !== "undefined" ? timeSyncClient : null
+        function onFinished(requestId, status, body) {
+            if (requestId !== sync.syncToken) return
+            sync.handleSyncResponse(sync.syncIndex, status, body, requestId)
+        }
+        function onFailed(requestId, reason) {
+            if (requestId !== sync.syncToken) return
+            sync.syncRequestFailed(sync.syncIndex, requestId,
+                reason === "timeout" ? I18n.t("请求超时")
+              : reason === "blocked" ? I18n.t("联网已关闭")
+              : I18n.t("网络不可用或服务不可达"))
+        }
     }
 
     Component.onCompleted: sync.load()
@@ -234,6 +248,15 @@ Item {
     function doSync(silent) {
         if (syncing) return
         silentSync = silent === true
+        // 「网络校时」关闭：一次请求都不发，保留内置标准时区。
+        // 手动点校时时说清原因，自动校时只更新状态行（不弹窗、不打断）。
+        if (typeof networkGate !== "undefined" && networkGate
+                && typeof networkGate.allow === "function"
+                && networkGate.allow("timesync") !== true) {
+            error = I18n.t("联网已关闭")
+            alertText = silentSync ? "" : I18n.t("联网已关闭")
+            return
+        }
         if (cities.length === 0) {
             alertText = I18n.t("先在时钟页添加至少一个城市再校时。")
             return
@@ -284,30 +307,28 @@ Item {
         const url = current.kind === "timeapi"
             ? TimeMath.buildTimeApiUrl(current.host, zone)
             : TimeMath.buildWorldTimeUrl(current.host, zone)
-        const request = new XMLHttpRequest()
-        xhr = request
-        request.onreadystatechange = function() {
-            if (request.readyState !== XMLHttpRequest.DONE) return
-            handleSyncResponse(index, request, token)
+        if (typeof timeSyncClient === "undefined" || !timeSyncClient
+                || typeof timeSyncClient.fetch !== "function") {
+            syncRequestFailed(index, token, I18n.t("网络校时组件不可用"))
+            return
         }
         watchdog.restart()
-        request.open("GET", url)
-        request.send()
+        timeSyncClient.fetch(url, token)
     }
 
-    function handleSyncResponse(index, request, token) {
+    function handleSyncResponse(index, status, body, token) {
         if (token !== syncToken) return
         watchdog.stop()
-        if (request.status < 200 || request.status >= 300) {
+        if (status < 200 || status >= 300) {
             syncRequestFailed(index, token,
-                request.status === 0 ? I18n.t("网络不可用或服务不可达") : ("HTTP " + request.status))
+                status === 0 ? I18n.t("网络不可用或服务不可达") : ("HTTP " + status))
             return
         }
         const current = providerQueue[providerIndex]
         let parsed = null
         try {
-            parsed = current.kind === "timeapi" ? TimeMath.parseTimeApiZone(request.responseText)
-                                                : TimeMath.parseWorldTimeApi(request.responseText)
+            parsed = current.kind === "timeapi" ? TimeMath.parseTimeApiZone(body)
+                                                : TimeMath.parseWorldTimeApi(body)
         } catch (error) {
             syncRequestFailed(index, token, I18n.t("数据格式无效"))
             return
@@ -346,9 +367,10 @@ Item {
 
     function cancelRequest() {
         watchdog.stop()
+        if (typeof timeSyncClient !== "undefined" && timeSyncClient
+                && typeof timeSyncClient.abort === "function")
+            timeSyncClient.abort(syncToken)
         ++syncToken
-        if (xhr) { try { xhr.abort() } catch (error) {} }
-        xhr = null
     }
 
     function syncRequestFailed(index, token, reason) {

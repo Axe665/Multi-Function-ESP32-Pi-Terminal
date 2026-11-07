@@ -1,0 +1,32 @@
+[Unit]
+Description=Orange Pi Terminal local egress proxy
+Documentation=file:///usr/share/doc/orange-pi-terminal/networking.md
+After=network.target
+
+[Service]
+# 独立 UID：与主程序分开，系统级 nftables 规则才能按主体区分
+# "主进程只能连回环" 与 "代理可以出外网"。
+DynamicUser=yes
+
+# 策略文件目录：主程序（普通用户）要写得进，代理（DynamicUser）要读得到。
+# 所以是 0777 的公共目录 + 0644 的文件。
+# 这在本项目的威胁模型内（只防应用遗漏与绕过，不防同一登录用户的恶意进程）；
+# 若要防后者，需要改成 root 持有策略 + polkit 授权，见 docs/networking.md。
+RuntimeDirectory=orpi-net-proxy
+RuntimeDirectoryMode=0777
+
+# 与 cmake --install 的 BINDIR 一致；默认前缀 /usr 时就是 /usr/bin。
+# 装到别的前缀时改这一行。主进程用 applicationDirPath()/network_proxy 查找它。
+ExecStart=/usr/bin/network_proxy --policy /run/orpi-net-proxy/policy.json
+Restart=on-failure
+RestartSec=1
+
+# 代理自身也要最小权限：只读系统、无 home、无新特权。
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

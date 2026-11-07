@@ -305,7 +305,12 @@ namespace {
 // share the same QSettings file, so an unscoped write from QML would be a way
 // around the plugin trust prompt.
 const QStringList &pageSettingPrefixes() {
-    static const QStringList prefixes{QStringLiteral("time/")};
+    // layout/：应用卡片顺序（编辑模式确认后由 AppLauncher 写入）。
+    // about/：本机名称（只落在应用设置里，不写 hostname）。
+    // calc/：计算器历史（持久化，重启后仍在）。
+    static const QStringList prefixes{QStringLiteral("time/"), QStringLiteral("weather/"),
+                                      QStringLiteral("layout/"), QStringLiteral("about/"),
+                                      QStringLiteral("calc/")};
     return prefixes;
 }
 constexpr int kPageSettingMaxKey = 96;
@@ -337,6 +342,9 @@ void SystemTools::setUiLanguage(const QString &language) {
 SystemTools::SystemTools(QObject *p) : QObject(p), speech_(this) {
     qApp->installEventFilter(this);
     loadPinyinDictionaries();
+    settingsSyncTimer_.setSingleShot(true);
+    settingsSyncTimer_.setInterval(300);
+    connect(&settingsSyncTimer_, &QTimer::timeout, this, [this] { settings_.sync(); });
     musicNetworkProbeTimer_.setInterval(10000);
     connect(&musicNetworkProbeTimer_,&QTimer::timeout,this,&SystemTools::probeMusicNetwork);
     musicNetworkProbeTimer_.start();
@@ -352,21 +360,25 @@ SystemTools::SystemTools(QObject *p) : QObject(p), speech_(this) {
         if (qtChineseVoice_) setSpeechActive(state == QTextToSpeech::Speaking);
     });
     speechTimeout_.setSingleShot(true); speechTimeout_.setInterval(15000);
-    auto *mediaDevices = new QMediaDevices(this);
-    connect(mediaDevices, &QMediaDevices::audioOutputsChanged, this, [this] {
-        const QString wanted = audioOutputDevice();
-        if (!wanted.isEmpty()) {
-            bool found = false;
-            for (const auto &device : QMediaDevices::audioOutputs()) {
-                if (QString::fromUtf8(device.id()) == wanted) { found = true; break; }
+    // 音频设备枚举会拉起 GStreamer/PulseAudio，Pi 上要几百毫秒到几秒；
+    // 推迟到首帧之后，避免拖慢冷启动（只延后枚举，不改任何渲染路径）。
+    QTimer::singleShot(2500, this, [this] {
+        auto *mediaDevices = new QMediaDevices(this);
+        connect(mediaDevices, &QMediaDevices::audioOutputsChanged, this, [this] {
+            const QString wanted = audioOutputDevice();
+            if (!wanted.isEmpty()) {
+                bool found = false;
+                for (const auto &device : QMediaDevices::audioOutputs()) {
+                    if (QString::fromUtf8(device.id()) == wanted) { found = true; break; }
+                }
+                if (!found) {
+                    settings_.remove("ttsOutputDevice");
+                    settings_.sync();
+                    log(QStringLiteral("所选播报输出设备已断开，改回跟随系统"));
+                }
             }
-            if (!found) {
-                settings_.remove("ttsOutputDevice");
-                settings_.sync();
-                log(QStringLiteral("所选播报输出设备已断开，改回跟随系统"));
-            }
-        }
-        emit audioOutputsChanged();
+            emit audioOutputsChanged();
+        });
     });
     connect(&speechTimeout_, &QTimer::timeout, this, [this] {
         speechProcess_.kill();
@@ -617,7 +629,10 @@ void SystemTools::loadPinyinDictionaries() {
             const auto columns = line.split(QLatin1Char('\t'));
             if (columns.size() < 2) continue;
             const auto code = columns[phraseTable ? 0 : 1].trimmed().toLower();
-            if (code.isEmpty() || !QRegularExpression(QStringLiteral("^[a-zv]+$")).match(code).hasMatch()) continue;
+            // 正则编译很贵：词典有数万行，若每行都构造 QRegularExpression，
+            // 启动会卡 60-90 秒（pcre2 compile 占满单核）。提到循环外只编译一次。
+            static const QRegularExpression codePattern(QStringLiteral("^[a-zv]+$"));
+            if (code.isEmpty() || !codePattern.match(code).hasMatch()) continue;
             const auto word = columns[phraseTable ? 1 : 0].trimmed();
             if (word.isEmpty()) continue;
             bool ok = false;
@@ -650,11 +665,23 @@ QStringList SystemTools::pinyinCandidates(const QString &input) const {
         if(paths.size()>48)paths.resize(48);
         for(int length=1;length<=qMin(24,code.size()-offset);++length) {
             const auto syllable=code.mid(offset,length);
-            QVector<PinyinCandidate> options=phrasePinyin_.value(syllable);
-            options+=characterPinyin_.value(syllable);
-            if(options.size()>32)options.resize(32);
-            for(const auto &path:paths)for(const auto &candidate:options)
-                lattice[offset+length].append({path.text+candidate.word,path.score+std::log(double(candidate.weight)+1.0)-std::log(60101967.0)});
+            // A53 是顺序小核：避免为每个音节把整张候选表拷贝进临时
+            // QVector（value() 返回副本，再 += 追加）。这里直接引用两张
+            // 索引表，按原来“词表优先、最多 32 个”的语义遍历。
+            const auto phraseIt=phrasePinyin_.constFind(syllable);
+            const auto characterIt=characterPinyin_.constFind(syllable);
+            const auto &phraseList=phraseIt!=phrasePinyin_.constEnd()?phraseIt.value():QVector<PinyinCandidate>{};
+            const auto &characterList=characterIt!=characterPinyin_.constEnd()?characterIt.value():QVector<PinyinCandidate>{};
+            for(const auto &path:paths) {
+                int taken=0;
+                for(const auto *list:{&phraseList,&characterList}) {
+                    for(const auto &candidate:*list) {
+                        if(taken>=32)break;
+                        ++taken;
+                        lattice[offset+length].append({path.text+candidate.word,path.score+std::log(double(candidate.weight)+1.0)-std::log(60101967.0)});
+                    }
+                }
+            }
         }
     }
     auto complete=lattice.last();
@@ -676,7 +703,8 @@ QStringList SystemTools::pinyinCandidates(const QString &input) const {
 void SystemTools::recordPinyinSelection(const QString &code,const QString &word) {
     if(code.isEmpty()||word.isEmpty())return;
     const auto key="imeUsage/"+code.toLower()+"/"+word;
-    settings_.setValue(key,qMin(10000,settings_.value(key,0).toInt()+1));settings_.sync();
+    settings_.setValue(key,qMin(10000,settings_.value(key,0).toInt()+1));
+    if (!settingsSyncTimer_.isActive()) settingsSyncTimer_.start();
 }
 QString SystemTools::filesRoot() const {
     // Start the file application at the current user's home directory.
@@ -878,6 +906,33 @@ QString SystemTools::fileDisplayPath(const QString &relative) const {
     if (relative.startsWith("@usb/")) return removableStorage_.resolve(relative, false, true);
     return filesRoot() + (relative.isEmpty() ? QString{} : '/' + relative);
 }
+bool SystemTools::writeRemovableText(const QString &location, const QString &text) const {
+    const auto path = removableStorage_.resolve(location, true);
+    if (path.isEmpty()) return false;
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
+    const auto bytes = text.toUtf8();
+    return file.write(bytes) == bytes.size() && file.flush();
+}
+QVariantList SystemTools::removableBackups(const QString &id) const {
+    QVariantList out;
+    QString root;
+    const auto devices = removableStorage_.devices();
+    for (const auto &entry : devices) {
+        const auto map = entry.toMap();
+        if (map.value("id").toString() == id) { root = map.value("path").toString(); break; }
+    }
+    if (root.isEmpty()) return out;
+    // 只扫根目录：用户在 U 盘上看到的备份就只有这一层，不递归翻子目录。
+    const auto entries = QDir(root).entryInfoList({QStringLiteral("*.optbk")}, QDir::Files, QDir::Time);
+    for (const auto &info : entries) {
+        out.append(QVariantMap{{"fileName", info.fileName()},
+                               {"location", "@usb/" + id + '/' + info.fileName()},
+                               {"modifiedMs", info.lastModified().toMSecsSinceEpoch()},
+                               {"sizeBytes", info.size()}});
+    }
+    return out;
+}
 bool SystemTools::editable(const QString &relative) const {
     const auto path = safePath(relative); if (path.isEmpty()) return false;
     QFile file(path);
@@ -1045,8 +1100,8 @@ void SystemTools::speakWithVoice(const QString &text, const QString &id) {
     if (trimmed.trimmed().isEmpty()) return;
     if (!fliteReady(id)) { log(QStringLiteral("语音音色不可用：") + id); return; }
     if (speechProcess_.state() != QProcess::NotRunning) {
+        // 连续播报时不要在主线程等旧进程退出；kill 后由 finished 信号收尾。
         speechProcess_.kill();
-        speechProcess_.waitForFinished(500);
     }
     if (speechSound_ != nullptr) speechSound_->stop();
     pendingSpeech_.clear();

@@ -12,6 +12,7 @@ Item {
     property string message: ""
 
     signal finishTask(string taskId)
+    signal cancelTask(string taskId)
     signal stopAll()
 
     implicitHeight: column.implicitHeight
@@ -56,8 +57,14 @@ Item {
                     fontPixelSize: Theme.fontLabel
                 }
                 CarButton {
+                    objectName: "finishTaskButton"
                     text: I18n.t("完成")
                     onClicked: finishDialog.finishTask(modelData.taskId)
+                }
+                CarButton {
+                    objectName: "cancelTaskButton"
+                    text: I18n.t("取消（标记未完成）")
+                    onClicked: finishDialog.cancelTask(modelData.taskId)
                 }
             }
         }
@@ -65,7 +72,7 @@ Item {
         CarButton {
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.hit
-            text: I18n.t("全部停止")
+            text: I18n.t("全部完成")
             onClicked: finishDialog.stopAll()
         }
     }

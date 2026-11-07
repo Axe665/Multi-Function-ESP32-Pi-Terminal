@@ -158,6 +158,19 @@ int CardIndex::revokeAll(const QString &userId) {
     return count;
 }
 
+int CardIndex::removeUser(const QString &userId) {
+    if (userId.isEmpty()) return 0;
+    QVector<Entry> entries = load();
+    int count = 0;
+    for (int i = entries.size(); i-- > 0;) {
+        if (entries.at(i).userId != userId) continue;
+        entries.removeAt(i);
+        ++count;
+    }
+    if (count > 0 && !save(entries)) return 0;
+    return count;
+}
+
 // ---- CardBindingWindow ----
 
 void CardBindingWindow::open(qint64 nowMs) { openedAtMs_ = nowMs; }

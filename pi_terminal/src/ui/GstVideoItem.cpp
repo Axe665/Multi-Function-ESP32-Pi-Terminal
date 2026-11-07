@@ -1,5 +1,7 @@
 #include "GstVideoItem.h"
 
+#include "net/NetChannels.h"
+
 #include <QDateTime>
 #include <QDebug>
 #include <QFileInfo>
@@ -9,6 +11,7 @@
 #include <QOpenGLFunctions>
 #include <QOpenGLShaderProgram>
 #include <QOpenGLTexture>
+#include <QQuickWindow>
 #include <QTimer>
 
 #include <chrono>
@@ -43,9 +46,13 @@ QString pipelineFor(const QString &url, bool hardware)
     escaped.replace(QLatin1Char('"'), QStringLiteral("\\\""));
 
     const QString decoder = hardware ? QStringLiteral("v4l2h264dec") : QStringLiteral("avdec_h264");
+    // 电视通道走本地出站代理（NetChannels::TvPort）：CONNECT/请求一旦被拒，
+    // souphttpsrc 就是连接失败，不会悄悄回退到直连。
     const QString source = QStringLiteral("souphttpsrc location=\"%1\" is-live=true "
-                                          "timeout=10 retries=5 keep-alive=true")
-                               .arg(escaped);
+                                          "timeout=10 retries=5 keep-alive=true "
+                                          "proxy=\"http://127.0.0.1:%2\"")
+                               .arg(escaped)
+                               .arg(NetChannels::TvPort);
 
     // 0 = 不限制；单位 kbps。给的码率上限会直接影响 hlsdemux 选哪一路变体。
     const int connectionSpeed = qEnvironmentVariableIntValue("TERMINAL_GST_CONNECTION_SPEED");
@@ -477,8 +484,14 @@ GstVideoItem::GstVideoItem(QQuickItem *parent) : QQuickFramebufferObject(parent)
     renderTick_ = new QTimer(this);
     renderTick_->setInterval(8);
     connect(renderTick_, &QTimer::timeout, this, [this] {
-        if (playing_ && hasDueFrame())
+        if (!playing_ || !hasDueFrame())
+            return;
+        // 最小化/窗口不可见时没有渲染器来取帧，6 槽队列会满并回压解码线程，
+        // 音频分支也可能一起卡住。这里把到期帧丢掉，只保留音频继续播。
+        if (isVisible() && window() && window()->isExposed())
             update();
+        else
+            drainFrameQueue();
     });
 }
 
@@ -700,9 +713,21 @@ bool GstVideoItem::hasDueFrame()
     return false;
 }
 
+void GstVideoItem::drainFrameQueue()
+{
+    int seq = 0, width = 0, height = 0, strideY = 0, strideUV = 0;
+    while (GstSample *sample = acquireFrame(nowNs(), &seq, &width, &height, &strideY, &strideUV))
+        releaseFrame(sample);
+}
+
 void GstVideoItem::setVolume(qreal volume)
 {
-    volume_ = qBound<qreal>(0.0, volume, 1.0);
+    volume = qBound<qreal>(0.0, volume, 1.0);
+    // qFuzzyCompare 对 0 不可靠；静音是合法值，用绝对差判断。
+    if (qAbs(volume_ - volume) < 1e-6)
+        return;
+    volume_ = volume;
+    emit volumeChanged();
     if (worker_)
         QMetaObject::invokeMethod(worker_, "setVolume", Qt::QueuedConnection, Q_ARG(double, volume_));
 }
@@ -833,6 +858,9 @@ void GstVideoItem::onStatsTick()
     const int samples = sampleCount_.load(std::memory_order_relaxed);
     const int late = droppedLate_.load(std::memory_order_relaxed);
     const int skipped = droppedSkip_.load(std::memory_order_relaxed);
+    // 原来每帧（8ms）一条 qInfo，播放时每秒 100+ 条日志；改为约 5 秒一次。
+    if (++statsTicks_ < 625) return;
+    statsTicks_ = 0;
     qInfo("GST_STAT samples=%d drop_late=%d drop_skip=%d", samples - lastSampleCount_,
           late - lastDroppedLate_, skipped - lastDroppedSkip_);
     lastSampleCount_ = samples;

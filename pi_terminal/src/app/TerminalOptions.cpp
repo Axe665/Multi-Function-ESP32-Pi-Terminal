@@ -8,6 +8,9 @@ void configure(QCommandLineParser &parser) {
     parser.addHelpOption();
     parser.addOptions({{{"c", "config"}, "Product configuration JSON", "path"},
                        {"demo", "Attach simulator module 80"},
+                       // 只给人工/自动化测试用：跳过登入门禁，不需要 PIN。
+                       // 与 --ui-test 的区别是它不跑自动点按脚本，人可以正常操作。
+                       {"no-login", "Test-only: skip the login gate without a PIN (no automation)"},
                        {"quit-after", "Quit after milliseconds", "ms"},
                        {"screenshot", "Save a window screenshot before quitting", "path"},
                        {"metrics", "Write frame-delivery and process-memory metrics on exit", "path"},
@@ -29,7 +32,13 @@ void configure(QCommandLineParser &parser) {
                        // 首次管理员初始化：本地受控、无默认 PIN。注册表非空时拒绝。
                        {"init-admin", "Create the first administrator (local initialisation only); "
                                       "asks for PIN on stdin unless --init-pin-stdin is given", "display-name"},
-                       {"init-pin-stdin", "Read the initial administrator PIN from stdin instead of a TTY prompt"}});
+                       {"init-pin-stdin", "Read the initial administrator PIN from stdin instead of a TTY prompt"},
+                       // 首次开机向导（OOBE）：注册表为空时默认进入。仅调试/自动化绕过，
+                       // 绕过时 qInfo 留痕；生产环境不要设置。
+                       {"skip-onboarding", "Test-only: bypass the first-run setup wizard"},
+                       // 注册表为空时默认会清掉上一次跑留下的鉴权与用户数据残留；
+                       // 需要保留现场（排查用）时加这个开关。
+                       {"keep-stale-data", "Keep leftover profile data even when no user exists"}});
 }
 
 } // namespace TerminalOptions

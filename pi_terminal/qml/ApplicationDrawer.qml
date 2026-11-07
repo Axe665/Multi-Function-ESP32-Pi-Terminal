@@ -60,16 +60,19 @@ Drawer {
                 required property int route
                 required property string instance
                 required property bool ready
+                required property bool restricted
                 width: appDrawerGrid.cellWidth
                 height: appDrawerGrid.cellHeight
                 Rectangle {
                     anchors.fill: parent
                     anchors.margins: Theme.gap / 4
                             radius: Theme.shapeExtraLarge
-                            color: Theme.surfaceContainer
+                            color: drawerTile.restricted ? Theme.disabledSurface : Theme.surfaceContainer
                             border.color: Theme.outlineVariant
                     ColumnLayout {
                         anchors.fill: parent
+                        // 与主界面一致：访客禁用入口整组降低不透明度。
+                        opacity: drawerTile.restricted ? 0.55 : 1
                         anchors.margins: Theme.gap / 2
                         spacing: Theme.gap / 4
                         AppIcon {
@@ -77,7 +80,7 @@ Drawer {
                             Layout.preferredWidth: 56 * root.uiScale
                             Layout.preferredHeight: 56 * root.uiScale
                             iconName: drawerTile.iconName
-                            accentColor: drawerTile.accentColor
+                            accentColor: drawerTile.restricted ? Theme.disabledText : drawerTile.accentColor
                         }
                         CarText {
                             text: drawerTile.title
@@ -101,13 +104,26 @@ Drawer {
                         }
                     }
                 }
+                // 访客禁用入口右上角的锁；不随内容一起变透明。
+                Rectangle {
+                    objectName: "drawerLock"
+                    visible: drawerTile.restricted
+                    z: 2
+                    width: 28 * root.uiScale; height: width; radius: Theme.shapeFull
+                    anchors.right: parent.right; anchors.top: parent.top
+                    anchors.margins: Theme.gap / 2
+                    color: Theme.surface
+                    border.width: 1; border.color: Theme.outlineVariant
+                    MaterialIcon { anchors.centerIn: parent; width: 18 * root.uiScale; height: width; name: "lock" }
+                }
                 TapHandler {
                     gesturePolicy: TapHandler.DragThreshold
                     onTapped: {
                         const entry = {entryId: drawerTile.entryId, title: drawerTile.title,
                             description: drawerTile.description, iconName: drawerTile.iconName,
                             accentColor: drawerTile.accentColor, route: drawerTile.route,
-                            instance: drawerTile.instance, ready: drawerTile.ready}
+                            instance: drawerTile.instance, ready: drawerTile.ready,
+                            restricted: drawerTile.restricted}
                         const point = drawerTile.mapToItem(null, drawerTile.width / 2,
                                                            drawerTile.height / 2)
                         root.close()

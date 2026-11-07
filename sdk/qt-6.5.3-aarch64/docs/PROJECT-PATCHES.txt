@@ -1,0 +1,22 @@
+Project source changes applied
+==============================
+Path: Multi-Function-ESP32-Pi-Terminal-refs-pull-44-head
+
+1) pi_terminal/CMakeLists.txt
+   - vendor third_party/vendor/deps block is now skipped when CMAKE_CROSSCOMPILING
+   - SQLCipher/mbedTLS find_library also searches lib/${CMAKE_LIBRARY_ARCHITECTURE}
+   - cross GStreamer target_link_directories adds lib/${CMAKE_LIBRARY_ARCHITECTURE}
+   - terminal_ui currently has NO_CACHEGEN (for Qt 6.7 workaround).
+     For Qt 6.5.3 remove NO_CACHEGEN to get embedded QML cache and fast Pi startup.
+
+2) third_party/vlc/CMakeLists.txt
+   - find_library LIBVLC_LIBRARY also searches ${VLC_ROOT}/lib/${CMAKE_LIBRARY_ARCHITECTURE}
+
+3) Project build dirs included:
+   - pi_terminal/build        : x86_64 Qt 6.5.3 Release build, runs on laptop
+   - build-pi                 : aarch64 Qt 6.4.2 Release cross build
+   - pi-stage                 : DESTDIR install of the aarch64 Qt 6.4.2 build
+   - pi_terminal/build        : see above
+
+4) Pi /usr currently contains the Qt 6.4.2 cross build from pi-stage. Its main binary
+   crashes on Pi in QtQuick.Layouts; old 20261018 backup is the running app.

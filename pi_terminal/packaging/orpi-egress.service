@@ -1,0 +1,17 @@
+[Unit]
+Description=Orange Pi terminal kernel egress whitelist (cgroup-scoped)
+# app.slice 属于用户实例；等它出现再加载规则，否则 nft 无法解析 cgroup 路径。
+After=systemd-user-sessions.service user@1000.service
+Wants=user@1000.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# 绑定的是 cgroup 实例：路径不存在时 nft 会静默绑到失效 ID，规则不再命中。
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 30); do [ -d /sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice ] && exit 0; sleep 1; done; exit 1'
+# 必须绑 app.slice（level 4）而不是具体 unit：unit 每次重启都会重建 cgroup，
+# 实例 ID 变化后旧规则不再匹配（实测：规则里路径退化成数字，组内不再被拦）。
+ExecStart=/usr/local/sbin/orpi-net-egress.sh install user.slice/user-1000.slice/user@1000.service/app.slice
+
+[Install]
+WantedBy=multi-user.target

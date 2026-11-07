@@ -225,13 +225,23 @@ python3 -m http.server 8000 --bind 127.0.0.1
 ├── module-devkit/     可独立使用的模块 SDK、模板与智能盆栽完整示例
 ├── hardware/
 │   └── enclosure/    外壳 CAD、STL / STEP / 3MF、打印和装配资料
-├── build_scripts/     主机与设备构建入口
+├── build_scripts/     主机与设备构建入口（构建/检查依赖/部署/验证/打包）
+├── sdk/               完整外部仓库快照：Qt 6.5.3 aarch64 + ESP 固件
 ├── docs/              架构、专项实现、验证记录和项目展示
 ├── tools/             配包、维护、数据生成和文档素材工具
-└── third_party/       Viper、媒体参考代码、GStreamer 头文件等第三方内容
+└── third_party/       Viper、媒体参考代码、GStreamer（头文件 + 运行期插件）等第三方内容
 ```
 
-> 部分旧文档和维护脚本引用 `esp/` 正式固件目录；**当前 GitHub 主线未跟踪该目录**。桥板与模块固件位于**独立仓库** [gggitj/ESP-Modular-Terminal-Service](https://github.com/gggitj/ESP-Modular-Terminal-Service)（`esp/S3_PiBridge_LinkIt_Host/`、`esp/S3_Pi_Module/`、`esp/shared/`）。公开设备侧开发入口是 `module-devkit/sdk/esp32/` 和 `module-devkit/examples/smart-planter/firmware/`，不要把维护者本地存在的工程当作克隆后必定具备的文件。
+`sdk/` 里是两个**完整仓库内容**（不含各自的 `.git`），随主仓一起分发，保证下一台
+开发机不需要再猜版本：
+
+| 目录 | 内容 | 固定版本 |
+|---|---|---|
+| `sdk/qt-6.5.3-aarch64/` | Qt 6.5.3 aarch64 交叉 SDK：sysroot、Qt 库、host 工具、构建脚本 | `d8c0c52` |
+| `sdk/esp-firmware/` | 桥板 / 模块 ESP-IDF 固件工程（替代旧 `esp/` 引用） | `16aebdd` |
+
+固件工具链（ESP-IDF / xtensa 编译器）的安装与版本要求见
+[module-devkit/docs/ESP-TOOLCHAIN.md](module-devkit/docs/ESP-TOOLCHAIN.md)。
 
 ## 开始开发
 
@@ -244,7 +254,7 @@ cd Multi-Function-ESP32-Pi-Terminal
 
 ### 2. 原生终端
 
-主机侧使用 **C++17、CMake 3.21+、Qt 6.4+**。Qt 组件包括 Quick/QuickControls2、Widgets、Network、Bluetooth、SerialPort、WebEngine、Multimedia、TextToSpeech、StateMachine 与构建期 ShaderTools；开启测试时还需要 Qt Test。完整组件清单以 [`pi_terminal/CMakeLists.txt`](pi_terminal/CMakeLists.txt) 为准。
+主机侧使用 **C++17、CMake 3.21+、Qt 6.4+**（目标机基线 **6.4.2**，开发机可用 6.5.3，见下方 Qt 版本说明）。Qt 组件包括 Quick/QuickControls2、Widgets、Network、Bluetooth、SerialPort、WebEngine、Multimedia、TextToSpeech、StateMachine 与构建期 ShaderTools；开启测试时还需要 Qt Test。完整组件清单以 [`pi_terminal/CMakeLists.txt`](pi_terminal/CMakeLists.txt) 为准。
 
 Linux 还需准备匹配的 GStreamer 运行库/插件与开发头文件；Qt WebEngine 等依赖不能仅靠安装 Qt Core 满足。现有 `third_party/gst/` 开发入口可用 [`tools/fetch_gst_headers.sh`](tools/fetch_gst_headers.sh) 准备。系统音量使用 `pactl`，可移动存储按需使用 `udisksctl`；在线音乐 API 另需 Node.js 和相应依赖，见 [音乐说明](docs/native-music.md)。
 
@@ -252,7 +262,7 @@ Linux 还需准备匹配的 GStreamer 运行库/插件与开发头文件；Qt We
 
 ```sh
 # 可选：指向自己的 Qt 安装，不指定时脚本会尝试默认 SDK 目录
-export OPI_QT_ROOT=/path/to/Qt/6.x/gcc_64
+export OPI_QT_ROOT=/path/to/Qt/6.4.2/gcc_64   # 或开发机的 6.5.3
 bash build_scripts/build_terminal.sh
 bash build_scripts/run_terminal.sh
 ```

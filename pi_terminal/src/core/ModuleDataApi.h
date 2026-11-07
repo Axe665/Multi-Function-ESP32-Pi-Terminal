@@ -7,6 +7,7 @@
 
 namespace security {
 class UserDatabase;
+class SessionManager;
 }
 
 // 模块 QML 的用户数据接口（报告 §6.1 / §12.2）。
@@ -35,6 +36,7 @@ public:
 
     // 由宿主在登录/切用户/会话重建时更新。nullptr = 未登录。
     void setDatabase(security::UserDatabase *database);
+    void setSessionManager(security::SessionManager *session);
     void setInstance(const QString &instance);
 
     QString scope() const;
@@ -77,6 +79,7 @@ private:
     bool checkReady() const;
 
     security::UserDatabase *database_ = nullptr;
+    security::SessionManager *session_ = nullptr;
     int moduleId_ = 0;
     QString instance_;
 };

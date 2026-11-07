@@ -27,6 +27,12 @@ public:
     /// Constructs the request interceptor with an optional parent pointer
     RequestInterceptor(const ViperServiceLocator &serviceLocator, QObject *parent = nullptr);
 
+    /// Host-wide kill switch: while blocked, EVERY request is cancelled (including the
+    /// main document), so a browser window opened before the switch was turned off
+    /// cannot keep loading anything. Thread-safe: the value is read from the IO thread.
+    /// 宿主总闸：置位后拦截**全部**请求（含主文档）。实现用 atomic，IO 线程安全。
+    static void setNetworkBlocked(bool blocked);
+
 protected:
     /// Intercepts the given request, potentially blocking it, modifying the header values or redirecting the request
     void interceptRequest(QWebEngineUrlRequestInfo &info) override;

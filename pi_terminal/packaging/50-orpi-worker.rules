@@ -1,0 +1,20 @@
+// 允许终端用户启停自己的模块 worker 单元。
+//
+// 为什么需要：主程序是用户级服务，ModuleWorkerClient 通过 systemctl 启动
+// 系统级模板单元 orange-pi-worker@<session>.service（DynamicUser 沙箱）。
+// 默认 polkit 会要求交互式认证，无人值守的触屏终端无法弹认证框，导致
+// 模块加载报 WORKER_UNAVAILABLE / Interactive authentication required。
+//
+// 只放行这一个模板单元的 start/stop/restart，且只对该 kiosk 用户生效；
+// 不放行任意 unit，也不放行 enable/disable。
+//
+// 注意：不要加 subject.local / subject.active —— 从 ssh 或 sudo 出来的会话
+// 两者都可能为 false，规则会静默不生效（实测踩过）。
+polkit.addRule(function(action, subject) {
+    if (action.id !== "org.freedesktop.systemd1.manage-units") return;
+    var unit = action.lookup("unit");
+    var verb = action.lookup("verb");
+    if (!unit || unit.indexOf("orange-pi-worker@") !== 0) return;
+    if (verb !== "start" && verb !== "stop" && verb !== "restart") return;
+    if (subject.user === "raspberrypi") return polkit.Result.YES;
+});

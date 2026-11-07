@@ -63,6 +63,7 @@ SettingsGroup {
         CarText {
             Layout.fillWidth: true
             maximumLineCount: 1
+            elide: Text.ElideRight
             text: I18n.t("指针表盘配色")
         }
         CarButton {
@@ -103,21 +104,17 @@ SettingsGroup {
             CarText {
                 Layout.fillWidth: true
                 maximumLineCount: 1
-                text: I18n.t("自动设置日期和时间")
-            }
-            CarText {
-                Layout.fillWidth: true
-                maximumLineCount: 1
                 elide: Text.ElideRight
-                subdued: true
-                fontPixelSize: Theme.fontCaption
-                text: I18n.t("需要联网；启动后静默校时一次，之后每 6 小时一次")
+                text: I18n.t("自动设置日期和时间")
             }
         }
         Switch {
             id: autoTimeSwitch
             objectName: "timeAutoSyncSwitch"
             implicitHeight: Theme.hit
+            // 没联网时置灰：不再用长说明提醒，开关本身表达“当前不可用”。
+            enabled: systemTools.musicNetworkOnline
+            opacity: enabled ? 1.0 : 0.45
             Accessible.name: I18n.t("自动设置日期和时间")
             Binding {
                 target: autoTimeSwitch
@@ -135,11 +132,13 @@ SettingsGroup {
         CarText {
             Layout.fillWidth: true
             maximumLineCount: 1
+            elide: Text.ElideRight
             text: I18n.t("日期和时间")
         }
         CarText {
             objectName: "timeNowValue"
             maximumLineCount: 1
+            elide: Text.ElideRight
             subdued: true
             text: settings.nowText
         }
@@ -158,6 +157,7 @@ SettingsGroup {
         CarText {
             Layout.fillWidth: true
             maximumLineCount: 1
+            elide: Text.ElideRight
             text: I18n.t("自动选择校时线路")
         }
         Switch {
@@ -175,7 +175,7 @@ SettingsGroup {
                                settings.timeSync.apiMode === "auto" ? "custom" : "auto"
         }
     }
-    CarField {
+    CarField { plainHint: true
         objectName: "timeSyncHostField"
         Layout.fillWidth: true
         visible: settings.timeSync ? settings.timeSync.apiMode === "custom" : false
@@ -191,13 +191,15 @@ SettingsGroup {
         CarText {
             Layout.fillWidth: true
             maximumLineCount: 1
+            elide: Text.ElideRight
             text: I18n.t("时区")
         }
         CarText {
             objectName: "timeZoneValue"
             maximumLineCount: 1
+            elide: Text.ElideRight
             subdued: true
-            text: TimeMath.formatOffset(settings.localOffsetMinutes) + "，" + I18n.t("本机")
+            text: TimeMath.formatOffset(settings.localOffsetMinutes) + I18n.t("，") + I18n.t("本机")
         }
     }
 
@@ -208,6 +210,7 @@ SettingsGroup {
         CarText {
             Layout.fillWidth: true
             maximumLineCount: 1
+            elide: Text.ElideRight
             text: I18n.t("时间格式")
         }
         CarButton {
@@ -244,16 +247,10 @@ SettingsGroup {
         CarButton {
             objectName: "timeSyncStart"
             visible: settings.timeSync ? !settings.timeSync.syncing : false
+            enabled: systemTools.musicNetworkOnline
             text: I18n.t("立即校时")
             onClicked: if (settings.timeSync) settings.timeSync.syncTime()
         }
-    }
-    CarText {
-        Layout.fillWidth: true
-        wrapMode: Text.Wrap
-        subdued: true
-        fontPixelSize: Theme.fontCaption
-        text: I18n.t("自动校时失败不会打断使用；只有手动点「立即校时」失败时才弹窗说明原因。")
     }
 
     // ------------------------------------------------------------ 整点报时
@@ -321,7 +318,15 @@ SettingsGroup {
         id: syncAlert
         objectName: "timeSyncAlert"
         parent: Overlay.overlay
-        anchors.centerIn: Overlay.overlay
+        // 键盘可见时上移，避免弹窗里的输入框被挡。
+        x: parent ? (parent.width - width) / 2 : 0
+        y: {
+            const host = parent ? parent.Window.window : null
+            const kb = host ? host.virtualKeyboard : null
+            const centered = parent ? Math.max(0, (parent.height - height) / 2) : 0
+            if (!host || !kb || !kb.visible) return centered
+            return Math.max(0, Math.min(centered, host.height - kb.y - height - Theme.gap))
+        }
         modal: true
         dim: true
         closePolicy: Popup.CloseOnEscape
@@ -349,6 +354,7 @@ SettingsGroup {
                     heading: true
                     Layout.fillWidth: true
                     maximumLineCount: 1
+                    elide: Text.ElideRight
                     text: I18n.t("校时接口不可用")
                 }
             }
@@ -383,6 +389,7 @@ SettingsGroup {
         CarText {
             text: stepper.caption
             maximumLineCount: 1
+            elide: Text.ElideRight
         }
         IconButton {
             iconName: "remove"
@@ -393,6 +400,7 @@ SettingsGroup {
             objectName: "chimeHourValue"
             heading: true
             maximumLineCount: 1
+            elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
             Layout.preferredWidth: 76 * Theme.scaleFactor
             text: (stepper.value < 10 ? "0" : "") + stepper.value + ":00"

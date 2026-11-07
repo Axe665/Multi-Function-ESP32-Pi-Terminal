@@ -108,7 +108,7 @@ Item {
     onEnabledChanged: if (!enabled) stop()
     Component.onCompleted: install()
     Connections {
-        target: root.targetView
+        target: root.targetView ? root.targetView : null
         ignoreUnknownSignals: true
         function onLoadingChanged(request) {
             root.stop()

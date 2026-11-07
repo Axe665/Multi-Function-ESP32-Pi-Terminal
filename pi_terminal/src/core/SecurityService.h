@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QHash>
+#include <QPair>
+#include <QVector>
 
 #include <QObject>
 #include <QString>
@@ -50,6 +52,9 @@ public:
     Q_INVOKABLE bool healthy() const;
     // 配对：publicKeyHex 是 65 字节未压缩点。需要管理员。
     Q_INVOKABLE bool pairBridge(const QString &bridgeId, const QString &publicKeyHex);
+    // PBR 握手专用：按线上 key_id 返回 (bridgeId, 65B 公钥) 候选。
+    // 只含身份公钥，不含任何私钥；供 TerminalApplication 注入传输层。
+    QVector<QPair<QString, QByteArray>> bridgeHandshakeCandidates(quint8 keyId) const;
     // 撤销：按指纹前缀（16 hex）定位。需要管理员。
     Q_INVOKABLE bool revokeBridge(const QString &fingerprintHex);
 
@@ -70,6 +75,18 @@ public:
     Q_INVOKABLE bool bindCard(const QString &rawUidHex);
     Q_INVOKABLE bool revokeCard(const QString &rawUidHex);
     Q_INVOKABLE int revokeAllCards();
+
+    // 账户删除后的可信侧清理：物理移除该用户的卡索引条目与权限矩阵。
+    // 只由宿主在 userDeleted 信号里调用，不暴露给 QML。
+    int forgetUser(const QString &userId);
+
+    // ---- 绑卡窗口（D 写：设置页“绑定卡片”入口）----
+    // 调用方先用 sessionManager.verifyPin() 重验 PIN，再开窗口；窗口内到达的
+    // rfid_card 由 TerminalApplication 路由到 bindCard()，消费一次即关窗。
+    Q_INVOKABLE bool openCardBindingWindow();
+    Q_INVOKABLE void closeCardBindingWindow();
+    Q_INVOKABLE bool cardBindingWindowOpen() const;
+    Q_INVOKABLE int cardBindingRemainingMs() const;
 
     // ---- 用户级能力授权（§8.2）----
     Q_INVOKABLE QVariantList capabilities(int moduleId) const;
@@ -107,6 +124,8 @@ public:
 
 signals:
     void changed();
+    // 管理员撤销桥板身份后发出：宿主据此立即断开匹配的 PBR 会话并清密钥。
+    void bridgeRevoked(QString bridgeId);
     // 刷卡选中用户：QML 据此只跳 PIN 页，不得直接登录。
     void cardUserSelected(QString userId);
 
@@ -131,4 +150,6 @@ private:
     bool ready_ = false;
     bool bridgeAvailable_ = false;
     QString lastMessage_;
+    // 绑卡窗口开启时刻（epoch ms）；-1 表示未开启。
+    qint64 cardBindingOpenedAtMs_ = -1;
 };

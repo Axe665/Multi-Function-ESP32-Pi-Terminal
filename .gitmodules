@@ -1,0 +1,6 @@
+[submodule "sdk/qt-6.5.3-aarch64"]
+	path = sdk/qt-6.5.3-aarch64
+	url = https://github.com/SomaRia-Meta/qt-6.5.3-aarch64.git
+[submodule "sdk/esp-firmware"]
+	path = sdk/esp-firmware
+	url = https://github.com/gggitj/ESP-Modular-Terminal-Service.git

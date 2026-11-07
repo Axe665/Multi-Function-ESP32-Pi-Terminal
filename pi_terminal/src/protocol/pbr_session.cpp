@@ -38,6 +38,17 @@ void EventDedup::clear() { seen_.clear(); }
 
 namespace EventTtl {
 
+Verdict evaluateWithOffset(qint64 ttlMs, qint64 senderUptimeMs, qint64 receiverUptimeMs,
+                           qint64 offsetMs, bool hasOffset) {
+    if (ttlMs != kExpectedTtlMs) return Verdict::BadTtlField;
+    if (!hasOffset) return Verdict::MissingClock;
+    const qint64 age = senderUptimeMs - (receiverUptimeMs + offsetMs);
+    // 负值不是"未来事件"，而是握手锚点把单向传输时延算进了 offset。
+    // 允许 kMaxSkewMs 的负偏差；更早的事件仍然过期。
+    if (age < -kMaxSkewMs || age > kMaxAgeMs) return Verdict::Expired;
+    return Verdict::Ok;
+}
+
 Verdict evaluate(qint64 ttlMs, qint64 senderUptimeMs, qint64 receiverUptimeMs,
                  bool hasBothClocks) {
     if (ttlMs != kExpectedTtlMs) return Verdict::BadTtlField;

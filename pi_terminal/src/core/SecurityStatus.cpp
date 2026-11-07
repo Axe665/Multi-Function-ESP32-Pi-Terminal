@@ -109,6 +109,67 @@ void SecurityStatus::reloadUidKey()
     }
 }
 
+bool SecurityStatus::ensureIdentity()
+{
+#if defined(TERMINAL_HAVE_MBEDTLS)
+    if (!identity_) return false;
+    if (identity_->hasKey()) return true;
+    QString error;
+    if (identity_->exists()) {
+        if (!identity_->load(&error)) return false;
+    } else if (!identity_->generate(&error)) {
+        qWarning().noquote() << "host identity generation failed:" << error;
+        return false;
+    }
+    reloadIdentity();
+    return identity_->hasKey();
+#else
+    return false;
+#endif
+}
+
+QByteArray SecurityStatus::identityPublicKey() const
+{
+#if defined(TERMINAL_HAVE_MBEDTLS)
+    return identity_ ? identity_->publicKey() : QByteArray();
+#else
+    return {};
+#endif
+}
+
+quint8 SecurityStatus::identityKeyIdByte() const
+{
+#if defined(TERMINAL_HAVE_MBEDTLS)
+    return identity_ ? identity_->keyId() : quint8(0);
+#else
+    return 0;
+#endif
+}
+
+bool SecurityStatus::signIdentity(const QByteArray &hash, QByteArray *signature) const
+{
+#if defined(TERMINAL_HAVE_MBEDTLS)
+    return identity_ && identity_->sign(hash, signature);
+#else
+    Q_UNUSED(hash);
+    Q_UNUSED(signature);
+    return false;
+#endif
+}
+
+bool SecurityStatus::verifyIdentity(const QByteArray &publicKey, const QByteArray &hash,
+                                    const QByteArray &signature)
+{
+#if defined(TERMINAL_HAVE_MBEDTLS)
+    return HostIdentity::verify(publicKey, hash, signature);
+#else
+    Q_UNUSED(publicKey);
+    Q_UNUSED(hash);
+    Q_UNUSED(signature);
+    return false;
+#endif
+}
+
 void SecurityStatus::refresh()
 {
     reloadTrust();

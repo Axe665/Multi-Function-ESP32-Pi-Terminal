@@ -28,6 +28,12 @@ enum class Result {
     BadTranscript,
 };
 
+// 生成 X25519 临时私钥（32 字节，CSPRNG）。每次握手必须新生成，不得复用。
+QByteArray generatePrivateKey();
+
+// §3.0 的带长度前缀元件：u16le(len(name)) || name || u16le(len(body)) || body。
+QByteArray element(const QByteArray &name, const QByteArray &body);
+
 // X25519(priv32, peerPub32)，返回 32 字节。失败返回空。
 QByteArray sharedSecret(const QByteArray &privateKey, const QByteArray &peerPublicKey);
 

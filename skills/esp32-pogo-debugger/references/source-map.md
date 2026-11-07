@@ -2,7 +2,7 @@
 
 项目全景图与逐文件完整索引见项目内 `docs/project-code-map.md`，可用 `python3 tools/generate_project_code_map.py` 刷新。
 
-先确认实际 checkout，不能把临时构建目录当成源码。路径不相对 skill 目录：`src/`、`qml/`、`tests/`、`tools/`、`modules/` 和 `music_api/` 均位于项目 `pi_terminal/` 下；`esp/`、`build_scripts/`、`docs/`、`third_party/` 相对项目根目录。
+先确认实际 checkout，不能把临时构建目录当成源码。路径不相对 skill 目录：`src/`、`qml/`、`tests/`、`tools/`、`modules/` 和 `music_api/` 均位于项目 `pi_terminal/` 下；`sdk/esp-firmware/esp/`、`build_scripts/`、`docs/`、`third_party/` 相对项目根目录。
 
 ## 终端生命周期和构建
 
@@ -46,10 +46,10 @@
 
 ## ESP
 
-- `esp/S3_PiBridge_LinkIt_Host/main/`：控制桥 PBR1 UART0、LinkIt、模块配置转发。
-- `esp/S3_Pi_Module/main/`：模块编译模式、嵌入包、传感器发布和断开请求。
-- `esp/shared/module_data_service/`：BLE/TCP 业务会话、包 API、可选 HTTP/Wi-Fi。
-- `esp/shared/pi_sensor_device/`：BME/BMP280 与 BH1750，valid 标记和总线恢复。
+- `sdk/esp-firmware/esp/S3_PiBridge_LinkIt_Host/main/`：控制桥 PBR1 UART0、LinkIt、模块配置转发。
+- `sdk/esp-firmware/esp/S3_Pi_Module/main/`：模块编译模式、嵌入包、传感器发布和断开请求。
+- `sdk/esp-firmware/esp/shared/module_data_service/`：BLE/TCP 业务会话、包 API、可选 HTTP/Wi-Fi。
+- `sdk/esp-firmware/esp/shared/pi_sensor_device/`：BME/BMP280 与 BH1750，valid 标记和总线恢复。
 - `build_scripts/`：构建包装器、私有配置、BLE/LAN 隔离产物。
 
 `third_party/YesPlayMusic` 仅是算法/交互参考，不构建、不部署。`docs/figures`、原始设计图和许可证是素材，不是测试垃圾。

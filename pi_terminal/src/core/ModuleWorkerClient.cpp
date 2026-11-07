@@ -33,9 +33,16 @@ bool ModuleWorkerClient::start(const QString &session, const QString &libraryPat
     const QString socketPath = WorkerIpc::socketPath(session);
 
     // 先探测 systemd 能否管这个 unit：只有它能提供 DynamicUser 等隔离。
-    QProcess probe;
-    probe.start(QStringLiteral("systemctl"), {QStringLiteral("cat"), unit});
-    const bool systemdManaged = probe.waitForFinished(1500) && probe.exitCode() == 0;
+    // 测试可以显式要求降级（直接 spawn worker），否则装了模板 unit 的机器上
+    // 单元测试会走 systemd 分支，与「不依赖已安装单元」的断言冲突。
+    const bool forceDegraded =
+        qEnvironmentVariable("ORANGE_PI_WORKER_FORCE_DEGRADED") == QLatin1String("1");
+    bool systemdManaged = false;
+    if (!forceDegraded) {
+        QProcess probe;
+        probe.start(QStringLiteral("systemctl"), {QStringLiteral("cat"), unit});
+        systemdManaged = probe.waitForFinished(1500) && probe.exitCode() == 0;
+    }
 
     if (systemdManaged) {
         // unit 存在：先清掉上一次运行留下的 socket，再交给 systemd 起进程。
@@ -210,6 +217,22 @@ bool ModuleWorkerClient::request(const QString &op, const QJsonObject &body, QJs
             if (message.value("op").toString() == QLatin1String("reportState")) {
                 const QJsonObject payload = message.value("body").toObject();
                 emit eventReceived(payload.value("type").toString(), payload.value("json").toString());
+                continue;
+            }
+            if (message.value("op").toString() == QLatin1String("appRequest")) {
+                const QJsonObject body = message.value("body").toObject();
+                QJsonObject result;
+                if (appRequestHandler_)
+                    result = appRequestHandler_(body);
+                else
+                    result.insert(QStringLiteral("response"),
+                                  QStringLiteral("{\"ok\":false,\"error\":\"app API unavailable\"}"));
+                const QJsonObject reply{
+                    {QStringLiteral("app_request_id"), body.value(QStringLiteral("app_request_id"))},
+                    {QStringLiteral("response"), result.value(QStringLiteral("response")).toString()}};
+                socket_->write(WorkerIpc::encode(
+                    WorkerIpc::request(0, QStringLiteral("appResponse"), reply)));
+                socket_->flush();
                 continue;
             }
             if (static_cast<quint64>(message.value("request_id").toDouble()) != id) continue;

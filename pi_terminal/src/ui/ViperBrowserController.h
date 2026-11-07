@@ -9,6 +9,7 @@
 
 class BookmarkManager;
 class BrowserApplication;
+class NetworkGate;
 class ViperBrowserController final : public QObject {
     Q_OBJECT
     Q_PROPERTY(QQuickWebEngineProfile *profile READ profile NOTIFY profileReadyChanged)
@@ -24,7 +25,14 @@ class ViperBrowserController final : public QObject {
 public:
     explicit ViperBrowserController(QObject *parent = nullptr);
     ~ViperBrowserController() override;
+    // 联网门控：宿主注入后，浏览器里**所有**请求都受总开关与「浏览器联网」约束。
+    void setNetworkGate(NetworkGate *gate);
     QQuickWebEngineProfile *profile() const;
+
+    // 访客隔离：把 WebEngine 的存储、缓存、下载目录切到会话专属的临时目录。
+    // 退出时传 guest=false 恢复默认路径，并删除该访客目录。
+    // 只切路径不换 profile：换 profile 会丢掉正在运行的页面与 cookie store 连接。
+    Q_INVOKABLE void setGuestProfile(bool guest, const QString &guestId);
     bool profileReady() const;
     int bookmarkCount() const;
 
@@ -84,6 +92,7 @@ private:
 
     BrowserApplication *browser_ = nullptr;
     BookmarkManager *bookmarks_ = nullptr;
+    NetworkGate *gate_ = nullptr;
     QList<QNetworkCookie> cookies_;
     QPointer<QQuickWebEngineProfile> privateProfile_;
     void configureProfile(QQuickWebEngineProfile *profile);

@@ -113,4 +113,35 @@ bool constantTimeEquals(const QByteArray &a, const QByteArray &b) {
     return diff == 0;
 }
 
+QByteArray generatePrivateKey() {
+    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_X25519, nullptr);
+    if (!ctx) return {};
+    EVP_PKEY *key = nullptr;
+    QByteArray out;
+    if (EVP_PKEY_keygen_init(ctx) == 1 && EVP_PKEY_keygen(ctx, &key) == 1 && key) {
+        out.resize(kKeyBytes);
+        size_t length = size_t(kKeyBytes);
+        if (EVP_PKEY_get_raw_private_key(
+                key, reinterpret_cast<unsigned char *>(out.data()), &length) != 1
+            || length != size_t(kKeyBytes)) {
+            out.fill('\0');
+            out.clear();
+        }
+    }
+    EVP_PKEY_free(key);
+    EVP_PKEY_CTX_free(ctx);
+    return out;
+}
+
+QByteArray element(const QByteArray &name, const QByteArray &body) {
+    if (name.size() > 0xffff || body.size() > 0xffff) return {};
+    auto u16le = [](int value) {
+        QByteArray bytes(2, '\0');
+        bytes[0] = char(value & 0xff);
+        bytes[1] = char((value >> 8) & 0xff);
+        return bytes;
+    };
+    return u16le(name.size()) + name + u16le(body.size()) + body;
+}
+
 }  // namespace PbrHandshake

@@ -774,10 +774,12 @@ Item {
                                 Layout.preferredHeight: root.compact ? 48 * root.uiScale : implicitHeight
                                 placeholderText: root.compact ? I18n.t("搜索") : I18n.t("搜索本机歌曲")
                                 onTextChanged: root.searchText = text
-                                color:"#ffffff";placeholderTextColor:"#b3b3b3";selectionColor:"#1ed760";selectedTextColor:"#07120b"
+                                color:"#ffffff";placeholderTextColor:"transparent";selectionColor:"#1ed760";selectedTextColor:"#07120b"
                                 leftPadding: 16 * root.uiScale
                                 Accessible.name: placeholderText
                                 background: Rectangle { radius: Theme.shapeFull; color: "#242424"; border.width: parent.activeFocus ? 2 : 0; border.color: "#ffffff" }
+                                Text { anchors.left:parent.left; anchors.leftMargin:parent.leftPadding; anchors.verticalCenter:parent.verticalCenter
+                                       text:parent.length===0?parent.placeholderText:""; color:"#b3b3b3"; font:parent.font; elide:Text.ElideRight; z:1 }
                             }
                             TextField {
                                 visible: root.mode === "online" && root.currentPlaylistId === ""
@@ -785,7 +787,7 @@ Item {
                                 Layout.preferredWidth: Math.min((root.compact ? 180 : 220) * root.uiScale, root.width * 0.25)
                                 Layout.preferredHeight: root.compact ? 48 * root.uiScale : implicitHeight
                                 placeholderText: root.compact ? I18n.t("搜索") : I18n.t("搜索网易云歌曲")
-                                color:"#ffffff";placeholderTextColor:"#b3b3b3";selectionColor:"#1ed760";selectedTextColor:"#07120b"
+                                color:"#ffffff";placeholderTextColor:"transparent";selectionColor:"#1ed760";selectedTextColor:"#07120b"
                                 onAccepted: {
                                     root.currentPlaylistId = ""; root.currentPlaylistName = ""; root.playlistBrowserRows = []
                                      musicService.search(text, false)
@@ -793,6 +795,8 @@ Item {
                                 leftPadding: 16 * root.uiScale
                                 Accessible.name: placeholderText
                                 background: Rectangle { radius: Theme.shapeFull; color: "#242424"; border.width: parent.activeFocus ? 2 : 0; border.color: "#ffffff" }
+                                Text { anchors.left:parent.left; anchors.leftMargin:parent.leftPadding; anchors.verticalCenter:parent.verticalCenter
+                                       text:parent.length===0?parent.placeholderText:""; color:"#b3b3b3"; font:parent.font; elide:Text.ElideRight; z:1 }
                             }
                              IconButton { visible: root.mode === "online" && !!musicService.account && !root.currentPlaylistId; iconName: "history"; label: I18n.t("每日推荐"); onClicked: musicService.recommendations() }
                              IconButton { visible: root.mode === "online" && !!musicService.account; enabled: !musicService.busy; iconName: "link_off"; label: I18n.t("退出帐号"); onClicked: { musicService.logout(); audioPlayer.stop(); audioPlayer.source = ""; root.onlineLoading = false; onlineStartupTimer.stop(); root.pendingOnlineId = ""; root.onlineQueue = []; root.onlineQueueIndex = -1; root.currentTitle = ""; root.currentArtist = ""; root.currentCover = ""; root.currentPlaylistId = "" } }
