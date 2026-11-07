@@ -243,6 +243,9 @@ python3 -m http.server 8000 --bind 127.0.0.1
 固件工具链（ESP-IDF / xtensa 编译器）的安装与版本要求见
 [module-devkit/docs/ESP-TOOLCHAIN.md](module-devkit/docs/ESP-TOOLCHAIN.md)。
 
+文档入口见 [docs/README.md](docs/README.md)（按“上手 → 构建 → 运行 → 性能 → 专项 → 记录”排序）；
+性能与编译优化先看 [docs/performance.md](docs/performance.md)。
+
 ## 开始开发
 
 ### 1. 获取代码
