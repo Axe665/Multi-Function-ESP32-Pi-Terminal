@@ -87,6 +87,19 @@ install -m755 "$ROOT/pi_terminal/packaging/orange-pi-terminal.sh" "$PKG/usr/bin/
 for u in orange-pi-worker@.service orange-pi-net-proxy.service orange-pi-file-daemon.service orpi-egress.service; do
     install -m644 "$ROOT/pi_terminal/packaging/$u" "$PKG/usr/lib/systemd/system/$u"
 done
+# deb 专属 drop-in：系统 unit 的默认 ExecStart 是 /usr/bin/*，deb 在 /opt。
+for unit in orange-pi-net-proxy orange-pi-file-daemon; do
+    case "$unit" in
+        orange-pi-net-proxy) args="network_proxy --policy /run/orpi-net-proxy/policy.json" ;;
+        orange-pi-file-daemon) args="orange-pi-file-daemon --socket=%t/orange-pi-file.sock --token-file=%t/orange-pi-file.token" ;;
+    esac
+    install -d "$PKG/usr/lib/systemd/system/$unit.service.d"
+    cat > "$PKG/usr/lib/systemd/system/$unit.service.d/10-deb-paths.conf" <<EOF
+[Service]
+ExecStart=
+ExecStart=$PREFIX/bin/$args
+EOF
+done
 install -m644 "$ROOT/pi_terminal/packaging/pi-module-terminal.service" "$PKG/usr/lib/systemd/user/pi-module-terminal.service"
 install -m644 "$ROOT/pi_terminal/packaging/orange-pi-net-proxy.service.d/10-policy-bootstrap.conf" \
     "$PKG/usr/lib/systemd/system/orange-pi-net-proxy.service.d/10-policy-bootstrap.conf" 2>/dev/null || {

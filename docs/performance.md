@@ -71,7 +71,7 @@ cmake --build --preset aarch64-pgo-generate
 
 # 设备上跑真实负载，然后 SIGTERM（不要 --quit-after，实测不落盘）
 sudo mkdir -p /tmp/orpi-pgo && sudo chmod 777 /tmp/orpi-pgo
-ORANGE_PI_... /usr/bin/orange_pi_terminal --config ... --demo
+/opt/orange-pi-terminal/bin/orange_pi_terminal --config ... --demo   # deb 安装路径
 kill -TERM <pid>          # main.cpp 的 SIGTERM handler → quit → __gcov_dump()
 
 # 阶段 2：使用（同一 build 目录，保证 gcda 路径匹配）

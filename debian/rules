@@ -43,6 +43,11 @@ override_dh_auto_install:
 	DESTDIR=$(CURDIR)/debian/tmp cmake --install $(BUILDDIR)
 	QT_BUNDLE_SRC="$(QT_BUNDLE_SRC)" bash debian/stage-deb.sh "$(CURDIR)" "$(CURDIR)/debian/tmp" "$(PREFIX)"
 
+# 构建目录被手动删过时，debhelper 的 bucket 记录会指向不存在的文件，clean 直接失败。
+override_dh_clean:
+	rm -rf debian/.debhelper debian/debhelper-build-stamp
+	dh_clean
+
 override_dh_auto_clean:
 	rm -rf $(BUILDDIR) debian/tmp debian/qt-runtime
 	dh_auto_clean || true

@@ -36,6 +36,12 @@ dpkg-buildpackage -b -aarm64 -us -uc -d
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
+| Pi 上 `GLIBC_2.38 not found` | 链接捡到宿主交叉包 glibc，不是 sysroot | toolchain 加 `-L<sysroot>/usr/lib/aarch64-linux-gnu` |
+| system unit `203/EXEC` | deb 在 /opt，unit 写死 /usr | 装 drop-in 或建 `/usr/libexec/...` 兼容链接 |
+| 系统代理全 403 channel-off | system unit 用空策略文件，应用另起代理 | `systemctl disable --now orange-pi-net-proxy` |
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
 | 安装后启动 `symbol lookup error` | 库 RUNPATH 仍是构建机路径 | stage 脚本对所有 ELF `patchelf` |
 | 包 1 GB+ | Qt 未裁剪 | 去掉 `include/ lib/cmake bin/ mkspecs *.a`，保留 `libexec/`（WebEngineProcess） |
 | 用户单元不生效 | 只装了文件没 enable | postinst `systemctl --global enable pi-module-terminal.service` |
