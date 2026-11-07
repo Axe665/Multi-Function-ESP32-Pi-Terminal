@@ -4,7 +4,7 @@
 #   export ORPI_QT_PREFIX=/path/to/qt653-arm64     # Qt 6.5.3 aarch64
 #   cmake --preset aarch64-cross
 #
-# 与 sdk/qt-6.5.3-aarch64 配合使用；该仓库的 deploy/env.sh 会导出上面两个变量。
+# 与 toolchain/qt-6.5.3-aarch64 配合使用；该仓库的 deploy/env.sh 会导出上面两个变量。
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR aarch64)
 

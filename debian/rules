@@ -1,0 +1,62 @@
+#!/usr/bin/make -f
+export DH_VERBOSE = 1
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+PREFIX   = /opt/orange-pi-terminal
+BUILDDIR = obj-aarch64
+SDKROOT ?= $(CURDIR)/toolchain/qt-6.5.3-aarch64
+
+# 交叉工具链三件套；CI/本机可用环境变量覆盖。
+export ORPI_SYSROOT   ?= $(SDKROOT)/dist/sdk/pi-sysroot
+export ORPI_QT_PREFIX ?= $(SDKROOT)/dist/sdk/qt653-arm64
+export ORPI_HOST_QT   ?= /opt/Qt/6.5.3/gcc_64
+export ORPI_FLITE_ROOT ?= $(SDKROOT)/dist/sdk/flite-aarch64
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	cmake -S pi_terminal -B $(BUILDDIR) -G Ninja \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_TOOLCHAIN_FILE=$(CURDIR)/pi_terminal/cmake/toolchain-aarch64.cmake \
+		-DCMAKE_INSTALL_PREFIX=$(PREFIX) \
+		-DCMAKE_INSTALL_LIBDIR=lib \
+		-DBUILD_TESTING=OFF \
+		-DVLC_ROOT=$(ORPI_SYSROOT)/usr \
+		-DSQLCIPHER_ROOT=$(ORPI_SYSROOT)/usr \
+		-DMBEDTLS_ROOT=$(ORPI_SYSROOT)/usr \
+		-DOPENSSL_ROOT_DIR=$(ORPI_SYSROOT)/usr \
+		-DFLITE_ROOT=$(ORPI_FLITE_ROOT)
+
+override_dh_auto_build:
+	cmake --build $(BUILDDIR) --parallel
+
+override_dh_auto_install:
+	rm -rf debian/tmp debian/orange-pi-terminal debian/orange-pi-terminal-dev
+	DESTDIR=$(CURDIR)/debian/tmp cmake --install $(BUILDDIR)
+	bash debian/stage-deb.sh "$(CURDIR)" "$(CURDIR)/debian/tmp" "$(PREFIX)"
+
+override_dh_auto_clean:
+	rm -rf $(BUILDDIR) debian/tmp debian/qt-runtime
+	dh_auto_clean || true
+
+# Qt 与 libterminal_* 是包内私有库，系统 shlibs 里没有它们；用 -l 指路，
+# 私有库缺依赖信息时忽略（它们随包自带），系统库（glibc/glib/xkbcommon…）仍会算进 Depends。
+override_dh_shlibdeps:
+	dh_shlibdeps --dpkg-shlibdeps-params="--ignore-missing-info \
+	    -l$(ORPI_SYSROOT)/lib/aarch64-linux-gnu \
+	    -l$(ORPI_SYSROOT)/usr/lib/aarch64-linux-gnu \
+	    -l$(CURDIR)/debian/orange-pi-terminal/opt/orange-pi-terminal/lib \
+	    -l$(CURDIR)/debian/orange-pi-terminal/opt/orange-pi-terminal/lib/orange-pi-terminal \
+	    -l$(CURDIR)/debian/orange-pi-terminal/opt/orange-pi-terminal/qt/lib"
+
+# 交叉产物被 patchelf 改过 section，dwz 会报 "Allocatable section after
+# non-allocatable ones" 并中止；本包不需要 dwz 去重调试信息。
+override_dh_dwz:
+	@echo "skip dwz (cross-built + patchelf)"
+
+override_dh_install:
+	@echo "stage-deb.sh 已把文件放进 debian/orange-pi-terminal*，跳过 dh_install"
+
+override_dh_missing:
+	@echo "无 debian/tmp 残留，跳过 dh_missing"
