@@ -21,6 +21,11 @@ for item in include/openssl/ssl.h include/mbedtls/ecdsa.h include/sqlcipher/sqli
     if [ -e "$VENDOR/$item" ]; then say_ok "$item"; else say_miss "$VENDOR/$item"; fi
 done
 
+# Python 侧（配包/测试才需要）
+for mod in cryptography PIL numpy; do
+    if python3 -c "import $mod" >/dev/null 2>&1; then say_ok "python: $mod"; else say_miss "python: $mod（pip install -r pi_terminal/tools/requirements.txt）"; fi
+done
+
 echo "== 2. Qt（必需，体积太大不内置）；目标机基线 6.4.2（系统包），开发可用 6.5.3，最低 6.4 =="
 QT_OK=""
 # 作者 SDK 的默认落点（CMakePresets.json 里也指向这里）

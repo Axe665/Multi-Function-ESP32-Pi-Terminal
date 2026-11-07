@@ -84,7 +84,8 @@ cmake --build build --parallel 8
    `terminal_kdf_worker`、`module_worker`、`net-policy-helper`、共享库、声库、music-api；
 2. 装三个 systemd 单元到 `/etc/systemd/system/`：
    `orange-pi-worker@.service`（模块沙箱）、`orange-pi-net-proxy.service`、`orange-pi-file-daemon.service`；
-3. 装 polkit 策略到 `/usr/share/polkit-1/actions/`；
+3. 装 polkit：网络策略到 `/usr/share/polkit-1/actions/`，worker 单元规则到
+   `/etc/polkit-1/rules.d/50-orpi-worker.rules`（否则用户级终端起不了系统级 worker）；
 4. 建 `/usr/lib/orange-pi-terminal/modules`（worker 只读挂载点）；
 5. `systemctl enable --now` 启动 net-proxy 与 file-daemon；
 6. 自检 11 项并打印 `[ok]/[缺]`。
