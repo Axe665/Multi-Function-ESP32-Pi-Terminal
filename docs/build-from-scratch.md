@@ -84,6 +84,20 @@ build_scripts/build_terminal.sh
 
 产物：`pi_terminal/build/orange_pi_terminal`。
 
+> **只编主程序会“登录卡死”**：`orange_pi_terminal` 还依赖两个配套可执行文件
+> `terminal_kdf_worker`（PBKDF2 子进程）和 `network_proxy`（本地代理）。只执行
+> `cmake --build build --target orange_pi_terminal` 时它们不会被编出来，表现为：
+>
+> - 日志 `kdf-worker: unavailable, login will block on the main thread`；
+>   点登录后在主线程同步跑 600k PBKDF2（Qt 纯 C++ 实现，比 OpenSSL 慢很多），
+>   桌面机也会冻结数秒到十几秒，之后才进桌面，看起来就是“输密码卡死”；
+> - 日志 `net-proxy: ... missing, every outbound request will fail`，联网模块全挂。
+>
+> 正确做法：`cmake --build build --parallel 8`（不带 `--target`，编全部目标），
+> 或直接用 `build_scripts/build_terminal.sh`。手动拷贝时至少带上
+> `orange_pi_terminal`、`terminal_kdf_worker`、`network_proxy` 三个可执行文件，
+> 并在同目录或 `$PATH` 可见。
+
 ## 4. 运行
 
 ```bash
