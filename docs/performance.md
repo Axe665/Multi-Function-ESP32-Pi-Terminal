@@ -126,6 +126,9 @@ PBKDF2-HMAC-SHA256 600k 在 A53 上约 6–9 s。原实现同步跑在主线程�
   `loginFinished` / `unlockFinished` 统一清除；
 - worker 不可用时**自动回退同步路径**，安全强度不变；
 - 实测：同步 8.6 s（阻塞）→ 异步 **6.75 s**（界面可响应）。
+- 若只编了主程序而缺 `terminal_kdf_worker`，会回退同步路径（日志
+  `kdf-worker: unavailable, login will block on the main thread`），登录时界面冻结
+  数秒到十几秒。部署三件套见 [build-from-scratch.md](build-from-scratch.md)。
 
 注意：自动登录钩子若在初始化阶段发起，回调会被 WebEngine 初始化拖到 17 s 量级；
 测试/无人值守场景要延迟到事件循环稳定后再发（`ORANGE_PI_LOGIN_ASYNC=1` 已内置 3 s 延迟）。
