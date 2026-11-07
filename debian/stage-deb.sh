@@ -63,7 +63,7 @@ find "$PKG$PREFIX/qt/lib" -maxdepth 1 \( -name 'libQt6Quick3D*' -o -name 'libQt6
        -o -name 'libQt6Test*' -o -name 'libQt6QuickTest*' \) -delete 2>/dev/null || true
 
 # 3.6) 仓库内置的开发依赖（SQLCipher 不在 Debian 主源，必须随包自带）
-if [ -d "$ROOT/third_party/deps/lib/x86_64-linux-gnu" ]; then
+if [ "$MULTIARCH" = "x86_64-linux-gnu" ] && [ -d "$ROOT/third_party/deps/lib/x86_64-linux-gnu" ]; then
     for lib in "$ROOT"/third_party/deps/lib/x86_64-linux-gnu/libsqlcipher*.so* \
                "$ROOT"/third_party/deps/lib/x86_64-linux-gnu/libmbed*.so*; do
         [ -e "$lib" ] && cp -a "$lib" "$PKG$PREFIX/lib/orange-pi-terminal/"

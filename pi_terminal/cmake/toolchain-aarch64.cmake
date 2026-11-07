@@ -20,6 +20,16 @@ if(DEFINED ENV{ORPI_SYSROOT})
         list(APPEND CMAKE_FIND_ROOT_PATH "$ENV{ORPI_QT_PREFIX}")
         set(CMAKE_PREFIX_PATH "$ENV{ORPI_QT_PREFIX}" CACHE PATH "")
     endif()
+    # 链接器必须优先在 sysroot 里找 libm/libc，否则会捡到宿主 aarch64 交叉包的
+    # glibc（Ubuntu 24.04 = 2.39），产物在 Debian 12（2.36）上报 GLIBC_2.38 缺失。
+    foreach(_kind EXE SHARED MODULE)
+        string(APPEND CMAKE_${_kind}_LINKER_FLAGS_INIT
+               " -L$ENV{ORPI_SYSROOT}/usr/lib/aarch64-linux-gnu -L$ENV{ORPI_SYSROOT}/lib/aarch64-linux-gnu")
+    endforeach()
+    if(DEFINED ENV{ORPI_STUB})
+        string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " $ENV{ORPI_STUB}")
+        string(APPEND CMAKE_SHARED_LINKER_FLAGS_INIT " $ENV{ORPI_STUB}")
+    endif()
     set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
     set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
     set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
