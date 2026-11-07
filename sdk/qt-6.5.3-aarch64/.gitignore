@@ -1,0 +1,21 @@
+# 构建产物
+src/pi_terminal/build/
+src/pi_terminal/build-*/
+src/build-pi*/
+src/pi-stage*/
+**/CMakeFiles/
+**/*.o
+**/*.a
+**/*.so
+!artifacts/**
+# 编辑器/系统
+.DS_Store
+*.swp
+__pycache__/
+firmware/
+
+# 本地产出的 SDK / 构建目录（体积大，走 Release 或内网分发）
+dist/
+build/
+*.tar.zst
+!artifacts/*.part*

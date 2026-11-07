@@ -1,15 +1,149 @@
 {
   "version": 3,
-  "configurePresets": [{
-    "name": "desktop-debug", "displayName": "Desktop Qt 6 Debug",
-    "generator": "Ninja", "binaryDir": "${sourceDir}/build-preset",
-    "cacheVariables": {
-      "CMAKE_BUILD_TYPE": "Debug", "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-      "CMAKE_PREFIX_PATH": "$env{HOME}/.local/share/orange-pi-terminal-sdk/qt/6.5.3/gcc_64",
-      "Python3_EXECUTABLE": "$env{HOME}/.local/share/orange-pi-terminal-sdk/tools/bin/python3",
-      "CMAKE_INSTALL_PREFIX": "$env{HOME}/.local/orange-pi-terminal"
+  "configurePresets": [
+    {
+      "name": "linux-qt642",
+      "displayName": "Linux · 系统 Qt 6.4.2（目标机基线）",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-qt642",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_PREFIX_PATH": "/usr",
+        "CMAKE_INSTALL_PREFIX": "/usr"
+      }
+    },
+    {
+      "name": "linux-qt653",
+      "displayName": "Linux · 作者 SDK Qt 6.5.3（开发用，同一份源码）",
+      "inherits": "linux-qt642",
+      "binaryDir": "${sourceDir}/build-qt653",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "$env{HOME}/.local/share/orange-pi-terminal-sdk/qt/6.5.3/gcc_64"
+      }
+    },
+    {
+      "name": "desktop-debug",
+      "displayName": "Desktop Qt 6 Debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-preset",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_PREFIX_PATH": "$env{HOME}/.local/share/orange-pi-terminal-sdk/qt/6.5.3/gcc_64",
+        "Python3_EXECUTABLE": "$env{HOME}/.local/share/orange-pi-terminal-sdk/tools/bin/python3",
+        "CMAKE_INSTALL_PREFIX": "$env{HOME}/.local/orange-pi-terminal"
+      }
+    },
+    {
+      "name": "aarch64-cross",
+      "displayName": "Pi 3B · aarch64 交叉（A53，免 LTO）",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-aarch64",
+      "toolchainFile": "${sourceDir}/cmake/toolchain-aarch64.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "ORPI_TARGET_CPU": "cortex-a53",
+        "CMAKE_INSTALL_PREFIX": "/usr"
+      }
+    },
+    {
+      "name": "aarch64-lto",
+      "displayName": "Pi 3B · aarch64 + LTO",
+      "inherits": "aarch64-cross",
+      "binaryDir": "${sourceDir}/build-aarch64-lto",
+      "cacheVariables": {
+        "ORPI_ENABLE_LTO": "ON"
+      }
+    },
+    {
+      "name": "aarch64-pgo-generate",
+      "displayName": "Pi 3B · aarch64 PGO 阶段 1（采集）",
+      "inherits": "aarch64-cross",
+      "binaryDir": "${sourceDir}/build-aarch64-pgo",
+      "cacheVariables": {
+        "ORPI_PGO_MODE": "generate",
+        "ORPI_PGO_DIR": "/tmp/orpi-pgo"
+      }
+    },
+    {
+      "name": "aarch64-pgo-use",
+      "displayName": "Pi 3B · aarch64 PGO 阶段 2（使用 profile + LTO）",
+      "inherits": "aarch64-cross",
+      "binaryDir": "${sourceDir}/build-aarch64-pgo",
+      "cacheVariables": {
+        "ORPI_PGO_MODE": "use",
+        "ORPI_PGO_DIR": "/tmp/orpi-pgo",
+        "ORPI_ENABLE_LTO": "ON"
+      }
     }
-  }],
-  "buildPresets": [{"name":"desktop-debug", "configurePreset":"desktop-debug", "jobs":2}],
-  "testPresets": [{"name":"desktop-debug", "configurePreset":"desktop-debug", "output":{"outputOnFailure":true}}]
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-qt642",
+      "configurePreset": "linux-qt642",
+      "jobs": 8
+    },
+    {
+      "name": "linux-qt653",
+      "configurePreset": "linux-qt653",
+      "jobs": 8
+    },
+    {
+      "name": "desktop-debug",
+      "configurePreset": "desktop-debug",
+      "jobs": 2
+    },
+    {
+      "name": "aarch64-cross",
+      "configurePreset": "aarch64-cross",
+      "jobs": 8
+    },
+    {
+      "name": "aarch64-lto",
+      "configurePreset": "aarch64-lto",
+      "jobs": 8
+    },
+    {
+      "name": "aarch64-pgo-generate",
+      "configurePreset": "aarch64-pgo-generate",
+      "jobs": 8
+    },
+    {
+      "name": "aarch64-pgo-use",
+      "configurePreset": "aarch64-pgo-use",
+      "jobs": 8
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "linux-qt642",
+      "configurePreset": "linux-qt642",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-qt653",
+      "configurePreset": "linux-qt653",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "desktop-debug",
+      "configurePreset": "desktop-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "aarch64-cross",
+      "configurePreset": "aarch64-cross",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
 }

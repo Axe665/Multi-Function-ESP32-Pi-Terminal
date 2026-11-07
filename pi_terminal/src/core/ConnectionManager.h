@@ -23,6 +23,7 @@
 #include "transport/BleTransport.h"
 #include "transport/HotspotLanTransport.h"
 
+class NetworkGate;
 class ConnectionManager : public QObject {
     Q_OBJECT
     Q_PROPERTY(QVariantList cards READ cards NOTIFY cardsChanged)
@@ -36,6 +37,13 @@ public:
     ~ConnectionManager() override;
     bool configure(const QString &path);
     bool start(const QString &device);
+    // PBR 握手宿主能力；必须在 start() 之前注入。
+    // 桥板身份被撤销：立刻中断 PBR 控制会话（不清业务会话）。
+    void abortBridge(const QString &bridgeId) { pogo_.abortBridge(bridgeId); }
+    void setPogoHandshakeContext(const PogoControlTransport::HandshakeContext &context)
+    { pogo_.setHandshakeContext(context); }
+    void setNetworkGate(NetworkGate *gate) { modules_.setNetworkGate(gate); }
+    Q_INVOKABLE QString modulePackageId(const QString &instance) const;
     bool bridgeConnected() const { return bridgeMonitor_.connected(); }
     bool bridgeMonitoring() const { return bridgeMonitor_.enabled(); }
     QVariantList cards() const;
@@ -45,6 +53,10 @@ public:
     // 槽位判定计数：accepted / rejected / lastRejection。
     // 用于回答「刷卡没反应是不是被当成迟到事件丢了」。
     Q_INVOKABLE QVariantMap slotStats() const;
+    // 诊断：worker 隔离模式与 IPC 契约（开发者面板用）。
+    Q_INVOKABLE QVariantMap workerInfo() const;
+    // 模块安装根目录（config cache，空则环境变量/系统目录）。
+    Q_INVOKABLE QString moduleRoot() const;
     QString status() const { return status_; }
     ModuleCardModel *cardModel() { return &cards_; }
     PageProvider *pageProvider() { return &pages_; }
@@ -160,6 +172,8 @@ private:
     void lost(const QString &, const QString &);
     void cancelDataPackageTransfer(const QSharedPointer<Session> &);
     void install(const QSharedPointer<Session> &);
+    void finishInstall(const QSharedPointer<Session> &, const QString &verifiedPath);
+    QString moduleStagingRoot() const;
     void loadVerified(const QSharedPointer<Session> &);
     void stop(const QSharedPointer<Session> &, const QString &);
     void finishRelease(const QSharedPointer<Session> &);

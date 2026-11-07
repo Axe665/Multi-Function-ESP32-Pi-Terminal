@@ -1,6 +1,6 @@
 // worker 路径的异步语义测试（T-11）。
 //
-// 与 session_test 的区别：那个测的是同进程 QLibrary 的同步回调，
+// 与已删除的旧 session_test 的区别：那个测的是同进程 QLibrary 的同步回调，
 // 这里测 worker 进程 IPC 的异步行为。
 //
 // 本机没有 systemd unit，所以走 degraded 路径（直接起二进制）。
@@ -40,6 +40,8 @@ private:
 
 private slots:
     void initTestCase() {
+        // 单元测试不依赖已安装的 systemd 单元：强制走降级直连。
+        qputenv("ORANGE_PI_WORKER_FORCE_DEGRADED", "1");
         if (!QFileInfo::exists(workerBinary())) QSKIP("module_worker not built");
     }
 

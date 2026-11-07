@@ -14,6 +14,8 @@
 #include <QCoreApplication>
 #include <QTcpSocket>
 #include <QTimer>
+#include "core/NetworkGate.h"
+
 #include <QNetworkRequest>
 #include <memory>
 #include <algorithm>
@@ -114,6 +116,12 @@ void MusicService::setEndpoint(const QString &value) {
 }
 
 void MusicService::request(const QString &path, const QMap<QString, QString> &params, Callback callback) {
+    // 「音乐联网」关闭时不拉起本机 Node，也不发任何请求：
+    // 本地文件播放不经过这里，不受影响。
+    if (gate_ && !gate_->allow(NetworkGate::Purpose::Music)) {
+        callback({}, QStringLiteral("联网已关闭"));
+        return;
+    }
     ensureService([this, path, params, callback](QString startupError) {
     if (!startupError.isEmpty()) { callback({}, startupError); return; }
     QUrl url(endpoint() + (endpoint().endsWith('/') ? path.mid(1) : path));
@@ -305,6 +313,10 @@ void MusicService::cacheAudioForSeek(const QString &requestedId, const QString &
 
     if (!makeSeekCacheSpace(0, path)) {
         emit seekAudioCacheFailed(id, QStringLiteral("本地音频缓存空间不足"));
+        return;
+    }
+    if (gate_ && !gate_->allow(NetworkGate::Purpose::Music)) {
+        emit seekAudioCacheFailed(id, QStringLiteral("联网已关闭"));
         return;
     }
     seekCacheJob_ = std::make_unique<SeekCacheJob>();

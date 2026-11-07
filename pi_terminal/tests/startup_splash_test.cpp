@@ -84,7 +84,11 @@ private slots:
                 QVERIFY(slot && text && icon);
                 QCOMPARE(slot->width(), 24.0);
                 QCOMPARE(slot->height(), 24.0);
-                QVERIFY(qAbs(slot->y() + slot->height()/2 - text->y() - text->height()/2) < 0.5);
+                QVERIFY2(qAbs(slot->y() + slot->height()/2 - text->y() - text->height()/2) < 0.5,
+                         qPrintable(QStringLiteral("slot y=%1 h=%2 text y=%3 h=%4 text='%5'")
+                                        .arg(slot->y()).arg(slot->height())
+                                        .arg(text->y()).arg(text->height())
+                                        .arg(text->property("text").toString())));
                 QCOMPARE(icon->property("name").toString(), index < 3 ? QString("check_circle") : QString("pending"));
                 QVERIFY(icon->property("source").toUrl().path().contains(index < 3 ? "check_circle" : "pending"));
             }

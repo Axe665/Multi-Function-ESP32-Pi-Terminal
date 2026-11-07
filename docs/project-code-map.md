@@ -45,7 +45,7 @@ flowchart LR
 
 ## 所有代码文件
 
-共 **1736 个**代码/构建脚本文件（不含依赖目录 `node_modules`）。下列清单按仓库目录列出，`third_party/` 按子目录汇总：
+共 **2394 个**代码/构建脚本文件（不含依赖目录 `node_modules`）。下列清单按仓库目录列出，`third_party/` 按子目录汇总：
 
 ### `build_scripts/`（7 个）
 
@@ -59,11 +59,12 @@ build_scripts/run_terminal.sh
 build_scripts/test_terminal.sh
 ```
 
-### `docs/`（6 个）
+### `docs/`（7 个）
 
 ```text
 docs/build_technical_word.py
 docs/devdocs/team-work-dependency-diagram.html
+docs/pbr-secure-v1/build_mbedtls_host.sh
 docs/pbr-secure-v1/gen_vectors.py
 docs/pbr-secure-v1/mbedtls_check.c
 docs/showcase/connection.html
@@ -79,10 +80,14 @@ hardware/enclosure/scripts/pack_v32.py
 hardware/enclosure/scripts/rebuild_v32.py
 ```
 
-### `module-devkit/`（460 个）
+### `module-devkit/`（469 个）
 
 ```text
 module-devkit/ai_guide.py
+module-devkit/examples/blood-pressure/CMakeLists.txt
+module-devkit/examples/blood-pressure/module.cpp
+module-devkit/examples/blood-pressure/qml/ModulePage.qml
+module-devkit/examples/blood-pressure/tests/pressure_module_test.cpp
 module-devkit/examples/smart-planter/CMakeLists.txt
 module-devkit/examples/smart-planter/History.h
 module-devkit/examples/smart-planter/firmware/CMakeLists.txt
@@ -475,6 +480,11 @@ module-devkit/examples/smart-planter/qml/PlantScene.qml
 module-devkit/examples/smart-planter/qml/TrendChart.qml
 module-devkit/examples/smart-planter/tests/planter_test.cpp
 module-devkit/examples/smart-planter/tests/preview.cpp
+module-devkit/examples/xiaotian-fence/CMakeLists.txt
+module-devkit/examples/xiaotian-fence/module.cpp
+module-devkit/examples/xiaotian-fence/qml/FenceState.qml
+module-devkit/examples/xiaotian-fence/qml/ModulePage.qml
+module-devkit/examples/xiaotian-fence/tests/fence_module_test.cpp
 module-devkit/firmware-build.sh
 module-devkit/mock-device.py
 module-devkit/module_devkit.py
@@ -544,11 +554,12 @@ module-devkit/tools/mock_module.py
 module-devkit/tools/package_tool.py
 ```
 
-### `pi_terminal/`（161 个）
+### `pi_terminal/`（387 个）
 
 ```text
 pi_terminal/CMakeLists.txt
 pi_terminal/cmake/OrangePiModuleSDKConfig.cmake
+pi_terminal/cmake/WriteBuildInfo.cmake
 pi_terminal/modules/example/CMakeLists.txt
 pi_terminal/modules/example/example_module.cpp
 pi_terminal/modules/example/qml/DiagnosticsPage.qml
@@ -559,9 +570,16 @@ pi_terminal/modules/test_devices/camera.qml
 pi_terminal/modules/test_devices/counter.qml
 pi_terminal/modules/test_devices/environment.qml
 pi_terminal/music_api/server.cjs
+pi_terminal/packaging/net-egress.sh
+pi_terminal/qml/AboutDevicePage.qml
+pi_terminal/qml/AboutInfoRow.qml
+pi_terminal/qml/AdminDeleteWait.qml
+pi_terminal/qml/AdminPairingPage.qml
+pi_terminal/qml/AlarmEngine.qml
 pi_terminal/qml/AppIcon.qml
 pi_terminal/qml/AppLauncher.qml
 pi_terminal/qml/ApplicationDrawer.qml
+pi_terminal/qml/Avatar.qml
 pi_terminal/qml/BlurCache.qml
 pi_terminal/qml/BrowserJoystick.qml
 pi_terminal/qml/BrowserScroll.js
@@ -570,8 +588,11 @@ pi_terminal/qml/CachedBlur.qml
 pi_terminal/qml/CarButton.qml
 pi_terminal/qml/CarField.qml
 pi_terminal/qml/CarText.qml
+pi_terminal/qml/ConnectionSettingsPage.qml
 pi_terminal/qml/ContextScroll.js
+pi_terminal/qml/CreditsPage.qml
 pi_terminal/qml/DesktopPet.qml
+pi_terminal/qml/DeveloperPanel.qml
 pi_terminal/qml/DirectionWheel.qml
 pi_terminal/qml/EditorToolbar.qml
 pi_terminal/qml/FileThumbnail.qml
@@ -580,23 +601,63 @@ pi_terminal/qml/GlassSurface.qml
 pi_terminal/qml/I18n.qml
 pi_terminal/qml/IconButton.qml
 pi_terminal/qml/KeyboardKey.qml
+pi_terminal/qml/LockCreateUser.qml
+pi_terminal/qml/LockScreen.qml
+pi_terminal/qml/LockSettings.qml
+pi_terminal/qml/LoginPage.qml
 pi_terminal/qml/Main.qml
 pi_terminal/qml/MaterialIcon.qml
+pi_terminal/qml/ModuleAuthPanel.qml
 pi_terminal/qml/MusicModeButton.qml
 pi_terminal/qml/MusicPlayer.qml
 pi_terminal/qml/MusicText.qml
+pi_terminal/qml/NetworkPermissions.qml
+pi_terminal/qml/NetworkPermissionsPage.qml
 pi_terminal/qml/PaintToolButton.qml
 pi_terminal/qml/PetManager.qml
 pi_terminal/qml/PictureViewer.qml
+pi_terminal/qml/PinPad.qml
 pi_terminal/qml/QuickPanelTile.qml
 pi_terminal/qml/QuickToggle.qml
+pi_terminal/qml/ReadOnlyTextView.qml
+pi_terminal/qml/RecoveryAckConfirm.qml
+pi_terminal/qml/RecoveryExport.qml
+pi_terminal/qml/RightSlidePage.qml
+pi_terminal/qml/SecurityStatusPage.qml
+pi_terminal/qml/SecurityStatusSection.qml
+pi_terminal/qml/SessionGate.qml
 pi_terminal/qml/SettingsGroup.qml
+pi_terminal/qml/Speech.qml
 pi_terminal/qml/StartupSplash.qml
 pi_terminal/qml/StatusDock.qml
+pi_terminal/qml/TaskFinishDialog.qml
+pi_terminal/qml/TestModePanel.qml
 pi_terminal/qml/Theme.qml
+pi_terminal/qml/TimeMath.js
+pi_terminal/qml/TimePane.qml
+pi_terminal/qml/TimeSync.qml
+pi_terminal/qml/TimeSyncSettings.qml
+pi_terminal/qml/TimeTools.qml
 pi_terminal/qml/TvPlayer.qml
+pi_terminal/qml/UsbDevicePicker.qml
+pi_terminal/qml/UserPicker.qml
+pi_terminal/qml/UserSecurityPage.qml
+pi_terminal/qml/UserSecurityView.qml
 pi_terminal/qml/VideoPlayer.qml
+pi_terminal/qml/VoiceSettings.qml
+pi_terminal/qml/WeatherEngine.qml
+pi_terminal/qml/WeatherMath.js
+pi_terminal/qml/WeatherSettings.qml
+pi_terminal/qml/WeatherTools.qml
 pi_terminal/qml/WheelStrings.js
+pi_terminal/qml/onboarding/AdminStep.qml
+pi_terminal/qml/onboarding/DoneStep.qml
+pi_terminal/qml/onboarding/NetworkStep.qml
+pi_terminal/qml/onboarding/OnboardingWizard.qml
+pi_terminal/qml/onboarding/ProgressHeader.qml
+pi_terminal/qml/onboarding/RecoveryStep.qml
+pi_terminal/qml/onboarding/WelcomeStep.qml
+pi_terminal/qml/user/UserSecurityHome.qml
 pi_terminal/scripts/build.sh
 pi_terminal/scripts/check-audio.sh
 pi_terminal/scripts/configure-hotspot.sh
@@ -607,37 +668,141 @@ pi_terminal/scripts/run-desktop-preview.sh
 pi_terminal/scripts/run-desktop.sh
 pi_terminal/scripts/setup-desktop.py
 pi_terminal/scripts/test.sh
+pi_terminal/src/app/AdminInitializer.cpp
+pi_terminal/src/app/AdminInitializer.h
 pi_terminal/src/app/DiagnosticRunner.cpp
 pi_terminal/src/app/DiagnosticRunner.h
+pi_terminal/src/app/OnboardingController.cpp
+pi_terminal/src/app/OnboardingController.h
 pi_terminal/src/app/TerminalApplication.cpp
 pi_terminal/src/app/TerminalApplication.h
 pi_terminal/src/app/TerminalOptions.cpp
 pi_terminal/src/app/TerminalOptions.h
 pi_terminal/src/app/TerminalRuntime.cpp
 pi_terminal/src/app/TerminalRuntime.h
+pi_terminal/src/core/AppNetworkApi.cpp
+pi_terminal/src/core/AppNetworkApi.h
+pi_terminal/src/core/AppNetworkBroker.cpp
+pi_terminal/src/core/AppNetworkBroker.h
 pi_terminal/src/core/BridgeConnectionMonitor.h
 pi_terminal/src/core/ConnectionManager.cpp
 pi_terminal/src/core/ConnectionManager.h
+pi_terminal/src/core/DeveloperProbe.cpp
+pi_terminal/src/core/DeveloperProbe.h
+pi_terminal/src/core/FetchBudget.cpp
+pi_terminal/src/core/FetchBudget.h
+pi_terminal/src/core/FileApi.cpp
+pi_terminal/src/core/FileApi.h
+pi_terminal/src/core/FileApiBroker.cpp
+pi_terminal/src/core/FileApiBroker.h
 pi_terminal/src/core/HostEventDetector.h
+pi_terminal/src/core/LaneGate.cpp
+pi_terminal/src/core/LaneGate.h
+pi_terminal/src/core/MachineInfo.cpp
+pi_terminal/src/core/MachineInfo.h
 pi_terminal/src/core/ModuleCardModel.cpp
 pi_terminal/src/core/ModuleCardModel.h
+pi_terminal/src/core/ModuleDataApi.cpp
+pi_terminal/src/core/ModuleDataApi.h
 pi_terminal/src/core/ModuleManager.cpp
 pi_terminal/src/core/ModuleManager.h
+pi_terminal/src/core/ModulePageHost.cpp
+pi_terminal/src/core/ModulePageHost.h
+pi_terminal/src/core/ModuleWorkerClient.cpp
+pi_terminal/src/core/ModuleWorkerClient.h
+pi_terminal/src/core/ModuleWorkerLauncher.cpp
+pi_terminal/src/core/ModuleWorkerLauncher.h
+pi_terminal/src/core/NetworkGate.cpp
+pi_terminal/src/core/NetworkGate.h
 pi_terminal/src/core/PackageReceiver.cpp
 pi_terminal/src/core/PackageReceiver.h
 pi_terminal/src/core/PageProvider.cpp
 pi_terminal/src/core/PageProvider.h
+pi_terminal/src/core/PowerStatus.cpp
+pi_terminal/src/core/PowerStatus.h
+pi_terminal/src/core/SecurityService.cpp
+pi_terminal/src/core/SecurityService.h
+pi_terminal/src/core/SecurityStatus.cpp
+pi_terminal/src/core/SecurityStatus.h
 pi_terminal/src/core/SessionStateMachine.cpp
 pi_terminal/src/core/SessionStateMachine.h
+pi_terminal/src/core/SlotRouter.cpp
+pi_terminal/src/core/SlotRouter.h
+pi_terminal/src/core/TestRunner.cpp
+pi_terminal/src/core/TestRunner.h
 pi_terminal/src/core/TransportPolicy.h
+pi_terminal/src/core/WorkerIpc.cpp
+pi_terminal/src/core/WorkerIpc.h
+pi_terminal/src/core/module_worker_main.cpp
+pi_terminal/src/files/FileDaemonServer.cpp
+pi_terminal/src/files/FileDaemonServer.h
+pi_terminal/src/files/FileProtocol.h
+pi_terminal/src/files/file_daemon_main.cpp
 pi_terminal/src/main.cpp
 pi_terminal/src/modules/api/IModulePlugin.h
 pi_terminal/src/modules/api/pi_module_api.h
+pi_terminal/src/net/NetChannels.h
+pi_terminal/src/net/NetPolicy.cpp
+pi_terminal/src/net/NetPolicy.h
+pi_terminal/src/net/NetworkPolicy.cpp
+pi_terminal/src/net/NetworkPolicy.h
+pi_terminal/src/net/NetworkPolicyController.cpp
+pi_terminal/src/net/NetworkPolicyController.h
+pi_terminal/src/net/ProxyServer.cpp
+pi_terminal/src/net/ProxyServer.h
+pi_terminal/src/net/PublicNetwork.cpp
+pi_terminal/src/net/PublicNetwork.h
+pi_terminal/src/net/net_policy_helper.cpp
+pi_terminal/src/net/proxy_main.cpp
 pi_terminal/src/protocol/control_event.cpp
 pi_terminal/src/protocol/control_event.h
 pi_terminal/src/protocol/data_checksum.h
+pi_terminal/src/protocol/pbr_aead.cpp
+pi_terminal/src/protocol/pbr_aead.h
+pi_terminal/src/protocol/pbr_handshake.cpp
+pi_terminal/src/protocol/pbr_handshake.h
+pi_terminal/src/protocol/pbr_session.cpp
+pi_terminal/src/protocol/pbr_session.h
 pi_terminal/src/protocol/pibridge_protocol.cpp
 pi_terminal/src/protocol/pibridge_protocol.h
+pi_terminal/src/protocol/uid_index.cpp
+pi_terminal/src/protocol/uid_index.h
+pi_terminal/src/security/AuditLog.cpp
+pi_terminal/src/security/AuditLog.h
+pi_terminal/src/security/AuthService.cpp
+pi_terminal/src/security/AuthService.h
+pi_terminal/src/security/Backup.cpp
+pi_terminal/src/security/Backup.h
+pi_terminal/src/security/CardIndex.h
+pi_terminal/src/security/CardMatcher.cpp
+pi_terminal/src/security/CardMatcher.h
+pi_terminal/src/security/HostIdentity.cpp
+pi_terminal/src/security/HostIdentity.h
+pi_terminal/src/security/KdfClient.cpp
+pi_terminal/src/security/KdfClient.h
+pi_terminal/src/security/KeyWrap.cpp
+pi_terminal/src/security/KeyWrap.h
+pi_terminal/src/security/PermissionMatrix.cpp
+pi_terminal/src/security/PermissionMatrix.h
+pi_terminal/src/security/PinPolicy.cpp
+pi_terminal/src/security/PinPolicy.h
+pi_terminal/src/security/RecoveryCode.cpp
+pi_terminal/src/security/RecoveryCode.h
+pi_terminal/src/security/SessionManager.cpp
+pi_terminal/src/security/SessionManager.h
+pi_terminal/src/security/SqlCipherStore.cpp
+pi_terminal/src/security/SqlCipherStore.h
+pi_terminal/src/security/TaskCapability.cpp
+pi_terminal/src/security/TaskCapability.h
+pi_terminal/src/security/TrustStore.cpp
+pi_terminal/src/security/TrustStore.h
+pi_terminal/src/security/UserDatabase.cpp
+pi_terminal/src/security/UserDatabase.h
+pi_terminal/src/security/UserService.cpp
+pi_terminal/src/security/UserService.h
+pi_terminal/src/security/kdf_worker_main.cpp
+pi_terminal/src/security/uid_index_key.cpp
+pi_terminal/src/security/uid_index_key.h
 pi_terminal/src/transport/BleTransport.cpp
 pi_terminal/src/transport/BleTransport.h
 pi_terminal/src/transport/HotspotLanTransport.cpp
@@ -668,46 +833,117 @@ pi_terminal/src/ui/SystemVolume.h
 pi_terminal/src/ui/TerminalUi.cpp
 pi_terminal/src/ui/TerminalUi.h
 pi_terminal/src/ui/TextFormatter.h
+pi_terminal/src/ui/TimeSyncClient.cpp
+pi_terminal/src/ui/TimeSyncClient.h
 pi_terminal/src/ui/ViperBrowserController.cpp
 pi_terminal/src/ui/ViperBrowserController.h
 pi_terminal/tests/GuiAudit.cpp
 pi_terminal/tests/GuiAudit.h
+pi_terminal/tests/about_ui_test.cpp
+pi_terminal/tests/app_launcher_edit_test.cpp
+pi_terminal/tests/app_network_broker_test.cpp
 pi_terminal/tests/arkpets_preview.cpp
 pi_terminal/tests/arkpets_preview.qml
+pi_terminal/tests/auth_service_test.cpp
+pi_terminal/tests/backup_test.cpp
+pi_terminal/tests/business_security_test.cpp
+pi_terminal/tests/card_flow_test.cpp
+pi_terminal/tests/card_matcher_test.cpp
 pi_terminal/tests/character_worker_test.py
+pi_terminal/tests/db_webengine_probe.cpp
 pi_terminal/tests/desktop_pet_test.cpp
+pi_terminal/tests/fetch_budget_test.cpp
+pi_terminal/tests/file_daemon_test.cpp
+pi_terminal/tests/host_identity_test.cpp
+pi_terminal/tests/lane_gate_test.cpp
+pi_terminal/tests/login_qml_test.cpp
+pi_terminal/tests/module_data_api_test.cpp
+pi_terminal/tests/module_page_host_test.cpp
+pi_terminal/tests/module_worker_async_test.cpp
+pi_terminal/tests/module_worker_ipc_test.cpp
 pi_terminal/tests/music_playback_test.cpp
 pi_terminal/tests/music_queue_test.cjs
 pi_terminal/tests/music_seek_test.cpp
 pi_terminal/tests/music_service_test.cpp
+pi_terminal/tests/net_policy_helper_test.cpp
+pi_terminal/tests/net_policy_test.cpp
+pi_terminal/tests/network_gate_test.cpp
+pi_terminal/tests/network_policy_controller_test.cpp
+pi_terminal/tests/network_policy_qml_test.cpp
+pi_terminal/tests/onboarding_test.cpp
 pi_terminal/tests/pack_sprites_test.py
+pi_terminal/tests/pairing_ui_test.cpp
+pi_terminal/tests/pbr_aead_test.cpp
+pi_terminal/tests/pbr_handshake_test.cpp
+pi_terminal/tests/pbr_session_test.cpp
+pi_terminal/tests/permission_matrix_test.cpp
 pi_terminal/tests/pet_manager_test.cpp
 pi_terminal/tests/plugin_scale_test.cpp
+pi_terminal/tests/pogo_control_test.cpp
+pi_terminal/tests/power_status_test.cpp
 pi_terminal/tests/protocol_test.cpp
+pi_terminal/tests/proxy_integration_test.cpp
+pi_terminal/tests/recovery_code_test.cpp
 pi_terminal/tests/run_integration.py
 pi_terminal/tests/run_media_browser_tests.py
+pi_terminal/tests/run_ui_audit.py
 pi_terminal/tests/runtime_test.cpp
 pi_terminal/tests/screenshot_regression.py
+pi_terminal/tests/security_lock_test.cpp
+pi_terminal/tests/security_status_test.cpp
+pi_terminal/tests/session_gate_test.cpp
 pi_terminal/tests/session_test.cpp
 pi_terminal/tests/shared_runtime_install.py
+pi_terminal/tests/slot_router_test.cpp
 pi_terminal/tests/startup_splash_test.cpp
+pi_terminal/tests/support/uid_index_key_fixed.cpp
+pi_terminal/tests/test_runner_discovery_test.cpp
 pi_terminal/tests/text_formatter_test.cpp
+pi_terminal/tests/time_math_test.cjs
+pi_terminal/tests/time_sync_client_test.cpp
+pi_terminal/tests/time_tools_test.cpp
+pi_terminal/tests/trust_store_test.cpp
+pi_terminal/tests/tv_player_ui_test.cpp
+pi_terminal/tests/uid_index_default_key_test.cpp
+pi_terminal/tests/uid_index_key_test.cpp
+pi_terminal/tests/uid_index_test.cpp
+pi_terminal/tests/user_database_test.cpp
 pi_terminal/tests/video_player_ui_test.cpp
+pi_terminal/tests/weather_math_test.cjs
+pi_terminal/tests/weather_tools_test.cpp
+pi_terminal/tests/worker_isolation_test.cpp
 pi_terminal/tools/arkpets/character_worker.py
 pi_terminal/tools/arkpets/pack_sprites.py
 pi_terminal/tools/build_pinyin_dictionary.py
 pi_terminal/tools/build_word.py
 pi_terminal/tools/compare_render_metrics.py
+pi_terminal/tools/demo_dual_module.py
 pi_terminal/tools/desktop_demo.py
 pi_terminal/tools/fetch_material_icons.py
+pi_terminal/tools/kdf_bench.cpp
 pi_terminal/tools/localize_ui.py
 pi_terminal/tools/mock_bridge.py
+pi_terminal/tools/mock_bridge_multi.py
 pi_terminal/tools/mock_module.py
 pi_terminal/tools/mock_pogo_control/CMakeLists.txt
 pi_terminal/tools/mock_pogo_control/main.cpp
+pi_terminal/tools/module_install_helper.py
+pi_terminal/tools/nfc_swipe_probe.py
 pi_terminal/tools/package_tool.py
 pi_terminal/tools/runtime_bundle.py
+pi_terminal/tools/security_preview/main.cpp
+pi_terminal/tools/test-systemd-user-file-daemon.sh
+pi_terminal/tools/tests/test_module_install_helper.py
 pi_terminal/tools/tv_probe.cpp
+pi_terminal/tts/flite/zh_engine.c
+pi_terminal/tts/flite/zh_main.c
+pi_terminal/tts/tools/build_binary_dict.py
+pi_terminal/tts/tools/build_lexicon.py
+pi_terminal/tts/tools/build_units.py
+pi_terminal/tts/tools/build_voicebank.py
+pi_terminal/tts/tools/fill_units_espeak.py
+pi_terminal/tts/tools/render_units.py
+pi_terminal/tts/tools/synth_edge_voice.py
 ```
 
 ### `projects/`（11 个）
@@ -726,13 +962,15 @@ projects/native-browser-wheel/tests/tst_web.qml
 projects/native-browser-wheel/tests/tst_wheel.qml
 ```
 
-### `third_party/`（1078 个，按子目录汇总）
+### `third_party/`（1496 个，按子目录汇总）
 
 ```text
 Viper-Browser/          364 个
 YesPlayMusic/           101 个
+flite/                  166 个
 gst/                    603 个
 sqlite-amalgamation/      2 个
+vendor/                 252 个
 vlc/                      8 个
 ```
 

@@ -1,0 +1,20 @@
+[Unit]
+Description=Pi ESP module terminal
+After=graphical-session.target
+
+[Service]
+Type=simple
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/raspberrypi/.Xauthority
+Environment=XDG_CONFIG_HOME=/home/raspberrypi/pi_debug/complex_qml_20261009/xdg
+Environment=ORANGE_PI_HOTSPOT_SUDO=1
+Environment=ORANGE_PI_CONTROL_DEVICE=/dev/serial/by-id/usb-1a86_USB_Single_Serial_5CF8045563-if00
+Environment=QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu
+ExecStart=/usr/bin/orange_pi_terminal --config /home/raspberrypi/pi_debug/complex_qml_20261009/product-ble-hotspot-live-20261012.json --demo
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/home/raspberrypi/pi_debug/complex_qml_20261009/terminal-service.log
+StandardError=append:/home/raspberrypi/pi_debug/complex_qml_20261009/terminal-service.log
+
+[Install]
+WantedBy=default.target

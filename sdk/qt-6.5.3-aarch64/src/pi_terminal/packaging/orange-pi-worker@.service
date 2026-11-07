@@ -1,0 +1,45 @@
+[Unit]
+Description=Orange Pi Terminal module worker (%i)
+Documentation=file:///usr/share/doc/orange-pi-terminal/worker-isolation.md
+After=network.target
+
+[Service]
+# worker 只从环境变量知道自己属于哪个会话；宿主用 WorkerIpc::socketPath(session)
+# 推导同一个 socket 路径。缺这行 worker 启动后会立即以
+# "missing ORANGE_PI_WORKER_SOCKET or ORANGE_PI_WORKER_SESSION" 退出（部署实测）。
+Environment=ORANGE_PI_WORKER_SESSION=%i
+# 不建持久账号：systemd 每次启动分配临时 UID。
+# 判定标准是「worker UID ≠ 宿主 UID」，不要求固定值（§0.4）。
+DynamicUser=yes
+# 默认完全无网络：连 AF_INET socket 都不允许创建。
+# 将来要按模块授权联网，改成 IPAddressDeny=any + 按 manifest 注入 IPAddressAllow=，
+# 并把 RestrictAddressFamilies 放开到 AF_UNIX AF_INET AF_INET6（见 docs/networking.md）。
+PrivateNetwork=yes
+PrivateTmp=yes
+# 模块只能经宿主文件 API 访问家目录：worker 完全看不到 home。
+# 模块包必须放在 root 管理的只读目录，由 ReadOnlyPaths 暴露。
+ProtectHome=yes
+ProtectSystem=strict
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+# worker 专用运行目录由 systemd 分配属主，不要手工 chown。
+# 0755 是必须的：宿主（普通用户）要能进入该目录读 socket 文件。
+# socket 本身 0666，只允许单连接，由 worker 侧 accept 一次。
+RuntimeDirectory=orange-pi-worker-%i
+RuntimeDirectoryMode=0755
+StateDirectory=orange-pi-worker-%i
+StateDirectoryMode=0700
+
+# 模块库只读挂载；不挂 DB、不挂宿主配置文件。
+# 注意：DynamicUser 每次 UID 不同，因此这里不能用固定属主。
+ReadOnlyPaths=/usr/lib/orange-pi-terminal/modules /usr/local/lib/orange-pi-terminal/modules
+
+ExecStart=/usr/libexec/orange-pi-terminal/module_worker
+
+[Install]
+WantedBy=multi-user.target

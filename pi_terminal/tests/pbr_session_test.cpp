@@ -106,8 +106,36 @@ private slots:
     // 过期与缺时钟必须区分：缺基准不能被当成"新鲜"。
     void expiredAndMissingClockAreDistinct()
     {
-        QCOMPARE(EventTtl::evaluate(3000, 1000, 1000 + 3001, true), EventTtl::Verdict::Expired);
+        QCOMPARE(EventTtl::evaluate(3000, 1000, 1000 + 60001, true), EventTtl::Verdict::Expired);
         QCOMPARE(EventTtl::evaluate(3000, 1000, 1000, false), EventTtl::Verdict::MissingClock);
+    }
+
+    // §3.5/§6.4：offset 由 hello_ok.uptime_ms 建立，age 必须落在
+    // -kMaxSkewMs..kMaxAgeMs。负值不是“未来事件”，而是握手锚点把单向传输时延
+    // 算进了 offset（CH343 实测约 34 ms）。
+    void offsetAgeRejectsFutureAndStaleEvents()
+    {
+        const qint64 offset = 5000;   // bridge uptime 比 Pi 单调时钟快 5s
+        const qint64 local = 1200;
+        // 事件年龄 0、3000 都合法。
+        QCOMPARE(EventTtl::evaluateWithOffset(3000, local + offset, local, offset, true),
+                 EventTtl::Verdict::Ok);
+        QCOMPARE(EventTtl::evaluateWithOffset(3000, local + offset + 3000, local, offset, true),
+                 EventTtl::Verdict::Ok);
+        // 超过 60 s 上限拒绝。
+        QCOMPARE(EventTtl::evaluateWithOffset(3000, local + offset + 60001, local, offset, true),
+                 EventTtl::Verdict::Expired);
+        // 负偏移在 kMaxSkewMs 容差内接受（握手锚点含单向时延）。
+        QCOMPARE(EventTtl::evaluateWithOffset(3000, local + offset - 34, local, offset, true),
+                 EventTtl::Verdict::Ok);
+        QCOMPARE(EventTtl::evaluateWithOffset(3000, local + offset - 2000, local, offset, true),
+                 EventTtl::Verdict::Ok);
+        // 超出容差（更早的事件）仍然拒绝。
+        QCOMPARE(EventTtl::evaluateWithOffset(3000, local + offset - 2001, local, offset, true),
+                 EventTtl::Verdict::Expired);
+        // 没有 offset 不能当新鲜事件。
+        QCOMPARE(EventTtl::evaluateWithOffset(3000, local, local, 0, false),
+                 EventTtl::Verdict::MissingClock);
     }
 };
 

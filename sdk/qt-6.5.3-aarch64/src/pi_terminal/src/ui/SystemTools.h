@@ -1,0 +1,299 @@
+#pragma once
+#include <QObject>
+#include <QVariantList>
+#include <QTextToSpeech>
+#include <QProcess>
+#include <QTimer>
+#include <functional>
+#include <QSettings>
+#include <QBluetoothLocalDevice>
+#include <QNetworkAccessManager>
+#include <QVariantMap>
+#include <QUrl>
+#include <QImage>
+#include <QColor>
+#include <QSet>
+#include <QPointer>
+#include <QHash>
+#include <QVector>
+#include "MusicPlayback.h"
+#include "RemovableStorage.h"
+#include "SystemVolume.h"
+class QSoundEffect;
+
+class SystemTools : public QObject {
+    Q_OBJECT
+    Q_PROPERTY(QStringList logs READ logs NOTIFY changed)
+    Q_PROPERTY(QString network READ network NOTIFY changed)
+    Q_PROPERTY(QString filesRoot READ filesRoot CONSTANT)
+    Q_PROPERTY(QVariantList removableDevices READ removableDevices NOTIFY removableDevicesChanged)
+    Q_PROPERTY(bool speechEnabled READ speechEnabled NOTIFY changed)
+    Q_PROPERTY(SystemVolume* systemVolume READ systemVolume CONSTANT)
+    Q_PROPERTY(QString voiceId READ voiceId NOTIFY voiceChanged)
+    Q_PROPERTY(QString voiceName READ voiceName NOTIFY voiceChanged)
+    Q_PROPERTY(QVariantList voiceOptions READ voiceOptions NOTIFY voiceChanged)
+    Q_PROPERTY(bool voiceTestMode READ voiceTestMode NOTIFY voiceChanged)
+    Q_PROPERTY(QVariantList audioOutputs READ audioOutputs NOTIFY audioOutputsChanged)
+    Q_PROPERTY(QString audioOutputDevice READ audioOutputDevice NOTIFY audioOutputsChanged)
+    Q_PROPERTY(QString audioOutputName READ audioOutputName NOTIFY audioOutputsChanged)
+    Q_PROPERTY(bool duckMediaForSpeech READ duckMediaForSpeech NOTIFY audioFocusChanged)
+    Q_PROPERTY(bool speechActive READ speechActive NOTIFY audioFocusChanged)
+    Q_PROPERTY(double mediaGain READ mediaGain NOTIFY audioFocusChanged)
+    Q_PROPERTY(double interfaceScale READ interfaceScale NOTIFY changed)
+    Q_PROPERTY(QVariantMap deviceStatus READ deviceStatus NOTIFY changed)
+    Q_PROPERTY(bool hotspotBusy READ hotspotBusy NOTIFY changed)
+    Q_PROPERTY(bool powerActionBusy READ powerActionBusy NOTIFY changed)
+    Q_PROPERTY(QUrl wallpaper READ wallpaper NOTIFY changed)
+    Q_PROPERTY(double launcherOpacity READ launcherOpacity NOTIFY changed)
+    Q_PROPERTY(double moduleOpacity READ moduleOpacity NOTIFY changed)
+    Q_PROPERTY(bool energySaving READ energySaving NOTIFY changed)
+    // 报告 §6.4：记录保留期限（天）。0 表示永久保留。
+    Q_PROPERTY(int retentionDays READ retentionDays NOTIFY changed)
+    // 报告 §14 适老化：大字号模式。在 Theme 的 token 之上再放大一档。
+    // 不是替换 Theme，而是让 Theme.scaleFactor 叠加，避免两套字号体系。
+    Q_PROPERTY(bool largeText READ largeText NOTIFY changed)
+    Q_PROPERTY(QString uiLanguage READ uiLanguage NOTIFY changed)
+    Q_PROPERTY(bool musicCliAvailable READ musicCliAvailable NOTIFY musicCliChanged)
+    Q_PROPERTY(bool musicNetworkOnline READ musicNetworkOnline NOTIFY musicNetworkChanged)
+    Q_PROPERTY(bool musicCliAuthenticated READ musicCliAuthenticated NOTIFY musicCliChanged)
+    Q_PROPERTY(bool musicCliBusy READ musicCliBusy NOTIFY musicCliChanged)
+    Q_PROPERTY(bool musicCliLoading READ musicCliLoading NOTIFY musicCliChanged)
+    Q_PROPERTY(int musicCliPlayProgress READ musicCliPlayProgress NOTIFY musicCliChanged)
+    Q_PROPERTY(bool musicPlaybackSwitching READ musicPlaybackSwitching NOTIFY musicCliChanged)
+    Q_PROPERTY(QString musicCliOutput READ musicCliOutput NOTIFY musicCliChanged)
+    Q_PROPERTY(QString musicCliError READ musicCliError NOTIFY musicCliChanged)
+    Q_PROPERTY(QString musicCliAction READ musicCliAction NOTIFY musicCliChanged)
+    Q_PROPERTY(QVariantList musicCliTracks READ musicCliTracks NOTIFY musicCliChanged)
+    Q_PROPERTY(QVariantMap musicCliPlaybackState READ musicCliPlaybackState NOTIFY musicCliChanged)
+    Q_PROPERTY(int musicCliPlaylistOffset READ musicCliPlaylistOffset NOTIFY musicCliChanged)
+    Q_PROPERTY(int musicCliPlaylistTotal READ musicCliPlaylistTotal NOTIFY musicCliChanged)
+    Q_PROPERTY(bool musicCliHasNextPlaylistPage READ musicCliHasNextPlaylistPage NOTIFY musicCliChanged)
+public:
+    Q_INVOKABLE QString saveCameraFrame(const QString &frame, const QUrl &destination);
+    Q_INVOKABLE QString cameraPhotoPath() const;
+    // 内置网络电视频道表（qrc:/tv/china.json）。QML 的 XHR 默认禁止读本地文件，
+    // 所以由 C++ 读取后交给 QML 解析。
+    Q_INVOKABLE QString tvChannelData() const;
+    // 仅用于性能/回归测试：TERMINAL_TV_URL 直接指定一个 HLS 源，跳过频道表。
+    Q_INVOKABLE QString tvTestUrl() const { return qEnvironmentVariable("TERMINAL_TV_URL"); }
+
+    // 测试/演示用：指定启动时直接播放的频道名（TERMINAL_TV_CHANNEL=浙江卫视）。
+    Q_INVOKABLE QString tvChannelName() const { return qEnvironmentVariable("TERMINAL_TV_CHANNEL"); }
+    // 仅用于开发期自动化：设置 TERMINAL_TV_AUTOPLAY=1 时自动进入电视页并播放首个频道
+    Q_INVOKABLE bool tvAutoplay() const;
+    // 仅测试：TERMINAL_TV_FULLSCREEN=1 时进入电视页即全屏。
+    Q_INVOKABLE bool tvForceFullscreen() const { return qEnvironmentVariableIsSet("TERMINAL_TV_FULLSCREEN"); }
+    bool musicCliAvailable() const;
+    bool musicNetworkOnline() const { return musicNetworkOnline_; }
+    bool musicCliAuthenticated() const { return musicCliAuthenticated_; }
+    bool musicCliBusy() const { return musicCliProcess_.state() != QProcess::NotRunning; }
+    bool musicCliLoading() const {
+        return musicCliProcess_.state() != QProcess::NotRunning && musicCliAction_ != QStringLiteral("state") &&
+            musicCliAction_ != QStringLiteral("volume") && musicCliAction_ != QStringLiteral("seek");
+    }
+    int musicCliPlayProgress() const { return musicPlayback_.progress(); }
+    bool musicPlaybackSwitching() const { return musicPlayback_.switching(); }
+    QString musicCliOutput() const { return musicCliOutput_; }
+    QString musicCliError() const { return musicCliError_; }
+    QString musicCliAction() const { return musicCliAction_; }
+    QVariantList musicCliTracks() const { return musicCliTracks_; }
+    QVariantMap musicCliPlaybackState() const { return musicPlayback_.state(); }
+    int musicCliPlaylistOffset() const { return musicCliPlaylistOffset_; }
+    int musicCliPlaylistTotal() const { return musicCliPlaylistTotal_; }
+    bool musicCliHasNextPlaylistPage() const;
+    Q_INVOKABLE bool launchMusicCliSetup(const QString &action);
+    Q_INVOKABLE bool musicCliSearch(const QString &keyword, const QString &type = QStringLiteral("song"));
+    Q_INVOKABLE bool musicCliControl(const QString &action);
+    Q_INVOKABLE bool musicCliPlaylists(const QString &scope);
+    Q_INVOKABLE bool musicCliPlaylistTracks(const QString &playlistId, int offset, int total);
+    Q_INVOKABLE bool musicCliPlay(const QString &encryptedId, const QString &originalId, const QString &type = QStringLiteral("song"));
+    Q_INVOKABLE bool musicCliVolume(int volume);
+    Q_INVOKABLE bool musicCliCheckLogin();
+    Q_INVOKABLE bool musicCliSeek(int positionSeconds);
+    double launcherOpacity() const { return qBound(0.0,settings_.value("launcherOpacity",0.65).toDouble(),1.0); }
+    double moduleOpacity() const { return qBound(0.0,settings_.value("moduleOpacity",0.65).toDouble(),1.0); }
+    Q_INVOKABLE void setLauncherOpacity(double value);
+    Q_INVOKABLE void setModuleOpacity(double value);
+    bool energySaving() const { return settings_.value("energySaving", true).toBool(); }
+    int retentionDays() const { return settings_.value("privacy/retentionDays", 90).toInt(); }
+    bool largeText() const { return settings_.value("accessibility/largeText", false).toBool(); }
+    QString uiLanguage() const { return settings_.value("uiLanguage", QStringLiteral("zh")).toString(); }
+    Q_INVOKABLE void setEnergySaving(bool value);
+    // 只接受 0/30/90/180；其他值拒绝，避免写入无意义保留期。
+    Q_INVOKABLE bool setRetentionDays(int days);
+    Q_INVOKABLE void setLargeText(bool value);
+    Q_INVOKABLE void setUiLanguage(const QString &language);
+    // QML 页面持久化少量自有状态。键名必须落在允许的前缀里（当前只有 "time/"），
+    // 以免页面脚本改写 trusted/* 等宿主信任记录；写入有大小上限。
+    Q_INVOKABLE QString settingsRead(const QString &key, const QString &fallback = QString()) const;
+    Q_INVOKABLE bool settingsWrite(const QString &key, const QString &value);
+    explicit SystemTools(QObject *parent = nullptr);
+    ~SystemTools() override;
+    QStringList logs() const { return logs_; }
+    QString network() const;
+    QString filesRoot() const;
+    QVariantList removableDevices() const { return removableStorage_.devices(); }
+    Q_INVOKABLE void openRemovableDevice(const QString &id) { removableStorage_.open(id); }
+    // 把 "@usb/<id>/<相对路径>" 解析成挂载点下的真实路径；非法、未挂载或越界返回空串。
+    Q_INVOKABLE QString resolveRemovablePath(const QString &location, bool creating) const
+    {
+        return removableStorage_.resolve(location, creating);
+    }
+    // U 盘根目录下的备份文件（*.optbk），按修改时间倒序；只给界面展示名字与时间。
+    Q_INVOKABLE QVariantList removableBackups(const QString &id) const;
+    // 往 U 盘写一个 UTF-8 文本文件（恢复码导出用），路径走 "@usb/<id>/<文件名>"。
+    Q_INVOKABLE bool writeRemovableText(const QString &location, const QString &text) const;
+    Q_INVOKABLE QString fileDisplayPath(const QString &relative) const;
+    Q_INVOKABLE QVariantList files(const QString &relative) const;
+    Q_INVOKABLE QUrl fileUrl(const QString &relative) const;
+    Q_INVOKABLE QString fileLocation(const QString &name) const;
+    Q_INVOKABLE QVariantMap localMusicMetadata(const QString &relative) const;
+    Q_INVOKABLE bool createFile(const QString &relative, const QString &text);
+    Q_INVOKABLE QVariantList recentFiles() const;
+    Q_INVOKABLE void rememberFile(const QString &relative);
+    Q_INVOKABLE QString read(const QString &relative) const;
+    Q_INVOKABLE bool editable(const QString &relative) const;
+    Q_INVOKABLE bool openWithDefault(const QString &relative);
+    Q_INVOKABLE bool write(const QString &relative, const QString &text);
+    Q_INVOKABLE bool makeDirectory(const QString &relative);
+    Q_INVOKABLE bool rename(const QString &from, const QString &to);
+    Q_INVOKABLE bool remove(const QString &relative);
+    bool speechEnabled() const { return settings_.value("speech", true).toBool(); }
+    SystemVolume *systemVolume() { return &systemVolume_; }
+    bool duckMediaForSpeech() const { return settings_.value("duckMediaForSpeech", true).toBool(); }
+    bool speechActive() const { return speechActive_; }
+    double mediaGain() const { return duckMediaForSpeech() && speechActive_ ? 0.2 : 1.0; }
+    Q_INVOKABLE void setDuckMediaForSpeech(bool enabled);
+    // 语音音色：微软音色常驻；BanG Dream 六套只在测试模式（彩蛋）里出现。
+    QString voiceId() const { return settings_.value("ttsVoice", QStringLiteral("xiaoxiao")).toString(); }
+    bool voiceTestMode() const { return settings_.value("ttsVoiceTestMode", false).toBool(); }
+    QVariantList voiceOptions() const;
+    QString voiceName() const;
+    Q_INVOKABLE QString voiceDisplayName(const QString &id) const;
+    Q_INVOKABLE bool voiceAvailable(const QString &id) const;
+    Q_INVOKABLE void setVoice(const QString &id);
+    Q_INVOKABLE void previewVoice(const QString &id);
+    // 给后续功能用：用指定音色播报任意文本（同样走 300 字上限/单槽合并/降音）。
+    Q_INVOKABLE void speakWithVoice(const QString &text, const QString &id);
+    // 当前引擎与声库是否可用；UI/新功能可用它决定是否给播报入口。
+    Q_INVOKABLE bool speechReady() const;
+    Q_INVOKABLE void setVoiceTestMode(bool enabled);
+    // 播报输出设备：空串 = 跟随系统；列表来自 Qt Multimedia 当前可见的输出设备。
+    QVariantList audioOutputs() const;
+    QString audioOutputDevice() const { return settings_.value("ttsOutputDevice").toString(); }
+    QString audioOutputName() const;
+    Q_INVOKABLE void setAudioOutputDevice(const QString &id);
+    double interfaceScale() const { return qBound(1.0, settings_.value("interface_scale", 1.0).toDouble(), 1.5); }
+    Q_INVOKABLE void setInterfaceScale(double scale);
+    QVariantMap deviceStatus() const { return deviceStatus_; }
+    Q_INVOKABLE void refreshStatus();
+    Q_INVOKABLE void setBluetoothEnabled(bool enabled);
+    Q_INVOKABLE void speak(const QString &text);
+    Q_INVOKABLE void remember(const QString &url);
+    Q_INVOKABLE void removeBookmark(const QString &url);
+    Q_INVOKABLE QStringList bookmarks() const;
+    Q_INVOKABLE void setSpeechEnabled(bool enabled);
+    Q_INVOKABLE void hotspot(bool enabled);
+    void acquireHotspotLease(const QString &owner);
+    void releaseHotspotLease(const QString &owner);
+    Q_INVOKABLE bool powerActionBusy() const { return powerActionBusy_; }
+    Q_INVOKABLE void requestPowerAction(const QString &action);
+    QUrl wallpaper() const;
+    Q_INVOKABLE QColor wallpaperColor(double x, double y, double width, double height) const;
+    Q_INVOKABLE QUrl monochromeIcon(const QString &name, bool white) const;
+    Q_INVOKABLE bool setWallpaper(const QUrl &url);
+    Q_INVOKABLE bool setFileWallpaper(const QString &relative);
+    Q_INVOKABLE void captureKeyboardTarget();
+    Q_INVOKABLE void captureKeyboardTargetItem(QObject *target);
+    Q_INVOKABLE void keyboardCommit(const QString &text);
+    Q_INVOKABLE void keyboardBackspace();
+    Q_INVOKABLE void keyboardReturn();
+    Q_INVOKABLE QString pinyinDictionary() const;
+    Q_INVOKABLE QString pinyinPhraseDictionary() const;
+    Q_INVOKABLE QStringList pinyinCandidates(const QString &code) const;
+    Q_INVOKABLE void recordPinyinSelection(const QString &code, const QString &word);
+    bool hotspotBusy() const { return hotspotBusy_; }
+    void log(const QString &text);
+signals:
+    void voiceChanged();
+    void audioOutputsChanged();
+    void audioFocusChanged();
+    void changed();
+    void removableDevicesChanged();
+    void removableDeviceInserted(QString name);
+    void removableDeviceReady(QString location);
+    void removableDeviceError(QString message);
+    void notification(QString message);
+    void hotspotLeaseReady(QString owner, bool ready);
+    void musicCliChanged();
+    void musicNetworkChanged();
+    void musicPlaybackEnded();
+private:
+    SystemVolume systemVolume_;
+    bool speechActive_ = false;
+    void setSpeechActive(bool active);
+    RemovableStorage removableStorage_;
+    bool eventFilter(QObject *watched, QEvent *event) override;
+    QPointer<QObject> keyboardTarget_;
+    struct PinyinCandidate { QString word; int weight = 0; };
+    QHash<QString, QVector<PinyinCandidate>> characterPinyin_;
+    QHash<QString, QVector<PinyinCandidate>> phrasePinyin_;
+    void loadPinyinDictionaries();
+    QTextToSpeech speech_;
+    QProcess speechProcess_;
+    QSoundEffect *speechSound_ = nullptr;
+    enum SpeechEngine { SpeechNone, SpeechFlite, SpeechEspeak };
+    SpeechEngine speechEngine_ = SpeechNone;
+    QString speechWavePath_;
+    int speechSerial_ = 0;
+    void playSpeechWave(const QString &path);
+    void bindDefaultAudioOutput();
+    void finishSpeechAudio();
+    QProcess musicCliProcess_;
+    MusicPlayback musicPlayback_;
+    QString musicCliAction_, musicCliOutput_, musicCliError_, musicCliSearchType_;
+    QVariantList musicCliTracks_;
+    QVariantMap musicCliPlaybackState_;
+    QString musicCliPlaylistId_;
+    int musicCliPlaylistOffset_ = 0, musicCliPlaylistTotal_ = 0;
+    bool musicCliAuthenticated_ = false;
+    bool musicNetworkOnline_ = false;
+    QNetworkAccessManager musicNetworkManager_;
+    QTimer musicNetworkProbeTimer_;
+    void probeMusicNetwork();
+    QTimer speechTimeout_;
+    QString speechProgram_, pendingSpeech_;
+    bool qtChineseVoice_ = false;
+    void startPendingSpeech();
+    // flite 中文引擎：外部进程 + 音色单元目录；不可用时静默回退旧引擎。
+    QStringList ttsDataRoots() const;
+    QString voiceUnitsDir(const QString &id) const;
+    QString voiceBankFile(const QString &id) const;
+    QString englishVoiceFile() const;
+    QString fliteDataDir() const;
+    QString fliteBinary() const;
+    bool fliteReady(const QString &id) const;
+    mutable QHash<QString, bool> voiceReadyCache_;
+    QStringList logs_;
+    QSettings settings_;
+    QBluetoothLocalDevice bluetooth_;
+    QVariantMap deviceStatus_;
+    bool hotspotBusy_ = false;
+    bool powerActionBusy_ = false;
+    bool hotspotActive_ = false, hotspotKnown_ = false, hotspotQueryBusy_ = false;
+    QSet<QString> hotspotLeases_;
+    QSet<QString> pendingHotspotLeases_;
+    bool hotspotOpenedByTerminal_ = false;
+    bool hotspotUserPinned_ = false;
+    void queryHotspot(std::function<void(bool, bool)> done = {});
+    void setHotspot(bool enabled, std::function<void(bool, bool)> done = {});
+    void processHotspotLeaseRequests();
+    void completeHotspotLeaseRequests(bool ready);
+    QString hotspotOwnershipMarker() const;
+    void setHotspotOwnershipMarker(bool owned);
+    mutable QUrl sampledWallpaper_;
+    mutable QImage wallpaperSample_;
+    QString safePath(const QString &relative, bool creating = false) const;
+    mutable QHash<QString, QVariantMap> localMusicMetadataCache_;
+    bool prepareMusicCliProcess();
+};

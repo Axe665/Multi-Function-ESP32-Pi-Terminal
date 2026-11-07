@@ -13,12 +13,26 @@ void pbrControl() {
         {"boot_id", "0123456789abcdef0123456789abcdef"},
         {"session_id", "fedcba9876543210fedcba9876543210"},
         {"uptime_ms", 1000}, {"event_id", 5}, {"ttl_ms", 3000}};
+    // §6.4：bridge_id 与已认证身份逐字节比对。空 expected = 还没有认证身份，不比对。
+    require(PbrControl::bridgeIdMatches(QString(), QStringLiteral("bridge-1")),
+            "no authenticated identity yet: must not compare");
+    require(PbrControl::bridgeIdMatches(QStringLiteral("bridge-1"), QStringLiteral("bridge-1")),
+            "same bridge_id must pass");
+    require(!PbrControl::bridgeIdMatches(QStringLiteral("bridge-1"), QStringLiteral("bridge-2")),
+            "different bridge_id must be rejected");
+    require(!PbrControl::bridgeIdMatches(QStringLiteral("bridge-1"), QString()),
+            "missing bridge_id must be rejected once identity is bound");
+    // 不做大小写/空白归一化：bridge_id 是身份字段，宽松匹配等于放宽身份。
+    require(!PbrControl::bridgeIdMatches(QStringLiteral("bridge-1"), QStringLiteral("BRIDGE-1")),
+            "bridge_id compare must be case sensitive");
+
     auto with = [&](const QJsonObject &extra) { QJsonObject e = base; for (auto it = extra.begin(); it != extra.end(); ++it) e[it.key()] = it.value(); return e; };
 
     require(PbrControl::validate({{"event", "attach"}, {"module_id", 80}, {"module_instance", "m-1"},
-        {"module_config", QJsonObject{}}}).verdict == Verdict::Legacy, "schema-less attach is legacy");
-    require(PbrControl::validate({{"event", "detach"}, {"module_id", 80}, {"module_instance", "m-1"}}).verdict == Verdict::Legacy,
-            "schema-less detach is legacy");
+        {"module_config", QJsonObject{}}}).verdict == Verdict::Rejected,
+            "schema-less attach is rejected after T-07");
+    require(PbrControl::validate({{"event", "detach"}, {"module_id", 80}, {"module_instance", "m-1"}}).verdict == Verdict::Rejected,
+            "schema-less detach is rejected after T-07");
     require(PbrControl::validate({{"event", "rfid_card"}, {"module_id", 80}, {"module_instance", "m-1"}}).verdict == Verdict::Rejected,
             "schema-less rfid rejected");
     require(PbrControl::validate(with({{"event", "attach"}, {"module_id", 80}, {"module_instance", "m-1"},

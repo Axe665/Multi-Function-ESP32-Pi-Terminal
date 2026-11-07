@@ -1,6 +1,11 @@
 #include "ModuleManager.h"
 
 #include "core/ModuleWorkerClient.h"
+#include "core/WorkerIpc.h"
+#include "core/AppNetworkBroker.h"
+#include "core/FileApiBroker.h"
+#include "core/NetworkGate.h"
+#include "modules/api/pi_module_api.h"
 
 #include <QDir>
 #include <QFile>
@@ -19,6 +24,10 @@ bool ModuleManager::inProcessMode() {
 
 ModuleManager::~ModuleManager() {
     for (const auto &key : instances_.keys()) unload(key);
+    delete appNetworkBroker_;
+    appNetworkBroker_ = nullptr;
+    delete fileApiBroker_;
+    fileApiBroker_ = nullptr;
 }
 
 namespace {
@@ -36,6 +45,16 @@ bool verifyManifest(const QJsonObject &m, int id, const QString &directory, QStr
         || m.value("qt_major").toInt() != 6
         || m.value("unload_contract").toString() != QLatin1String("synchronous-stop-v1"))
         return fail(QStringLiteral("manifest incompatible"));
+    // 平台 API 强制声明：所有模块都必须接入网络控制（至少声明 none），
+    // 老 manifest 没有 platform_api/network_api，直接拒绝，不做兼容回退。
+    const int platformApi = m.value(QStringLiteral("platform_api")).toInt(-1);
+    const QString networkApi = m.value(QStringLiteral("network_api")).toString();
+    const QString fileApi = m.value(QStringLiteral("file_api")).toString(QStringLiteral("none"));
+    if (platformApi != 1
+        || (networkApi != QLatin1String("broker") && networkApi != QLatin1String("none"))
+        || (fileApi != QLatin1String("none") && fileApi != QLatin1String("home-read"))) {
+        return fail(QStringLiteral("platform/network/file API declaration missing or unsupported"));
+    }
     // 页面 schema 版本：宿主在加载前就要拒绝不兼容页面，
     // 而不是等 QML 运行时报一堆绑定错误。缺省视为 1（存量模块兼容）。
     const int pageSchema = m.value("qml_schema_version").toInt(1);
@@ -102,13 +121,15 @@ bool ModuleManager::load(const QString &session, int id, const QString &director
         }
         auto version = reinterpret_cast<uint32_t (*)()>(i->library->resolve("pi_module_api_version"));
         auto embedded = reinterpret_cast<const char *(*)()>(i->library->resolve("pi_module_manifest_json"));
-        if (version() != 1 || QJsonDocument::fromJson(embedded()).object() != m) {
+        if (version() != PI_MODULE_API_VERSION || QJsonDocument::fromJson(embedded()).object() != m) {
             i->library->unload();
             delete i->library;
             return fail(QStringLiteral("embedded manifest/ABI differs"));
         }
-        i->services = {1, i.data(), sendControl, sendData, publishAction, publishEvent, dataDirectory,
-                       [](int, const char *s) { qInfo("plugin: %s", s ? s : ""); }, emitEvent};
+        i->services = {PI_MODULE_API_VERSION, i.data(), sendControl, sendData, publishAction,
+                       publishEvent, dataDirectory,
+                       [](int, const char *s) { qInfo("plugin: %s", s ? s : ""); }, emitEvent,
+                       nullptr, nullptr};
         auto create = reinterpret_cast<pi_module_handle_t *(*)(const pi_host_services_t *)>(
             i->library->resolve("pi_module_create"));
         i->handle = create(&i->services);
@@ -135,6 +156,53 @@ bool ModuleManager::load(const QString &session, int id, const QString &director
             [this, session](int code) {
         // worker 崩溃不得带崩宿主：只报告，由上层决定是否重连。
         emit error(session, QStringLiteral("worker exited with code %1").arg(code));
+    });
+    if (!appNetworkBroker_ && networkGate_) {
+        appNetworkBroker_ = new AppNetworkBroker(
+            [this](const QString &instance) {
+                return networkGate_ && networkGate_->moduleNetworkAllowed(instance);
+            }, this);
+    }
+    const QString packageId = m.value(QStringLiteral("id")).toString();
+    i->worker->setAppRequestHandler([this, session, packageId](const QJsonObject &body) {
+        QJsonObject result;
+        auto fail = [&result](const QString &message) {
+            result.insert(QStringLiteral("response"),
+                          QString::fromUtf8(QJsonDocument(QJsonObject{
+                              {QStringLiteral("ok"), false}, {QStringLiteral("error"), message}})
+                              .toJson(QJsonDocument::Compact)));
+            return result;
+        };
+        const QString kind = body.value(QStringLiteral("kind")).toString();
+        const QJsonDocument request = QJsonDocument::fromJson(
+            body.value(QStringLiteral("payload")).toString().toUtf8());
+        if (!request.isObject()) return fail(QStringLiteral("bad request"));
+
+        if (kind == QLatin1String("network")) {
+            if (!appNetworkBroker_) return fail(QStringLiteral("network broker unavailable"));
+            const QJsonObject response = appNetworkBroker_->requestSync(session, request.object());
+            result.insert(QStringLiteral("response"),
+                          QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Compact)));
+            return result;
+        }
+        if (kind == QLatin1String("file")) {
+            if (!networkGate_ || !networkGate_->moduleFileAllowed(session))
+                return fail(QStringLiteral("file access denied"));
+            if (!fileApiBroker_) fileApiBroker_ = new FileApiBroker(this);
+            const QString appRoot = fileApiBroker_->appDataRoot(packageId);
+            QJsonObject payload = request.object();
+            const QString op = payload.value(QStringLiteral("op")).toString();
+            payload.insert(QStringLiteral("appId"), packageId);
+            payload.insert(QStringLiteral("appRoot"), appRoot);
+            if (op == QLatin1String("write") || op == QLatin1String("mkdir")
+                || op == QLatin1String("rename") || op == QLatin1String("remove"))
+                payload.insert(QStringLiteral("writeRoot"), appRoot);
+            const QJsonObject response = fileApiBroker_->requestSync(op, payload);
+            result.insert(QStringLiteral("response"),
+                          QString::fromUtf8(QJsonDocument(response).toJson(QJsonDocument::Compact)));
+            return result;
+        }
+        return fail(QStringLiteral("unknown app request"));
     });
 
     const QString libraryPath = QFileInfo(directory + '/' + m.value("library").toString()).canonicalFilePath();
@@ -281,4 +349,36 @@ void ModuleManager::emitEvent(void *c, const char *type, const char *json) {
     auto *i = static_cast<Instance *>(c);
     if (i && !i->stopping && type && json && QThread::currentThread() == i->owner->thread())
         emit i->owner->event(i->session, QString::fromUtf8(type), QString::fromUtf8(json));
+}
+
+QVariantMap ModuleManager::workerInfo() const
+{
+    QVariantMap out;
+    out.insert(QStringLiteral("inProcessFallback"), inProcessMode());
+    out.insert(QStringLiteral("ipcSchema"), QString::fromLatin1(WorkerIpc::Schema));
+    out.insert(QStringLiteral("ipcMaxMessageBytes"), WorkerIpc::kMaxMessageBytes);
+    out.insert(QStringLiteral("ipcTimeoutMs"), WorkerIpc::kTimeoutMs);
+    out.insert(QStringLiteral("ipcMaxInFlight"), WorkerIpc::kMaxInFlight);
+    out.insert(QStringLiteral("unitTemplate"), QStringLiteral("orange-pi-worker@<session>.service"));
+    QVariantMap sessions;
+    for (auto it = instances_.begin(); it != instances_.end(); ++it) {
+        const Instance &inst = *it.value();
+        QVariantMap info;
+        info.insert(QStringLiteral("mode"), inst.worker
+                    ? (inst.worker->degraded() ? QStringLiteral("degraded") : QStringLiteral("systemd"))
+                    : (inst.library ? QStringLiteral("in-process") : QStringLiteral("none")));
+        info.insert(QStringLiteral("running"), inst.worker ? inst.worker->isRunning() : inst.handle != nullptr);
+        info.insert(QStringLiteral("degraded"), inst.worker ? inst.worker->degraded() : false);
+        info.insert(QStringLiteral("session"), inst.session);
+        info.insert(QStringLiteral("directory"), inst.directory);
+        info.insert(QStringLiteral("errorCode"), inst.worker ? inst.worker->errorCode() : QString());
+        info.insert(QStringLiteral("lastError"), inst.worker ? inst.worker->lastError() : QString());
+        if (inst.worker) {
+            info.insert(QStringLiteral("socket"),
+                        WorkerIpc::socketPath(inst.worker->sessionName()));
+        }
+        sessions.insert(it.key(), info);
+    }
+    out.insert(QStringLiteral("sessions"), sessions);
+    return out;
 }

@@ -46,6 +46,34 @@ private slots:
         QCOMPARE(b.toHex(), expectedShared.toHex());
     }
 
+    // §3.0/§3.3/§3.4：带长度前缀的元件拼接必须与官方 T2/T3 逐字节一致。
+    void transcriptMatchesOfficialVector()
+    {
+        const QJsonObject h = vectors_.value("handshake").toObject();
+        const QByteArray elemReq = PbrHandshake::element(QByteArrayLiteral("pbr_hello_req"),
+                                                         hex(h.value("msg1_body")));
+        const QByteArray elemResp = PbrHandshake::element(QByteArrayLiteral("pbr_hello_resp"),
+                                                          hex(h.value("msg2_body")));
+        const QByteArray elemFinish = PbrHandshake::element(QByteArrayLiteral("pbr_hello_finish"),
+                                                            hex(h.value("msg3_body")));
+        QCOMPARE(elemReq.size(), 67);
+        QCOMPARE(elemResp.size(), 73);
+        QCOMPARE(elemFinish.size(), 86);
+        QCOMPARE((elemReq + elemResp).size(), 140);
+        QCOMPARE((elemReq + elemResp + elemFinish).size(), 226);
+        QCOMPARE((elemReq + elemResp).toHex(), hex(h.value("t2")).toHex());
+        QCOMPARE((elemReq + elemResp + elemFinish).toHex(), hex(h.value("t3")).toHex());
+    }
+
+    // 每次握手的临时私钥必须新生成且能推出对应公钥。
+    void ephemeralKeyIsUsable()
+    {
+        const QByteArray priv = PbrHandshake::generatePrivateKey();
+        QCOMPARE(priv.size(), 32);
+        QCOMPARE(PbrHandshake::publicKeyOf(priv).size(), 32);
+        QVERIFY(priv != PbrHandshake::generatePrivateKey());
+    }
+
     // §4：HKDF 派生 96 字节并切成三个方向密钥 + session_id + nonce_prefix。
     void hkdfDerivationMatchesOfficialVector()
     {

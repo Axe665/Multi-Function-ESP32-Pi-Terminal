@@ -44,6 +44,8 @@ QtObject {
     readonly property color accentInk: "#081b29"
     readonly property color disabledSurface: "#182a3c"
     readonly property color disabledText: "#b6c8db"
+    readonly property color danger: "#ffb4ab"
+    readonly property color dangerContainer: "#8c1d18"
     readonly property color warning: "#ffdaa0"
     readonly property color outline: "#6e9abb"
     readonly property color outlineVariant: "#3b536a"

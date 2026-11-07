@@ -1,0 +1,329 @@
+#include "security/UserService.h"
+#include "security/RecoveryCode.h"
+
+#include "security/KeyWrap.h"
+#include "security/PinPolicy.h"
+
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QRandomGenerator>
+#include <QRegularExpression>
+#include <QSaveFile>
+#include <QStandardPaths>
+
+namespace security {
+
+
+namespace {
+
+QString defaultRegistryPath() {
+    return QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)
+        + QStringLiteral("/users.json");
+}
+
+QString newUserId() {
+    QByteArray raw(16, Qt::Uninitialized);
+    for (int i = 0; i < raw.size(); ++i) raw[i] = static_cast<char>(QRandomGenerator::system()->bounded(256));
+    // 不透明 ID：不含用户名，也不表达创建顺序。
+    return QString::fromLatin1(raw.toHex());
+}
+
+QByteArray newDbKey() {
+    QByteArray key(KeyWrap::kKeyBytes, Qt::Uninitialized);
+    for (int i = 0; i < key.size(); ++i) key[i] = static_cast<char>(QRandomGenerator::system()->bounded(256));
+    return key;
+}
+
+QJsonObject toJson(const UserRecord &record) {
+    return {{"user_id", record.userId},
+            {"display_name", record.displayName},
+            {"admin", record.admin},
+            {"disabled", record.disabled},
+            {"avatar", record.avatar},
+            {"lock_timeout_minutes", record.lockTimeoutMinutes},
+            {"salt", QString::fromLatin1(record.salt.toBase64())},
+            {"verifier", QString::fromLatin1(record.verifier.toBase64())},
+            {"wrapped_db_key", QString::fromLatin1(record.wrappedDbKey.toBase64())},
+            {"db_key_nonce", QString::fromLatin1(record.dbKeyNonce.toBase64())},
+            {"iterations", record.iterations},
+            // 恢复路径：只存 REK 封装后的密文，永不存恢复码本身。
+            {"recovery_salt", QString::fromLatin1(record.recoverySalt.toBase64())},
+            {"wrapped_db_key_by_code",
+             QString::fromLatin1(record.wrappedDbKeyByCode.toBase64())},
+            {"db_key_by_code_nonce", QString::fromLatin1(record.dbKeyByCodeNonce.toBase64())},
+            {"has_recovery_code", record.hasRecoveryCode}};
+}
+
+UserRecord fromJson(const QJsonObject &object) {
+    UserRecord record;
+    record.userId = object.value("user_id").toString();
+    record.displayName = object.value("display_name").toString();
+    record.admin = object.value("admin").toBool();
+    record.disabled = object.value("disabled").toBool();
+    record.avatar = object.value("avatar").toString();
+    record.lockTimeoutMinutes = object.value("lock_timeout_minutes").toInt(-1);
+    record.salt = QByteArray::fromBase64(object.value("salt").toString().toLatin1());
+    record.verifier = QByteArray::fromBase64(object.value("verifier").toString().toLatin1());
+    record.wrappedDbKey = QByteArray::fromBase64(object.value("wrapped_db_key").toString().toLatin1());
+    record.dbKeyNonce = QByteArray::fromBase64(object.value("db_key_nonce").toString().toLatin1());
+    record.iterations = object.value("iterations").toInt();
+    record.recoverySalt = QByteArray::fromBase64(object.value("recovery_salt").toString().toLatin1());
+    record.wrappedDbKeyByCode = QByteArray::fromBase64(
+        object.value("wrapped_db_key_by_code").toString().toLatin1());
+    record.dbKeyByCodeNonce = QByteArray::fromBase64(
+        object.value("db_key_by_code_nonce").toString().toLatin1());
+    record.hasRecoveryCode = object.value("has_recovery_code").toBool();
+    return record;
+}
+
+}  // namespace
+
+UserService::UserService(QString registryPath)
+    : registryPath_(registryPath.isEmpty() ? defaultRegistryPath() : std::move(registryPath)) {}
+
+QString UserService::path() const { return registryPath_; }
+
+QList<UserRecord> UserService::load() const {
+    QFile file(registryPath_);
+    if (!file.open(QIODevice::ReadOnly)) return {};
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    QList<UserRecord> records;
+    for (const QJsonValue &value : document.object().value("users").toArray()) {
+        UserRecord record = fromJson(value.toObject());
+        // 缺字段的记录直接丢弃，不做猜测修复。
+        if (record.userId.isEmpty() || record.salt.size() != PinPolicy::kSaltBytes
+            || record.verifier.isEmpty() || record.iterations < 1)
+            continue;
+        records.append(record);
+    }
+    return records;
+}
+
+bool UserService::save(const QList<UserRecord> &records) const {
+    QJsonArray users;
+    for (const UserRecord &record : records) users.append(toJson(record));
+    const QJsonDocument document(QJsonObject{{"schema", "p0-users-v1"}, {"users", users}});
+
+    QDir().mkpath(QFileInfo(registryPath_).absolutePath());
+    QSaveFile file(registryPath_);
+    if (!file.open(QIODevice::WriteOnly)) return false;
+    if (!file.setPermissions(QFile::ReadOwner | QFile::WriteOwner)) return false;
+    if (file.write(document.toJson(QJsonDocument::Compact)) < 0) {
+        file.cancelWriting();
+        return false;
+    }
+    if (!file.commit()) return false;
+    QFile::setPermissions(registryPath_, QFile::ReadOwner | QFile::WriteOwner);
+    return true;
+}
+
+bool UserService::hasAnyUser() const { return !load().isEmpty(); }
+
+bool UserService::hasAdminUser() const {
+    for (const UserRecord &record : load())
+        if (record.admin && !record.disabled) return true;
+    return false;
+}
+
+QString UserService::createInitialAdmin(const QString &displayName, const QString &pin,
+                                        const QString &recoveryCode) {
+    // 只要还有可用的管理员就拒绝（删文件重建管理员的路子走不通）。
+    // 但最后一名管理员被删掉后必须允许重新初始化，哪怕还留着普通用户。
+    if (hasAdminUser()) return {};
+    return createUser({}, displayName, pin, true, recoveryCode);
+}
+
+QString UserService::createUser(const QString &actorUserId, const QString &displayName,
+                                const QString &pin, bool admin, const QString &recoveryCode) {
+    QList<UserRecord> records = load();
+    // actorUserId 为空只允许"首次初始化"路径；其余必须由管理员发起。
+    if (!records.isEmpty()) {
+        if (actorUserId.isEmpty()) {
+            // 空 actor 只在"没有任何管理员"时合法：这是接管路径；
+            // 还有管理员就必须由管理员发起。
+            if (hasAdminUser()) return {};
+        } else {
+        bool actorIsAdmin = false;
+        for (const UserRecord &record : records) {
+            if (record.userId == actorUserId) actorIsAdmin = record.admin && !record.disabled;
+        }
+        if (!actorIsAdmin) return {};
+        }
+    }
+    if (displayName.trimmed().isEmpty() || !PinPolicy::validPin(pin)) return {};
+
+    UserRecord record;
+    record.userId = newUserId();
+    record.displayName = displayName.trimmed();
+    record.admin = admin;
+    record.iterations = PinPolicy::kProductionIterations;
+    record.salt = PinPolicy::salt16();
+    const QByteArray kek = PinPolicy::deriveKek(pin, record.salt, record.iterations);
+    if (kek.isEmpty()) return {};
+    record.verifier = PinPolicy::verifyValue(kek);
+    const QByteArray dbKey = newDbKey();
+    record.wrappedDbKey = KeyWrap::seal(kek, dbKey, &record.dbKeyNonce);
+    if (record.wrappedDbKey.isEmpty()) return {};
+
+    // 恢复路径：与 PIN 完全独立的第二层封装。传空则明确标记"无恢复路径"，
+    // 由界面提示用户"丢 PIN 即丢数据"，不假装已可恢复。
+    if (!recoveryCode.isEmpty()) {
+        if (!RecoveryCode::isValidFormat(recoveryCode)) return {};
+        record.recoverySalt = RecoveryCode::randomSalt();
+        const QByteArray rek = RecoveryCode::deriveKey(recoveryCode, record.recoverySalt);
+        if (rek.size() != 32) return {};
+        record.wrappedDbKeyByCode = RecoveryCode::wrap(dbKey, rek, &record.dbKeyByCodeNonce);
+        if (record.wrappedDbKeyByCode.isEmpty()) return {};
+        record.hasRecoveryCode = true;
+    }
+
+    records.append(record);
+    if (!save(records)) return {};
+    return record.userId;
+}
+
+bool UserService::openWithRecoveryCode(const QString &userId, const QString &recoveryCode,
+                                        QByteArray *dbKeyOut) const {
+    if (!dbKeyOut) return false;
+    UserRecord record;
+    if (!lookup(userId, &record) || record.disabled) return false;
+    if (!record.hasRecoveryCode || record.recoverySalt.isEmpty()) return false;
+    if (!RecoveryCode::isValidFormat(recoveryCode)) return false;
+
+    const QByteArray rek = RecoveryCode::deriveKey(recoveryCode, record.recoverySalt);
+    if (rek.size() != 32) return false;
+    const QByteArray dbKey = RecoveryCode::unwrap(record.wrappedDbKeyByCode, rek,
+                                                  record.dbKeyByCodeNonce);
+    if (dbKey.size() != 32) return false;   // 恢复码错或密文损坏
+    *dbKeyOut = dbKey;
+    return true;
+}
+
+bool UserService::setRecoveryCode(const QString &userId, const QByteArray &dbKey,
+                                  const QString &recoveryCode) {
+    if (dbKey.size() != 32 || !RecoveryCode::isValidFormat(recoveryCode)) return false;
+    QList<UserRecord> records = load();
+    for (UserRecord &record : records) {
+        if (record.userId != userId) continue;
+        record.recoverySalt = RecoveryCode::randomSalt();
+        const QByteArray rek = RecoveryCode::deriveKey(recoveryCode, record.recoverySalt);
+        if (rek.size() != 32) return false;
+        record.wrappedDbKeyByCode = RecoveryCode::wrap(dbKey, rek, &record.dbKeyByCodeNonce);
+        if (record.wrappedDbKeyByCode.isEmpty()) return false;
+        record.hasRecoveryCode = true;
+        return save(records);
+    }
+    return false;
+}
+
+bool UserService::hasRecoveryCode(const QString &userId) const {
+    UserRecord record;
+    return lookup(userId, &record) && record.hasRecoveryCode;
+}
+
+bool UserService::disableUser(const QString &actorUserId, const QString &targetUserId) {
+    QList<UserRecord> records = load();
+    bool actorIsAdmin = false;
+    for (const UserRecord &record : records) {
+        if (record.userId == actorUserId) actorIsAdmin = record.admin && !record.disabled;
+    }
+    if (!actorIsAdmin) return false;
+    for (UserRecord &record : records) {
+        if (record.userId != targetUserId) continue;
+        if (record.userId == actorUserId) return false;  // 不得停用自己
+        record.disabled = true;
+        return save(records);
+    }
+    return false;
+}
+
+bool UserService::setLockTimeout(const QString &userId, int minutes) {
+    static const QList<int> allowed{0, 1, 2, 5, 10, 15, 30};
+    if (userId.isEmpty() || !allowed.contains(minutes)) return false;
+    QList<UserRecord> records = load();
+    for (UserRecord &record : records) {
+        if (record.userId != userId) continue;
+        record.lockTimeoutMinutes = minutes;
+        return save(records);
+    }
+    return false;
+}
+
+bool UserService::removeRecord(const QString &userId) {
+    if (userId.isEmpty()) return false;
+    QList<UserRecord> records = load();
+    for (int i = 0; i < records.size(); ++i) {
+        if (records.at(i).userId != userId) continue;
+        records.removeAt(i);
+        return save(records);
+    }
+    return false;
+}
+
+bool UserService::setDisplayName(const QString &userId, const QString &displayName) {
+    const QString name = displayName.trimmed();
+    // 与创建用户时的约束保持一致：2..24 个字符。
+    if (name.size() < 2 || name.size() > 24) return false;
+    QList<UserRecord> records = load();
+    for (UserRecord &record : records) {
+        if (record.userId != userId) continue;
+        if (record.displayName == name) return true;
+        record.displayName = name;
+        return save(records);
+    }
+    return false;
+}
+
+bool UserService::setAvatar(const QString &userId, const QString &fileName) {
+    // 头像名会参与拼路径，因此这里只接受纯文件名；调用方已把文件放进 avatars/。
+    if (!fileName.isEmpty()) {
+        static const QRegularExpression allowed(QStringLiteral("^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$"));
+        if (fileName != QFileInfo(fileName).fileName()
+            || fileName.contains(QLatin1Char('/'))
+            || fileName.contains(QLatin1Char('\\'))
+            || !allowed.match(fileName).hasMatch())
+            return false;
+    }
+    QList<UserRecord> records = load();
+    for (UserRecord &record : records) {
+        if (record.userId != userId) continue;
+        record.avatar = fileName;
+        return save(records);
+    }
+    return false;
+}
+
+QList<UserService::PublicUser> UserService::listUsers() const {
+    QList<PublicUser> users;
+    for (const UserRecord &record : load()) {
+        users.append({record.userId, record.displayName, record.admin, record.disabled,
+                      record.avatar, record.lockTimeoutMinutes});
+    }
+    return users;
+}
+
+bool UserService::lookup(const QString &userId, UserRecord *out) const {
+    if (!out) return false;
+    for (const UserRecord &record : load()) {
+        if (record.userId != userId) continue;
+        *out = record;
+        return true;
+    }
+    return false;
+}
+
+bool UserService::replaceRecord(const UserRecord &record) {
+    QList<UserRecord> records = load();
+    for (UserRecord &existing : records) {
+        if (existing.userId != record.userId) continue;
+        existing = record;
+        return save(records);
+    }
+    return false;
+}
+
+}  // namespace security

@@ -1,0 +1,30 @@
+Qt 6.5.3 source/build changes applied on this machine
+=====================================================
+Source: /home/yuanzingo/qt653-src/qt-everywhere-src-6.5.3
+
+1) qtwebengine/src/3rdparty/chromium/third_party/six/src/six.py
+   Replaced vendored six 1.14.0 with system six 1.16.0 from
+   /usr/lib/python3/dist-packages/six.py
+   Reason: six 1.14's six.moves importer fails on Python 3.12.
+
+2) qtwebengine/src/3rdparty/chromium/mojo/public/tools/mojom/mojom/fileutil.py
+   Removed unused "import imp" (Python 3.12 removed imp).
+
+3) qtwebengine/src/3rdparty/chromium/third_party/catapult/common/py_vulcanize/py_vulcanize/parse_html_deps.py
+   Changed bs4.BeautifulSoup(html, 'html5lib') to 'html.parser'
+   Reason: vendored beautifulsoup4 4.9.3 cannot find html5lib.
+
+4) qt653-build/build.ninja
+   Nested QtWebEngineCore / QtPdf ninja command changed from -j4 to -j8.
+   If CMake regenerates build.ninja, re-apply:
+     /usr/bin/ninja -j8 -C .../qtwebengine/src/core/Release/aarch64 QtWebEngineCore
+     /usr/bin/ninja -j8 -C .../qtwebengine/src/pdf/Release/aarch64 QtPdf
+
+5) Pi sysroot changes (in 04-pi-sysroot.tar.zst)
+   - removed all system Qt 6.4 cmake configs, libQt6*.so*, qt6 headers/plugins/qml
+   - converted absolute /lib/... symlinks to relative
+   - libdbus-1.so -> libdbus-1.so.3.32.4 (force shared, not .a)
+   - usr/lib/pkgconfig -> aarch64-linux-gnu/pkgconfig (Chromium pkg-config.py)
+
+Python 3.12 imp shim:
+   /home/yuanzingo/pyshim/imp.py (in handover-extra/pyshim)

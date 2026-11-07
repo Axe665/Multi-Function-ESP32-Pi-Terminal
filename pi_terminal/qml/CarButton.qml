@@ -9,7 +9,8 @@ Button {
     property color buttonColor: !enabled ? Theme.disabledSurface : down ? Theme.pressed : accent || checked ? Theme.accent : Theme.raised
     property color textColor: Theme.textOn(buttonColor)
     property real fontPixelSize: -1
-    font.pointSize: fontPixelSize > 0 ? fontPixelSize * 72 / (Screen.logicalPixelDensity * 25.4) : Theme.body
+    font.pointSize: fontPixelSize > 0
+        ? Math.max(12, fontPixelSize) * 72 / (Screen.logicalPixelDensity * 25.4) : Theme.body
     leftPadding: Theme.gap; rightPadding: Theme.gap
     topPadding: Theme.gap; bottomPadding: Theme.gap
     implicitHeight: Math.max(Theme.hit, contentItem.implicitHeight + topPadding + bottomPadding)

@@ -5,6 +5,13 @@
 
 namespace security {
 
+void warmUpSqlite()
+{
+    // 只做初始化，不开库、不碰用户数据。
+    // 放在事件循环启动之前调用最安全：那时还没有别的线程在用 SQLite。
+    sqlite3_initialize();
+}
+
 
 SqlCipherStore::SqlCipherStore() = default;
 

@@ -48,7 +48,9 @@ int TerminalRuntime::run() {
             qCritical("Invalid window size (minimum 320x320 logical pixels)");
             return 2;
         }
-        window->resize(parts[0].toInt(), parts[1].toInt());
+        const int targetW = parts[0].toInt();
+        const int targetH = parts[1].toInt();
+        QTimer::singleShot(100, window, [window, targetW, targetH] { window->resize(targetW, targetH); });
     }
     if (window && !options_.isSet("window-size") && !options_.isSet("ui-audit") &&
         !options_.isSet("ui-test"))
@@ -103,7 +105,25 @@ int TerminalRuntime::run() {
         !options_.isSet("notification-layout-test") && !options_.isSet("notification-banner-test") &&
         !options_.isSet("app-drawer-test")) {
         QTimer::singleShot(200, &connection, [&connection] {
-            connection.attach({{"event", "attach"}, {"module_id", 80},
+            // T-07 之后 HostEventDetector 只接受 p0-control-v1；这里的演示事件
+            // 必须补齐 schema/bridge_id/boot_id/session_id/ttl 等字段，否则会被
+            // 静默丢弃（此前 demo 路径就是这样失效的）。
+            const auto hex32 = [](quint32 seed) {
+                return QStringLiteral("%1").arg(seed, 32, 16, QLatin1Char('0'));
+            };
+            connection.attach({{"schema", "p0-control-v1"},
+                               {"event", "attach"},
+                               {"bridge_id", "bridge-demo"},
+                               {"key_id", "00"},
+                               {"boot_id", hex32(1)},
+                               {"session_id", hex32(2)},
+                               {"uptime_ms", 0},
+                               {"event_id", 1},
+                               {"ttl_ms", 3000},
+                               {"slot_id", 0},
+                               {"binding_generation", hex32(3)},
+                               {"device_id", "demo-device"},
+                               {"module_id", 80},
                                {"module_instance", "desktop-demo"},
                                {"module_config", QJsonObject{{"schema", "module-transport-v1"},
                                    {"transport_mode", "fixed_hotspot_lan"}, {"package_transport", "data"}}}});

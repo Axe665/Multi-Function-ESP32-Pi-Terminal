@@ -1,5 +1,11 @@
 #include "core/ModulePageHost.h"
 
+#include "core/AppNetworkApi.h"
+#include "core/AppNetworkBroker.h"
+#include "core/FileApi.h"
+#include "core/FileApiBroker.h"
+#include "core/NetworkGate.h"
+
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QFile>
@@ -104,6 +110,28 @@ bool ModulePageHost::load(const QUrl &source, QObject *sessionModel, const QVari
     if (moduleDataApi_)
         context->setContextProperty(QStringLiteral("moduleData"), moduleDataApi_);
 
+    // 模块页的网络入口与 QML 引擎 NAM 工厂都绑定当前模块实例。
+    // 未设置实例/未授权时 broker 仍然存在，但一律拒绝（默认拒绝）。
+    if (!appNetworkBroker_) {
+        appNetworkBroker_ = new AppNetworkBroker(
+            [this](const QString &instance) {
+                return networkGate_ && networkGate_->moduleNetworkAllowed(instance);
+            }, this);
+    }
+    if (!appNetworkApi_) {
+        appNetworkApi_ = new AppNetworkApi(appNetworkBroker_, networkInstance_, this);
+    }
+    engine_->setNetworkAccessManagerFactory(appNetworkApi_->createNamFactory(engine_));
+    context->setContextProperty(QStringLiteral("appNetwork"), appNetworkApi_);
+    if (!fileApiBroker_) fileApiBroker_ = new FileApiBroker(this);
+    if (!fileApi_) {
+        fileApi_ = new FileApi(fileApiBroker_, networkGate_, networkInstance_,
+                               packageId_, this);
+        connect(fileApi_, &FileApi::writeAccessRequested, this,
+                &ModulePageHost::fileWriteAccessRequested);
+    }
+    context->setContextProperty(QStringLiteral("appFiles"), fileApi_);
+
     lastError_.clear();
 
     // §8.4：模块页不得 import 能访问文件/网络/设置的模块。
@@ -157,6 +185,9 @@ bool ModulePageHost::load(const QUrl &source, QObject *sessionModel, const QVari
 }
 
 void ModulePageHost::unload() {
+    if (fileApi_) fileApi_->clearWriteGrant();
+    if (fileApiBroker_ && !networkInstance_.isEmpty())
+        fileApiBroker_->revokeWrites(packageId_, false);
     if (page_) {
         delete page_;
         page_ = nullptr;
@@ -170,6 +201,36 @@ void ModulePageHost::unload() {
 
 void ModulePageHost::setModuleDataApi(QObject *api) {
     moduleDataApi_ = api;
+}
+
+void ModulePageHost::setNetworkGate(NetworkGate *gate) {
+    networkGate_ = gate;
+}
+
+void ModulePageHost::setNetworkInstance(const QString &instance) {
+    if (networkInstance_ == instance && appNetworkApi_) return;
+    unload();
+    networkInstance_ = instance;
+    delete appNetworkApi_;
+    appNetworkApi_ = nullptr;
+    delete appNetworkBroker_;
+    appNetworkBroker_ = nullptr;
+    delete fileApi_;
+    fileApi_ = nullptr;
+}
+
+void ModulePageHost::setPackageId(const QString &packageId) {
+    if (packageId_ == packageId) return;
+    packageId_ = packageId;
+    delete fileApi_;
+    fileApi_ = nullptr;
+}
+
+void ModulePageHost::grantFileWrite(const QString &path) {
+    if (!fileApiBroker_ || !fileApi_ || networkInstance_.isEmpty() || path.isEmpty()) return;
+    const QString token = fileApiBroker_->grantWrite(packageId_, path);
+    if (token.isEmpty()) return;
+    fileApi_->setWriteGrant(path, token);
 }
 
 void ModulePageHost::setContainer(QObject *container) {

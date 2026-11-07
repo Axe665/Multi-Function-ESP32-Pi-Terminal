@@ -15,6 +15,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QJSValue>
 #include "ui/TerminalUi.h"
 
@@ -52,6 +55,30 @@ public:
     }
 signals:
     void languageChanged();
+};
+
+// 生产路径把校时 HTTP 搬到了 C++ TimeSyncClient（QNAM + 34005 代理）。
+// 这个测试替身保留同一 Q_INVOKABLE 接口，让 QML 仍能对着本地桩服务器跑。
+class TestTimeSyncClient : public QObject {
+    Q_OBJECT
+public:
+    Q_INVOKABLE void fetch(const QString &url, int requestId) {
+        QNetworkRequest request{QUrl(url)};
+        auto *reply = network_.get(request);
+        connect(reply, &QNetworkReply::finished, this, [this, reply, requestId] {
+            const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            emit finished(requestId, status, QString::fromUtf8(reply->readAll()));
+            reply->deleteLater();
+        });
+    }
+    Q_INVOKABLE void abort(int) {}
+
+signals:
+    void finished(int requestId, int status, const QString &body);
+    void failed(int requestId, const QString &reason);
+
+private:
+    QNetworkAccessManager network_;
 };
 
 // Minimal worldtimeapi.org-shaped responder. Offsets intentionally differ from
@@ -311,6 +338,8 @@ private slots:
         TimeToolsHost host;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty("systemTools", &host);
+        TestTimeSyncClient client;
+        engine.rootContext()->setContextProperty("timeSyncClient", &client);
         QQmlComponent component(&engine, QUrl(QStringLiteral("qrc:/qt/qml/OrangePiTerminal/TimeSync.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> sync(component.create());
@@ -607,6 +636,8 @@ private slots:
         TimeToolsHost host;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty("systemTools", &host);
+        TestTimeSyncClient client;
+        engine.rootContext()->setContextProperty("timeSyncClient", &client);
         QQmlComponent component(&engine, QUrl(QStringLiteral("qrc:/qt/qml/OrangePiTerminal/TimeSync.qml")));
         QVERIFY2(component.isReady(), qPrintable(component.errorString()));
         QScopedPointer<QObject> sync(component.create());
@@ -631,6 +662,8 @@ private slots:
         TimeToolsHost host;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty("systemTools", &host);
+        TestTimeSyncClient client;
+        engine.rootContext()->setContextProperty("timeSyncClient", &client);
         QQmlComponent component(&engine, QUrl(QStringLiteral("qrc:/qt/qml/OrangePiTerminal/TimeSync.qml")));
         QScopedPointer<QObject> sync(component.create());
         QVERIFY(sync);
@@ -653,6 +686,8 @@ private slots:
         TimeToolsHost host;
         QQmlEngine engine;
         engine.rootContext()->setContextProperty("systemTools", &host);
+        TestTimeSyncClient client;
+        engine.rootContext()->setContextProperty("timeSyncClient", &client);
         QQmlComponent component(&engine, QUrl(QStringLiteral("qrc:/qt/qml/OrangePiTerminal/TimeSync.qml")));
         QScopedPointer<QObject> sync(component.create());
         QVERIFY(sync);
