@@ -18,6 +18,11 @@ constexpr auto Ok = "OK";
 constexpr auto Unavailable = "STORAGE_UNAVAILABLE";
 }  // namespace StorageCode
 
+// 启动期在主线程调用一次：SQLite 的全局初始化必须在单一线程里完整跑完。
+// 否则第一次 sqlite3_key 触发的 sqlcipher_activate 会重入 sqlite3_initialize
+// （它内部要拿一把普通 mutex），同一个线程自己等自己 —— 实测表现为登录永久卡死。
+void warmUpSqlite();
+
 class SqlCipherStore {
 public:
     SqlCipherStore();

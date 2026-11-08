@@ -1,0 +1,43 @@
+{
+ "coord": {
+  "lon": 113.5767,
+  "lat": 22.2707
+ },
+ "weather": [
+  {
+   "id": 801,
+   "main": "Clouds",
+   "description": "few clouds",
+   "icon": "02d"
+  }
+ ],
+ "base": "stations",
+ "main": {
+  "temp": 26.4,
+  "feels_like": 27.1,
+  "temp_min": 25.8,
+  "temp_max": 27.0,
+  "pressure": 1012,
+  "humidity": 78
+ },
+ "visibility": 10000,
+ "wind": {
+  "speed": 4.2,
+  "deg": 135
+ },
+ "clouds": {
+  "all": 20
+ },
+ "dt": 1793188800,
+ "sys": {
+  "type": 2,
+  "id": 2038571,
+  "country": "CN",
+  "sunrise": 1793174400,
+  "sunset": 1793210400
+ },
+ "timezone": 28800,
+ "id": 1790437,
+ "name": "Zhuhai",
+ "cod": 200
+}

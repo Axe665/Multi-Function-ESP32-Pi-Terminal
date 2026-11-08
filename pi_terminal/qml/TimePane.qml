@@ -16,6 +16,9 @@ Rectangle {
     property color accentColor: Theme.accent
     // true：撑满容器高度，正文内部滚动；false：按内容高度。
     property bool scrollBody: false
+    // true：这块卡片始终吃住垂直拖动（即使内部没有可滚内容），不再把手势传给外层整页。
+    property bool swallowVScroll: false
+    property real swallowLastY: 0
     // 卡片头部右上角的操作位（时间页的“报时”）。为空时不占位，其它页面头高不变。
     property Component headerAction: null
     // 卡片底部固定操作条（计时器的开始/重置）。放在正文 Flickable 之外，
@@ -48,6 +51,7 @@ Rectangle {
     // 正文占用的纵向预算：上边距 + 标题 + 半格间距在上，一格间距在下。隐式高度与
     // 内部 Flickable 用同一套账，否则单栏“按内容高”的卡片自己就会溢出半格。
     readonly property real bodyTop: headerHeight + Theme.gap * 1.5
+    // 底部至少留一个圆角半径：正文与滚动条不贴边，卡片底部圆角才不会被内容盖掉。
     readonly property real bodyBottomInset: Theme.gap
     implicitHeight: bodyTop + body.implicitHeight + footerHeight + bodyBottomInset
     // 单栏：卡片按内容高度，布局不得把它压小（压小会裁掉正文）。
@@ -125,7 +129,10 @@ Rectangle {
         objectName: card.objectName + "Body"
         x: Theme.gap
         y: card.bodyTop
-        width: Math.max(1, card.width - Theme.gap * 2)
+        // While a page is hidden its card can be temporarily 0-wide. A 1px
+        // column makes Qt's layout polish oscillate between wrapped text
+        // heights; keep a usable measuring width instead.
+        width: Math.max(48 * Theme.scaleFactor, card.width - Theme.gap * 2)
         height: card.scrollBody
                 ? Math.max(0, card.height - card.bodyTop - card.footerHeight - card.bodyBottomInset)
                 : body.implicitHeight
@@ -154,9 +161,10 @@ Rectangle {
         id: bodyFade
         objectName: card.objectName + "ScrollFade"
         visible: card.bodyScrollable && scroll.contentY < card.bodyMaxScroll - 1
-        x: scroll.x
-        width: scroll.width
-        height: Theme.gap * 2
+        // 只覆盖一小条，且左右内缩一个圆角半径，避免直角矩形盖住卡片圆角。
+        height: Theme.gap
+        x: scroll.x + Theme.shapeLarge / 2
+        width: Math.max(0, scroll.width - Theme.shapeLarge)
         y: scroll.y + Math.max(0, scroll.height - height)
         gradient: Gradient {
             GradientStop { position: 0; color: "transparent" }
@@ -176,6 +184,21 @@ Rectangle {
         anchors.bottomMargin: Theme.gap
         height: active && item ? item.implicitHeight : 0
         sourceComponent: card.footerAction
+    }
+
+    // 手势隔离层：天气的「未来 7 天」用它在卡片区域内滚自己的列表，
+    // 外层整页仍然可以滚（在别处拖）。
+    MouseArea {
+        anchors.fill: parent
+        enabled: card.swallowVScroll
+        preventStealing: true
+        onPressed: function(mouse) { card.swallowLastY = mouse.y }
+        onPositionChanged: function(mouse) {
+            const dy = card.swallowLastY - mouse.y
+            card.swallowLastY = mouse.y
+            const maxY = Math.max(0, scroll.contentHeight - scroll.height)
+            scroll.contentY = Math.max(0, Math.min(maxY, scroll.contentY + dy))
+        }
     }
 
     Rectangle {

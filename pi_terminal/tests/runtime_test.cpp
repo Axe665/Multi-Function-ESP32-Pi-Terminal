@@ -286,7 +286,16 @@ private slots:
     void bridgeSequenceValidation() {
         HostEventDetector detector;
         QSignalSpy events(&detector, &HostEventDetector::detected);
-        QJsonObject e{{"event", "attach"}, {"module_id", 80}, {"module_instance", "seq-test"},
+        // T-07 之后不再有 schema-less attach：HostEventDetector 会走
+        // PbrControl::validate 的完整 p0-control-v1 校验。
+        QJsonObject e{{"event", "attach"}, {"schema", "p0-control-v1"},
+                      {"bridge_id", "bridge-1"}, {"key_id", "a1"},
+                      {"boot_id", "0123456789abcdef0123456789abcdef"},
+                      {"session_id", "fedcba9876543210fedcba9876543210"},
+                      {"uptime_ms", 1000}, {"event_id", 1}, {"ttl_ms", 3000},
+                      {"module_id", 80},
+                      {"module_instance", "seq-test"}, {"slot_id", 0},
+                      {"binding_generation", "0123456789abcdef0123456789abcdef"},
                       {"module_config", QJsonObject{{"schema", "module-transport-v1"},
                           {"transport_mode", "fixed_hotspot_lan"}, {"package_transport", "data"}}}};
         for (double sequence : {-1.0, 0.0, 0.5, 4294967296.0}) {
@@ -383,6 +392,13 @@ private slots:
         SystemTools tools;
         const QString key = "time/test-" + QUuid::createUuid().toString(QUuid::WithoutBraces);
         QVERIFY(tools.settingsWrite(key, "{\"hour\":7}"));
+        const QString weatherKey = "weather/test-" + QUuid::createUuid().toString(QUuid::WithoutBraces);
+        QVERIFY(tools.settingsWrite(weatherKey, "{\"lat\":22.27}"));
+        QCOMPARE(tools.settingsRead(weatherKey, ""), QStringLiteral("{\"lat\":22.27}"));
+        // 应用卡片顺序由 AppLauncher 写入 layout/apps，同样受前缀白名单约束。
+        const QString layoutKey = "layout/test-" + QUuid::createUuid().toString(QUuid::WithoutBraces);
+        QVERIFY(tools.settingsWrite(layoutKey, "[\"browser\",\"files\"]"));
+        QCOMPARE(tools.settingsRead(layoutKey, ""), QStringLiteral("[\"browser\",\"files\"]"));
         QCOMPARE(tools.settingsRead(key, "fallback"), QStringLiteral("{\"hour\":7}"));
         QCOMPARE(tools.settingsRead(key + "-missing", "fallback"), QStringLiteral("fallback"));
         // 页面脚本拿不到信任记录与宿主偏好，也不能写空键或超长内容

@@ -11,7 +11,8 @@ Label {
     property real fontPixelSize: -1
     // Keep one font unit active. Explicit pixel-sized captions retain their
     // visual size without inheriting a conflicting pointSize from this type.
-    font.pointSize: fontPixelSize > 0 ? fontPixelSize * 72 / (Screen.logicalPixelDensity * 25.4)
+    font.pointSize: fontPixelSize > 0
+        ? Math.max(12, fontPixelSize) * 72 / (Screen.logicalPixelDensity * 25.4)
         : hero ? Theme.hero : heading ? Theme.title : Theme.body
     font.weight: heading || hero ? Font.DemiBold : Font.Normal
     color: {

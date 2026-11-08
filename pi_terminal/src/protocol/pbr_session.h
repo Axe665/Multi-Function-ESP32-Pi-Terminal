@@ -70,10 +70,21 @@ private:
 namespace EventTtl {
 constexpr int kExpectedTtlMs = 3000;
 // 允许的时钟偏差上限；超过判 EVENT_EXPIRED。
-constexpr int kMaxAgeMs = 3000;
+// Pi 3B 冷启动/模块枚举较慢，桥板 attach 常在握手后 3 秒以上才到；
+// 3 秒窗口会把整条事件丢掉，导致模块永远不加载、worker 沙箱不启动。
+constexpr int kMaxAgeMs = 60000;
+// 允许的负偏移：握手时 offset = 桥板 uptime − Pi 收到 hello_ok 的本地时刻，
+// 而桥板时间戳生成在发送前，串口/USB 的单向时延（实测 CH343 约 34 ms）会被
+// 整体算进 offset，使之后每条事件的 age 稳定为负。要求 age ≥ 0 会把它们全判过期。
+// 这里给 2 s 容差：远小于 TTL 上限，重放仍由 auth_seq + event_id 拦截。
+constexpr int kMaxSkewMs = 2000;
 
 enum class Verdict { Ok, BadTtlField, Expired, MissingClock };
 
 Verdict evaluate(qint64 ttlMs, qint64 senderUptimeMs, qint64 receiverUptimeMs,
                  bool hasBothClocks);
+// 带握手 offset 的严格判定（§3.5/§6.4）：age = sender - (receiver + offset)。
+// 只接受 0..kMaxAgeMs；offset 缺失/负年龄一律拒绝。
+Verdict evaluateWithOffset(qint64 ttlMs, qint64 senderUptimeMs, qint64 receiverUptimeMs,
+                           qint64 offsetMs, bool hasOffset);
 }  // namespace EventTtl

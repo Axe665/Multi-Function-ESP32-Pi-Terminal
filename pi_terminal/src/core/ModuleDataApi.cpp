@@ -1,6 +1,7 @@
 #include "core/ModuleDataApi.h"
 
 #include "security/UserDatabase.h"
+#include "security/SessionManager.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -59,6 +60,19 @@ void ModuleDataApi::setDatabase(security::UserDatabase *database) {
     emit readyChanged();
 }
 
+void ModuleDataApi::setSessionManager(security::SessionManager *session) {
+    if (session_ == session) return;
+    if (session_) disconnect(session_, nullptr, this, nullptr);
+    session_ = session;
+    if (session_) {
+        connect(session_, &security::SessionManager::lockStateChanged,
+                this, &ModuleDataApi::readyChanged, Qt::UniqueConnection);
+        connect(session_, &security::SessionManager::changed,
+                this, &ModuleDataApi::readyChanged, Qt::UniqueConnection);
+    }
+    emit readyChanged();
+}
+
 void ModuleDataApi::setInstance(const QString &instance) {
     if (instance_ == instance) return;
     instance_ = instance;
@@ -70,6 +84,8 @@ QString ModuleDataApi::scope() const {
 }
 
 bool ModuleDataApi::ready() const {
+    // 锁屏/恢复码待改 PIN 期间，模块写入同样失败关闭。
+    if (session_ && (session_->locked() || session_->mustChangePin())) return false;
     return database_ && database_->isOpen();
 }
 

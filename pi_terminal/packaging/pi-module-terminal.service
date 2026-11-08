@@ -1,0 +1,15 @@
+[Unit]
+Description=Orange Pi modular terminal
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/orange-pi-terminal
+Restart=on-failure
+RestartSec=5
+Environment=QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu
+Environment=QT_QUICK_BACKEND=software
+
+[Install]
+WantedBy=graphical-session.target

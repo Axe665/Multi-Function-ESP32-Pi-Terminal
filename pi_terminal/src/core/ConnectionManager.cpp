@@ -1,5 +1,6 @@
 #include "ConnectionManager.h"
 
+#include "core/NetworkGate.h"
 #include "LaneGate.h"
 #include <QJsonDocument>
 #include <QJsonArray>
@@ -45,7 +46,11 @@ SlotPosition slotPositionOf(const QJsonObject &event)
 ConnectionManager::ConnectionManager(QObject *parent) : QObject(parent), modules_(this), pogo_(this) {
     connect(this, &ConnectionManager::cardsChanged, this, [this] { cards_.synchronize(cards()); });
     connect(&pogo_, &TransportBase::connected, &hostEvents_, &HostEventDetector::reset);
-    connect(&pogo_, &TransportBase::connected, this, [this] { bridgeMonitor_.setConnected(true); });
+    connect(&pogo_, &TransportBase::connected, this, [this] {
+        bridgeMonitor_.setConnected(true);
+        // 首次连上不会走 handleBridgeRestored；这里显式放行刷卡/绑卡。
+        emit bridgeAvailabilityChanged(true);
+    });
     connect(&bridgeMonitor_, &BridgeConnectionMonitor::connectionChanged, this, [this](bool) { emit bridgeConnectionChanged(); });
     connect(&bridgeMonitor_, &BridgeConnectionMonitor::unavailable, this, [this] {
         handleBridgeUnavailable();
@@ -202,10 +207,19 @@ QVariantList ConnectionManager::cards() const {
             {"ready", s->ready && s->loaded && !s->stopping}, {"page", modules_.page(s->instance)},
             {"title", modules_.manifest(s->instance).value("name").toString(QString("模块 %1").arg(s->id))},
             {"icon", modules_.manifest(s->instance).value("icon").toString()},
+            {"packageId", modules_.manifest(s->instance).value("id").toString()},
+            {"networkApi", modules_.manifest(s->instance).value("network_api").toString()},
+            {"fileApi", modules_.manifest(s->instance).value("file_api").toString(QStringLiteral("none"))},
             {"actions", modules_.manifest(s->instance).value("actions").toArray().toVariantList()}});
     }
     return list;
 }
+
+QString ConnectionManager::modulePackageId(const QString &instance) const
+{
+    return modules_.manifest(instance).value(QStringLiteral("id")).toString();
+}
+
 void ConnectionManager::state(const QSharedPointer<Session> &s, const QString &value, const QString &text) {
     qInfo().noquote() << "Module session state:" << s->id << s->instance << value << text;
     s->machine->request(value, text);
@@ -638,6 +652,9 @@ void ConnectionManager::install(const QSharedPointer<Session> &s) {
         return;
     }
     s->progress = 10; state(s, "downloading_package", "正在下载并验证模块功能");
+    const bool useHelper = !QFileInfo(moduleRoot()).isWritable()
+        && qEnvironmentVariable("ORANGE_PI_MODULE_INSTALL_LOCAL") != QLatin1String("1");
+    const QString targetRoot = useHelper ? moduleStagingRoot() : moduleRoot();
     s->installer = new QProcess(this);
     auto *process = s->installer; const auto id = s->instance;
     connect(process, &QProcess::errorOccurred, this, [this, id, process](auto error) {
@@ -651,7 +668,7 @@ void ConnectionManager::install(const QSharedPointer<Session> &s) {
             if (TransportPolicy::fromProfile(s->profile).packageNeedsHotspot()) releaseHotspot(s);
         }
     });
-    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, [this, id, process](int code, auto exit) {
+    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, [this, id, process, useHelper](int code, auto exit) {
         process->deleteLater();
         auto s = sessions_.value(id); if (!s) return;
         s->installer = nullptr;
@@ -663,44 +680,97 @@ void ConnectionManager::install(const QSharedPointer<Session> &s) {
             if (policy.mode == TransportPolicy::Mode::BleOnly && policy.packageNeedsHotspot()) releaseHotspot(s);
             return;
         }
-        s->packagePath = QString::fromUtf8(process->readAllStandardOutput()).trimmed();
-        QFile manifest(s->packagePath + "/manifest.json");
-        if (!manifest.open(QIODevice::ReadOnly)) {
-            state(s, "error", "无法读取已验证清单");
+        const QString verifiedPath = QString::fromUtf8(process->readAllStandardOutput()).trimmed();
+        if (!useHelper) {
+            finishInstall(s, verifiedPath);
+            return;
+        }
+        const QString helper = config_.value("module_install_helper").toString(PI_MODULE_INSTALL_HELPER);
+        if (!QFileInfo(helper).isExecutable()) {
+            state(s, "error", "模块安装 helper 缺失或不可执行: " + helper);
             if (TransportPolicy::fromProfile(s->profile).packageNeedsHotspot()) releaseHotspot(s);
             return;
         }
-        s->verifiedManifest = QJsonDocument::fromJson(manifest.readAll()).object();
-        QFile key(config_.value("public_key").toString()); key.open(QIODevice::ReadOnly);
-        s->trustKey = QString::fromLatin1(QCryptographicHash::hash(key.readAll() + QJsonDocument(s->verifiedManifest).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex());
-        const auto policy = TransportPolicy::fromProfile(s->profile);
-        if (policy.mode == TransportPolicy::Mode::BleOnly && policy.packageNeedsHotspot()) releaseHotspot(s);
-        QSettings settings;
-        // 调试/演示：ORANGE_PI_AUTO_TRUST=1 跳过首次信任弹窗（见
-        // docs/devdocs/09-debug-hooks.md）。生产不设置即可，默认行为不变。
-        const bool autoTrust =
-            qEnvironmentVariable("ORANGE_PI_AUTO_TRUST") == QLatin1String("1");
-        if (autoTrust || settings.value("trusted/" + s->trustKey, false).toBool())
-            loadVerified(s);
-        else {
-            state(s, "awaiting_trust", "签名验证通过，请确认模块权限");
-            QStringList permissions;
-            for (const auto &v : s->verifiedManifest.value("permissions").toArray()) permissions.append(v.toString());
-            // manifest 的 permissions 只是请求；把请求记录给安全服务，
-            // 由授权页展示"请求了什么 / 实际授予了什么"，不自动授予。
-            if (requestedCapabilitiesSink) requestedCapabilitiesSink(id.toInt(), permissions);
-            emit trustRequired(id, s->verifiedManifest.value("name").toString(), permissions);
-        }
+        s->progress = 85; state(s, "installing_package", "正在安装到只读模块目录");
+        auto *installer = new QProcess(this);
+        s->installer = installer;
+        connect(installer, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
+                [this, id, installer](int helperCode, auto helperExit) {
+            installer->deleteLater();
+            auto session = sessions_.value(id);
+            if (!session) return;
+            if (session->installer == installer) session->installer = nullptr;
+            if (session->stopping) return;
+            if (helperCode || helperExit != QProcess::NormalExit) {
+                state(session, "error", "模块安装失败: "
+                      + QString::fromUtf8(installer->readAllStandardError()).right(1024));
+                return;
+            }
+            finishInstall(session, QString::fromUtf8(installer->readAllStandardOutput()).trimmed());
+        });
+        connect(installer, &QProcess::errorOccurred, this, [this, id, installer](auto error) {
+            if (error != QProcess::FailedToStart) return;
+            auto session = sessions_.value(id);
+            if (session && session->installer == installer) session->installer = nullptr;
+            installer->deleteLater();
+            if (session && !session->stopping)
+                state(session, "error", "无法启动模块安装 helper: " + installer->errorString());
+        });
+        QTimer::singleShot(30000, installer, [installer] {
+            if (installer->state() != QProcess::NotRunning) installer->kill();
+        });
+        installer->start("pkexec", {helper,
+            "--source", verifiedPath,
+            "--descriptor", verifiedPath + ".package.json",
+            "--root", moduleRoot(),
+            "--key", config_.value("public_key").toString(),
+            "--module", QString::number(s->id),
+            "--arch", QSysInfo::currentCpuArchitecture()});
     });
     process->start(config_.value("python").toString("python3"), {config_.value("package_tool").toString(PI_PACKAGE_TOOL),
         s->incoming.isEmpty() ? "install" : "install-local", s->incoming.isEmpty() ? s->profile.value("package_url").toString() : s->incoming, config_.value("public_key").toString(),
-        config_.value("cache").toString(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/modules"),
+        targetRoot,
         QString::number(s->id), QSysInfo::currentCpuArchitecture()});
     // A just-enabled hotspot can take several seconds to associate the module
     // STA. package_tool performs bounded transient HTTP retries; leave time for
     // that recovery without allowing an unbounded child process.
     QTimer::singleShot(90000, process, [process] { if (process->state() != QProcess::NotRunning) process->kill(); });
 }
+void ConnectionManager::finishInstall(const QSharedPointer<Session> &s, const QString &path) {
+    s->packagePath = path;
+    QFile manifest(s->packagePath + "/manifest.json");
+    if (!manifest.open(QIODevice::ReadOnly)) {
+        state(s, "error", "无法读取已验证清单");
+        if (TransportPolicy::fromProfile(s->profile).packageNeedsHotspot()) releaseHotspot(s);
+        return;
+    }
+    s->verifiedManifest = QJsonDocument::fromJson(manifest.readAll()).object();
+    QFile key(config_.value("public_key").toString()); key.open(QIODevice::ReadOnly);
+    s->trustKey = QString::fromLatin1(QCryptographicHash::hash(key.readAll() + QJsonDocument(s->verifiedManifest).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex());
+    const auto policy = TransportPolicy::fromProfile(s->profile);
+    if (policy.mode == TransportPolicy::Mode::BleOnly && policy.packageNeedsHotspot()) releaseHotspot(s);
+    QSettings settings;
+    // 调试/演示：ORANGE_PI_AUTO_TRUST=1 跳过首次信任弹窗（见
+    // docs/devdocs/09-debug-hooks.md）。生产不设置即可，默认行为不变。
+    const bool autoTrust =
+        qEnvironmentVariable("ORANGE_PI_AUTO_TRUST") == QLatin1String("1");
+    if (autoTrust || settings.value("trusted/" + s->trustKey, false).toBool())
+        loadVerified(s);
+    else {
+        state(s, "awaiting_trust", "签名验证通过，请确认模块权限");
+        QStringList permissions;
+        for (const auto &v : s->verifiedManifest.value("permissions").toArray()) permissions.append(v.toString());
+        if (s->verifiedManifest.value(QStringLiteral("network_api")).toString()
+            == QLatin1String("broker")) permissions.append(QStringLiteral("network.broker"));
+        if (s->verifiedManifest.value(QStringLiteral("file_api")).toString()
+            == QLatin1String("home-read")) permissions.append(QStringLiteral("files.home_read"));
+        // manifest 的 permissions 只是请求；把请求记录给安全服务，
+        // 由授权页展示"请求了什么 / 实际授予了什么"，不自动授予。
+        if (requestedCapabilitiesSink) requestedCapabilitiesSink(s->id, permissions);
+        emit trustRequired(s->instance, s->verifiedManifest.value("name").toString(), permissions);
+    }
+}
+
 void ConnectionManager::trust(const QString &id, bool always) {
     auto s = sessions_.value(id);
     if (!s || s->stopping || s->loaded || s->packagePath.isEmpty() || s->trustKey.isEmpty()) return;
@@ -828,4 +898,37 @@ void ConnectionManager::finishRelease(const QSharedPointer<Session> &s) {
 }
 void ConnectionManager::action(const QString &id, const QString &name) {
     auto s = sessions_.value(id); if (s && s->ready && !s->stopping) modules_.action(id, name);
+}
+
+QVariantMap ConnectionManager::workerInfo() const
+{
+    return modules_.workerInfo();
+}
+
+QString ConnectionManager::moduleRoot() const
+{
+    // 生产默认 root 可读的模块目录；worker ProtectHome=yes，因此配置
+    // cache 不能指向用户 home。root 不可写时由 module_install_helper.py
+    // 以 pkexec 复制，普通用户缓存只作为 staging。
+    QString root = config_.value("cache").toString();
+    if (root.isEmpty())
+        root = qEnvironmentVariable("ORANGE_PI_MODULE_ROOT",
+                                    QStringLiteral("/usr/lib/orange-pi-terminal/modules"));
+    // ProtectHome=yes 下 worker 看不到用户 home；配置误指向 home 时
+    // 静默回落到系统目录，避免“签名通过但永远 LIBRARY_UNAVAILABLE”。
+    const QString home = QFileInfo(QDir::homePath()).canonicalFilePath();
+    if (!home.isEmpty() && root.startsWith(home + QLatin1Char('/'))
+        && qEnvironmentVariable("ORANGE_PI_MODULE_INSTALL_LOCAL") != QLatin1String("1")) {
+        qWarning().noquote() << "module cache points into HOME; using system module root";
+        root = QStringLiteral("/usr/lib/orange-pi-terminal/modules");
+    }
+    return root;
+}
+
+QString ConnectionManager::moduleStagingRoot() const
+{
+    const QString root = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+        + QStringLiteral("/module-staging");
+    QDir().mkpath(root);
+    return root;
 }

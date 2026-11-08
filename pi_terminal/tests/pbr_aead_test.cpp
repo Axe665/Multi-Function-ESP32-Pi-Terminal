@@ -116,6 +116,24 @@ private slots:
         QCOMPARE(result, PbrAead::Result::AuthFailed);
     }
 
+    // Pi→桥命令用 kind=2 / dir=0；用错方向必须验不过（防把命令当事件回放）。
+    void commandEnvelopeUsesPiToBridgeDirection()
+    {
+        const QByteArray key(32, '\x44');
+        const QByteArray noncePrefix(4, '\x05');
+        const QByteArray plaintext = QByteArrayLiteral("{\"command\":1}");
+        PbrAead::Result result = PbrAead::Result::Malformed;
+        const QByteArray sealed = PbrAead::seal(plaintext, key, noncePrefix, 1, 0x09,
+                                                /*kind=*/2, /*dir=*/0, &result);
+        QCOMPARE(result, PbrAead::Result::Ok);
+        PbrAead::Aad right{PbrAead::kEnvVersion, 0x09, 2, 0, 1, quint16(plaintext.size())};
+        QCOMPARE(PbrAead::open(sealed, key, right, &result), plaintext);
+        QCOMPARE(result, PbrAead::Result::Ok);
+        PbrAead::Aad wrong{PbrAead::kEnvVersion, 0x09, 2, 1, 1, quint16(plaintext.size())};
+        QVERIFY(PbrAead::open(sealed, key, wrong, &result).isEmpty());
+        QCOMPARE(result, PbrAead::Result::AuthFailed);
+    }
+
     // §5.1：明文上限 2018，超限直接拒绝，不截断。
     void plaintextLimitIsEnforced()
     {

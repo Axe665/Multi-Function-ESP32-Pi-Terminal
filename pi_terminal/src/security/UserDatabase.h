@@ -51,6 +51,10 @@ public:
 
     // userId 必须来自 SessionManager；dbKey 必须由 PIN 经 KEK 解封得到。
     bool openForSession(const QString &userId, const QByteArray &dbKey);
+
+    // 临时会话专用：关闭当前库并删除该会话的整个目录（库文件、WAL、附件）。
+    // 只对合法 userId 生效；不存在时返回 false（不视为错误）。
+    bool discardSession(const QString &userId);
     void close();
 
     bool isOpen() const;
@@ -159,6 +163,9 @@ public:
 
     QString databasePathFor(const QString &userId) const;
     QString cipherVersion() const;
+    // 删除该用户的整个数据目录（<root>/<userId>/）。当前打开的若是该用户先关闭。
+    // 返回 false 表示目录存在但无法删除；目录本就不存在视为成功。
+    bool deleteUserData(const QString &userId);
 
 private:
     bool checkCipherMajor(const QString &currentMajor);

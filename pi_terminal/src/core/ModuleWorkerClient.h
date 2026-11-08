@@ -9,6 +9,9 @@
 #include <QProcess>
 #include <QString>
 
+#include <functional>
+#include <utility>
+
 namespace security {
 
 // 宿主侧的 worker 客户端（T-11）。
@@ -45,11 +48,19 @@ public:
     // actions 白名单校验过；本方法只保证传输与长度。
     bool invokeAction(const QString &action);
 
+    // worker 内 C 模块发起的 appRequest（network/file）。handler 返回
+    // {response: "<json string>"}；由 ModuleManager 注入。
+    using AppRequestHandler = std::function<QJsonObject(const QJsonObject &body)>;
+    void setAppRequestHandler(AppRequestHandler handler) { appRequestHandler_ = std::move(handler); }
+
     QString errorCode() const { return errorCode_; }
     QString lastError() const { return lastError_; }
 
     // true 表示没走 systemctl（本机无 systemd 时的降级），不得当作隔离证据。
     bool degraded() const { return degraded_; }
+
+    // 诊断用：当前会话名（空表示未持有会话）。
+    QString sessionName() const { return session_; }
 
 signals:
     // worker 主动上报的事件（reportState）
@@ -68,6 +79,7 @@ private:
     QString lastError_;
     bool degraded_ = false;
     quint64 nextRequestId_ = 1;
+    AppRequestHandler appRequestHandler_;
 };
 
 }  // namespace security

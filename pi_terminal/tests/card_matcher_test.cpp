@@ -139,6 +139,19 @@ private slots:
         QCOMPARE(matcher.findOwner(kCardB, testDerive).verdict, CardMatch::Verdict::NoMatch);
     }
 
+    void removeUserDeletesAllEntries() {
+        CardIndex matcher(mapPath_());
+        QVERIFY(matcher.bind(QStringLiteral("userA"), kCardA, testDerive));
+        QVERIFY(matcher.bind(QStringLiteral("userB"), kCardB, testDerive));
+
+        QCOMPARE(matcher.removeUser(QStringLiteral("userA")), 1);
+        QCOMPARE(matcher.findOwner(kCardA, testDerive).verdict, CardMatch::Verdict::NoMatch);
+        QVERIFY(matcher.boundCards(QStringLiteral("userA")).isEmpty());
+        QCOMPARE(matcher.findOwner(kCardB, testDerive).userId, QStringLiteral("userB"));
+        // 再删一次不存在的用户不写文件、不报错。
+        QCOMPARE(matcher.removeUser(QStringLiteral("userA")), 0);
+    }
+
     void mapFileIsOwnerOnly() {
         CardIndex matcher(mapPath_());
         QVERIFY(matcher.bind(QStringLiteral("userA"), kCardA, testDerive));

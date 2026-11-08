@@ -13,7 +13,7 @@ public:
     explicit HostEventDetector(QObject *parent = nullptr) : QObject(parent) {}
     static bool valid(const QJsonObject &event) {
         // p0-control-v1 events are validated field by field; the pre-P0
-        // schema-less attach/detach stays accepted until T-05 replaces it.
+        // schema-less attach/detach is rejected since T-07.
         if (PbrControl::validate(event).verdict == PbrControl::Verdict::Rejected) return false;
         const auto kind = event.value("event").toString();
 
