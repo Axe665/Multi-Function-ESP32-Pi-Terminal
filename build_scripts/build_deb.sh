@@ -15,8 +15,11 @@ export ORPI_QT_PREFIX="${ORPI_QT_PREFIX:-$SDKROOT/dist/sdk/qt653-arm64}"
 export ORPI_HOST_QT="${ORPI_HOST_QT:-/opt/Qt/6.5.3/gcc_64}"
 export ORPI_FLITE_ROOT="${ORPI_FLITE_ROOT:-$SDKROOT/dist/sdk/flite-aarch64}"
 
+# 分卷在 Release 上，缺了就先拉（见 tools/fetch_artifacts.sh）
+[[ -e "$SDKROOT/artifacts/sdk/pi-sysroot.tar.zst.part00" ]] || "$ROOT/tools/fetch_artifacts.sh"
+
 for p in "$ORPI_SYSROOT" "$ORPI_QT_PREFIX" "$ORPI_HOST_QT" "$ORPI_FLITE_ROOT"; do
-    [[ -e "$p" ]] || { echo "缺少 $p；先跑 toolchain/qt-6.5.3-aarch64/sdk/install.sh 或设置环境变量" >&2; exit 1; }
+    [[ -e "$p" ]] || { echo "缺少 $p；按 toolchain/qt-6.5.3-aarch64/artifacts/sdk/README.md 解包分卷，或设置环境变量" >&2; exit 1; }
 done
 
 cd "$ROOT"

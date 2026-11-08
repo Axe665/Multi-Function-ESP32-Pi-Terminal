@@ -2,10 +2,12 @@
 
 本目录放**已验证**的安装包，x86_64 与 arm64 各一套。
 
-GitHub 单文件上限 100 MB，deb 以 **90 MB 分片**提交；用 `join.sh` 拼回：
+分片不再跟着 git 走（否则每次 clone 都要传几百 MB），实际文件挂在
+[GitHub Release `sdk-v1`](https://github.com/Axe665/Multi-Function-ESP32-Pi-Terminal/releases)：
 
 ```sh
-./dist/join.sh          # 生成 4 个 .deb 在仓库根目录，并校验 SHA256SUMS
+./tools/fetch_artifacts.sh   # 只下缺失的分片，并按 SHA256SUMS 校验
+./dist/join.sh               # 生成 4 个 .deb 在仓库根目录
 ```
 
 | 包 | 架构 | 大小 | 分片 | 说明 |

@@ -3,6 +3,7 @@
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+PROJ="${ORPI_PROJECT:-$(cd "$REPO/../.." && pwd)}"
 OUT="${OUT_DIR:-$REPO/dist}/orpi-qt653-pi3"
 rm -rf "$OUT"; mkdir -p "$OUT/opt/qt653-arm64" "$OUT/usr"
 
@@ -18,7 +19,7 @@ find "$OUT/opt/qt653-arm64/lib" -name cmake -type d -prune -exec rm -rf {} + 2>/
 find "$OUT/opt/qt653-arm64" -name '*.cmake' -delete 2>/dev/null || true
 
 # 项目产物
-cp -a "$REPO/src/pi-stage653/usr/." "$OUT/usr/"
+cp -a "$PROJ/pi-stage653/usr/." "$OUT/usr/"
 rm -rf "$OUT/usr/include" "$OUT/usr/lib/cmake"
 
 # RUNPATH 修正为可重定位形式（Qt 在 /opt/qt653-arm64）

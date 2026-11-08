@@ -37,6 +37,8 @@ if [ -n "${QT_BUNDLE_SRC:-}" ] && [ -d "$QT_BUNDLE_SRC" ]; then
 else
     QT_SRC="$(find "$QT_CACHE" -maxdepth 3 -type d -path '*/opt/qt653-arm64' 2>/dev/null | head -1 || true)"
     if [ -z "$QT_SRC" ]; then
+        # 分卷在 Release 上，缺了就先拉（见 tools/fetch_artifacts.sh）
+        [ -f "$SDKROOT/artifacts/orpi-qt653-pi3.tar.zst.part00" ] || "$ROOT/tools/fetch_artifacts.sh"
         install -d "$QT_CACHE"
         echo "解包 Qt 运行时（首次约 1 分钟）..."
         cat "$SDKROOT"/artifacts/orpi-qt653-pi3.tar.zst.part* | zstd -d | tar -x -C "$QT_CACHE"

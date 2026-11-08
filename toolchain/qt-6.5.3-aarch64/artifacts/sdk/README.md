@@ -12,7 +12,8 @@
 ## 用法
 
 ```bash
-cd artifacts/sdk && ./join.sh          # 拼接 + 校验 SHA256SUMS
+./tools/fetch_artifacts.sh             # 仓库根执行：下载缺失分片并校验 SHA256
+cd toolchain/qt-6.5.3-aarch64/artifacts/sdk && ./join.sh   # 拼接 + 再校验一次
 mkdir -p ../../dist/sdk
 tar -C ../../dist/sdk -xf orpi-qt653-aarch64-dev.tar.zst
 tar -C ../../dist/sdk -xf orpi-host-qt-6.5.3-gcc_64.tar.zst
