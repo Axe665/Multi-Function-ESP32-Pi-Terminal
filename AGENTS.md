@@ -69,18 +69,19 @@ rm -rf ~/.local/share/ModularTerminal/OrangePiTerminal
 - **已内置**：OpenSSL / mbedTLS / SQLCipher 在 `third_party/deps`，不要另装；
 - **必须外部**：Qt 6.4.2（目标机基线，发行版系统包）／6.5.3（开发可用，作者 SDK），最低 6.4、GStreamer、X11/OpenGL；
 - **功能级**：`nft`、`python3`、`espeak-ng`；
-- **不要**把构建产物塞进仓库：SDK 交叉包、预编译 deb 一律走 GitHub Release（tag `sdk-v1`），
+- **不要**把构建产物塞进仓库：SDK 交叉包走 GitHub Release（tag `sdk-v1`），
   仓库只留 `tools/artifacts.manifest` + `tools/fetch_artifacts.sh`（按需下载并校验 SHA256）。
+  **预编译 deb 不发布**，需要时用 `./build_scripts/build_deb.sh` 现打。
   CI 会拦下 PR 里新增的 >20 MB 文件（`.github/workflows/large-files.yml`，语音模型白名单除外）。
 
 ## 四·半、历史已重写：本地仓库必须重新 clone
 
-2026-11 删掉了 `dist/` 分卷、`toolchain/.../artifacts/` 分卷和 `toolchain/.../src/`（旧快照），
+2026-11 删掉了 `dist/` 下的预编译 deb、`toolchain/.../artifacts/` 分卷和 `toolchain/.../src/`（旧快照），
 并把那 1.7 GB 分卷从**历史**里一并剔除。**所有提交号都变了，旧 clone 不能 `git pull`**：
 
 ```bash
 git clone git@github.com:Axe665/Multi-Function-ESP32-Pi-Terminal.git   # 约 630 MB
-cd Multi-Function-ESP32-Pi-Terminal && ./tools/fetch_artifacts.sh      # 需要交叉编译或预编译 deb 时
+cd Multi-Function-ESP32-Pi-Terminal && ./tools/fetch_artifacts.sh      # 需要交叉编译时
 ```
 
 旧仓库里有未推送提交的，先 `git format-patch` 出来再打到新仓库上。

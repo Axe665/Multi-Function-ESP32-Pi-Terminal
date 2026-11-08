@@ -18,7 +18,7 @@ while read -r f; do
 done < "$ROOT/tools/artifacts.manifest"
 
 status=0
-for dir in dist toolchain/qt-6.5.3-aarch64/artifacts toolchain/qt-6.5.3-aarch64/artifacts/sdk; do
+for dir in toolchain/qt-6.5.3-aarch64/artifacts toolchain/qt-6.5.3-aarch64/artifacts/sdk; do
     [ -f "$ROOT/$dir/SHA256SUMS" ] || continue
     while read -r sum name; do
         set -- "$ROOT/$dir/$name".part*
