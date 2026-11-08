@@ -5,7 +5,6 @@
 | 路径 | 内容 | 被谁取代 |
 |---|---|---|
 | `deployment-20261018.md` | 2026-10-18 的 Pi 部署快照 | [../DEPLOY.md](../DEPLOY.md) + `build_scripts/deploy_pi.sh` |
-| `devdocs/04-*` … `devdocs/11-*` | P0 任务拆解、MR 评审、早期调试与收尾记录 | `docs/devdocs/` 后续轮次 |
 
 规则：
 

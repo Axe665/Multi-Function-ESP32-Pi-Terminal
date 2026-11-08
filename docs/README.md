@@ -8,6 +8,7 @@
 | 文档 | 内容 |
 |---|---|
 | [../README.md](../README.md) | 项目定位、架构图、最小上手路径 |
+| [architecture/](architecture/README.md) | 端-边-云架构：技术方案、架构图、草案笔记（规划，非现状） |
 | [project-code-map.md](project-code-map.md) | 代码结构总览（QML / 源码 / 目录职责） |
 | [native-runtime-modules.md](native-runtime-modules.md) | 主程序与 `libterminal_*` 动态库的边界 |
 
@@ -67,7 +68,7 @@
 
 ## 7. 开发记录
 
-历史归档在 [`archive/`](archive/)（早期 P0 任务、MR 评审、旧部署快照）。
+历史归档在 [`archive/`](archive/)（旧部署快照）。
 
 - [`devdocs/`](devdocs/)：按日期的轮次记录，含任务清单、评审意见、验证结论；
 - 最近一轮：[`devdocs/51-pbr-ttl-and-egress-2026-11-07.md`](devdocs/51-pbr-ttl-and-egress-2026-11-07.md)。
