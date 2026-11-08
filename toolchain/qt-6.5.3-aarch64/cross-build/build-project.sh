@@ -1,10 +1,10 @@
 #!/bin/bash
 # 用本仓库的 Qt 6.5.3 aarch64 交叉编译一个 pi_terminal 工程。
-# 用法: ./cross-build/build-project.sh [工程根目录]（默认 $ORPI_PROJECT 或 ./src）
+# 用法: ./cross-build/build-project.sh [工程根目录]（默认 $ORPI_PROJECT 或仓库根）
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PROJ="${1:-${ORPI_PROJECT:-$REPO/src}}"
+PROJ="${1:-${ORPI_PROJECT:-$(cd "$REPO/../.." && pwd)}}"
 JOBS="${JOBS:-$(nproc)}"
 
 missing=0
