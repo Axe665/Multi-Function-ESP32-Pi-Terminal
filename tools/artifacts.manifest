@@ -1,0 +1,25 @@
+# 不再跟着 git 走的构建产物分卷，实际文件在 GitHub Release（tag 见 tools/fetch_artifacts.sh）。
+# 升级 SDK 或打包新版本后，用下面这条命令重新生成，并把新分卷传上去：
+#   ls -d dist/*.part* toolchain/qt-6.5.3-aarch64/artifacts/*.part* \
+#         toolchain/qt-6.5.3-aarch64/artifacts/sdk/*.part* | sort
+dist/orange-pi-terminal-dev_1.0.0_amd64.deb.part00
+dist/orange-pi-terminal-dev_1.0.0_arm64.deb.part00
+dist/orange-pi-terminal_1.0.0_amd64.deb.part00
+dist/orange-pi-terminal_1.0.0_amd64.deb.part01
+dist/orange-pi-terminal_1.0.0_amd64.deb.part02
+dist/orange-pi-terminal_1.0.0_amd64.deb.part03
+dist/orange-pi-terminal_1.0.0_arm64.deb.part00
+dist/orange-pi-terminal_1.0.0_arm64.deb.part01
+dist/orange-pi-terminal_1.0.0_arm64.deb.part02
+toolchain/qt-6.5.3-aarch64/artifacts/orpi-qt653-pi3.tar.zst.part00
+toolchain/qt-6.5.3-aarch64/artifacts/orpi-qt653-pi3.tar.zst.part01
+toolchain/qt-6.5.3-aarch64/artifacts/orpi-qt653-pi3.tar.zst.part02
+toolchain/qt-6.5.3-aarch64/artifacts/sdk/orpi-host-qt-6.5.3-gcc_64.tar.zst.part00
+toolchain/qt-6.5.3-aarch64/artifacts/sdk/orpi-host-qt-6.5.3-gcc_64.tar.zst.part01
+toolchain/qt-6.5.3-aarch64/artifacts/sdk/orpi-host-qt-6.5.3-gcc_64.tar.zst.part02
+toolchain/qt-6.5.3-aarch64/artifacts/sdk/orpi-qt653-aarch64-dev.tar.zst.part00
+toolchain/qt-6.5.3-aarch64/artifacts/sdk/pi-sysroot.tar.zst.part00
+toolchain/qt-6.5.3-aarch64/artifacts/sdk/pi-sysroot.tar.zst.part01
+toolchain/qt-6.5.3-aarch64/artifacts/sdk/pi-sysroot.tar.zst.part02
+toolchain/qt-6.5.3-aarch64/artifacts/sdk/pi-sysroot.tar.zst.part03
+toolchain/qt-6.5.3-aarch64/artifacts/sdk/pi-sysroot.tar.zst.part04

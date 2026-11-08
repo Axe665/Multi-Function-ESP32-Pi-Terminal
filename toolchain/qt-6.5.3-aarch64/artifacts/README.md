@@ -1,6 +1,7 @@
 # 预编译交付包（分卷）
 
 GitHub 单文件限制 100MB，258MB 的部署包拆成 90MB 分卷。
+分卷不跟着 git 走，在 GitHub Release `sdk-v1` 上；先跑 `./tools/fetch_artifacts.sh` 补齐。
 
 ## 合并
 

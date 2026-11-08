@@ -241,6 +241,9 @@ python3 -m http.server 8000 --bind 127.0.0.1
 | `toolchain/qt-6.5.3-aarch64/` | Qt 6.5.3 aarch64 交叉 SDK：sysroot、Qt 库、host 工具、构建脚本 | `d8c0c52` |
 | `sdk/esp-firmware/` | 桥板 / 模块 ESP-IDF 固件工程（替代旧 `esp/` 引用） | `16aebdd` |
 
+SDK 交叉包和预编译 deb 的分片太大，不跟着 git 走，放在 GitHub Release `sdk-v1` 上。
+需要时跑 `./tools/fetch_artifacts.sh` 补齐（自动校验 SHA256），构建脚本缺文件时会自己调它。
+
 固件工具链（ESP-IDF / xtensa 编译器）的安装与版本要求见
 [module-devkit/docs/ESP-TOOLCHAIN.md](module-devkit/docs/ESP-TOOLCHAIN.md)。
 
