@@ -256,12 +256,12 @@ SDK 交叉包和预编译 deb 的分片太大，不跟着 git 走，放在 GitHu
 ### 1. 获取代码
 
 ```sh
-git clone --depth 1 https://github.com/Axe665/Multi-Function-ESP32-Pi-Terminal.git
+git clone https://github.com/Axe665/Multi-Function-ESP32-Pi-Terminal.git
 cd Multi-Function-ESP32-Pi-Terminal
 ```
 
-`--depth 1` 只取当前版本（约 700 MB，含交叉 SDK 的脚本但不含 1.7 GB 构建产物分卷）。
-需要完整历史时 `git fetch --unshallow`；需要交叉编译或预编译 deb 时跑 `./tools/fetch_artifacts.sh`。
+完整 clone 约 630 MB（历史里已不含 1.7 GB 构建产物分卷）。
+需要交叉编译或预编译 deb 时跑 `./tools/fetch_artifacts.sh`。
 
 ### 2. 原生终端
 
