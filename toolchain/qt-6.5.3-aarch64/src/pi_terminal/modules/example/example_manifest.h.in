@@ -1,2 +1,0 @@
-#pragma once
-static constexpr const char *EXAMPLE_MANIFEST = R"manifest(@MANIFEST_CONTENT@)manifest";
