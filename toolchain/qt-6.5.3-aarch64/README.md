@@ -31,7 +31,8 @@ Pi 3B（1 GB RAM，1024×600）已实机验证，其余机型未逐项验证。
 
 ## 快速开始：安装预编译包（免构建）
 
-`artifacts/` 里是已编好的交付包（258 MB，因 GitHub 单文件 100 MB 限制拆成 3 卷）：
+`artifacts/` 里是已编好的交付包（258 MB）。分卷放在 GitHub Release `sdk-v1` 上，
+不跟着 git 走——先跑一次仓库根的 `./tools/fetch_artifacts.sh` 补齐并校验：
 
 | 文件 | 大小 |
 | :--- | :--- |
