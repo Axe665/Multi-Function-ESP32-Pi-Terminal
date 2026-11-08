@@ -13,7 +13,8 @@ while read -r f; do
     [ -f "$ROOT/$f" ] && continue
     mkdir -p "$ROOT/$(dirname "$f")"
     echo "下载 $f"
-    curl -fSL --retry 3 -o "$ROOT/$f" "$BASE/$(basename "$f")"
+    # 先写临时名再改名：下载中断只会留下 .partdl，下次不会把半截文件当成已完成
+    curl -fSL --retry 3 -o "$ROOT/$f.partdl" "$BASE/$(basename "$f")" && mv "$ROOT/$f.partdl" "$ROOT/$f"
 done < "$ROOT/tools/artifacts.manifest"
 
 status=0

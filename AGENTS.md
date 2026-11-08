@@ -84,10 +84,10 @@ rm -rf ~/.local/share/ModularTerminal/OrangePiTerminal
 ./tools/fetch_artifacts.sh        # 从 Release sdk-v1 补齐，按 SHA256SUMS 校验
 ```
 
-新机器用浅克隆，只要约 700 MB：
+新机器直接 clone 即可，约 630 MB（历史里已清掉那 1.7 GB 分卷）：
 
 ```bash
-git clone --depth 1 git@github.com:Axe665/Multi-Function-ESP32-Pi-Terminal.git
+git clone git@github.com:Axe665/Multi-Function-ESP32-Pi-Terminal.git
 ```
 
 ## 五、改动风格
