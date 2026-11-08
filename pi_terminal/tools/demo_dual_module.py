@@ -64,7 +64,14 @@ def main():
     ap.add_argument('out')
     ap.add_argument('--fence-so', required=True)
     ap.add_argument('--bp-so', required=True)
-    ap.add_argument('--hold', type=int, default=14, help='终端运行秒数')
+    ap.add_argument('--hold', type=int, default=14,
+                    help='终端运行秒数；0 = 一直运行，直到 Ctrl-C（长时间调试用）')
+    ap.add_argument('--desktop', action='store_true',
+                    help='只停在桌面（不自动打开模块页），用来看双模块卡片')
+    ap.add_argument('--shot-name', default='shot.png', help='截图文件名')
+    ap.add_argument('--display', default=None,
+                    help='在真实 X 显示上运行（如 :1）而不是 xvfb。'
+                         '用于在本机桌面直接看到窗口。')
     args = ap.parse_args()
     build = Path(args.build).resolve()
     out = Path(args.out).resolve()
@@ -163,17 +170,24 @@ def main():
                        ORANGE_PI_MODULE_INPROCESS='1',
                        ORANGE_PI_AUTO_LOGIN=PIN)
 
+        # --display 时直接跑在真实显示上（窗口真的出现在屏幕上）；
+        # 否则用 xvfb 离屏渲染，只产出截图，适合 CI。
+        launcher = ([] if args.display
+                    else ['xvfb-run', '-a', '-s', '-screen 0 1280x800x24'])
+        if args.display:
+            run_env['DISPLAY'] = args.display
         proc = subprocess.Popen(
-            ['xvfb-run', '-a', '-s', '-screen 0 1280x800x24', binary,
+            [*launcher, binary,
              '--config', str(tmp / 'config.json'),
              # --demo 注入虚拟热点租约（xvfb 环境没有 NetworkManager）
              '--demo',
-             # 自动打开啸天模块页，验证自定义 QML 真的渲染出来
-             '--open-module', 'fence-slot0',
-             # 模块 ready 后自动触发 start，让模拟模块开始推传感器数据
-             '--invoke-action', 'arm',
-             '--quit-after', str(args.hold * 1000),
-             '--screenshot', str(out / 'shot.png')],
+             # --desktop 时只停在桌面看双模块卡片；否则打开啸天模块页。
+             # --invoke-action 只在 --open-module 分支里生效，故仅后者带。
+             *([] if args.desktop else
+               ['--open-module', 'fence-slot0', '--invoke-action', 'arm']),
+             # hold=0 表示不自动退出，由用户 Ctrl-C 结束（长时间调试）。
+             *(['--quit-after', str(args.hold * 1000)] if args.hold > 0 else []),
+             *(['--screenshot', str(out / args.shot_name)] if args.hold > 0 else [])],
             env=run_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
         # 先让界面起来，再插模块（避开启动遮罩）。
@@ -185,10 +199,20 @@ def main():
         bridge.present_card('a1b2c3d4', delay=6.0)
 
         try:
-            stdout, stderr = proc.communicate(timeout=args.hold + 40)
+            # hold=0 时不设超时：跟着终端进程一起等到它自己退出或被 Ctrl-C 打断。
+            stdout, stderr = proc.communicate(
+                timeout=(args.hold + 40) if args.hold > 0 else None)
         except subprocess.TimeoutExpired:
             proc.kill()
             stdout, stderr = proc.communicate()
+        except KeyboardInterrupt:
+            print('\n[Ctrl-C] 正在关闭终端与模拟桥板…')
+            proc.terminate()
+            try:
+                stdout, stderr = proc.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                stdout, stderr = proc.communicate()
 
         bridge.close()
         (out / 'stdout.log').write_text(stdout or '')
