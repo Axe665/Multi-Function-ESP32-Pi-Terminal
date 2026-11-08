@@ -13,6 +13,20 @@
 - `sdk/esp-firmware/module-devkit/sdk/esp32/` 是固件仓库里的同一套组件，**以固件仓库为准**；
 - 同步与一致性检查：`python3 tools/sync_module_devkit.py --check`（`--write` 落盘）。
 
+## 同步状态（2026-11-08）
+
+| 项 | 状态 |
+|---|---|
+| `module-devkit/sdk/esp32` 组件 | 与主仓 0 差异 |
+| `module-devkit/sdk/include/pi_module_api.h` | 已升到 **v2**（`network_request` / `file_request`） |
+| 示例/模板 `module.cpp` | 已改为 `PI_MODULE_API_VERSION` 返回值与检查 |
+| 示例/模板 `sdkconfig.defaults` | 已补 NimBLE（`CONFIG_BT_ENABLED` 等），否则 `host/ble_gap.h` 缺失 |
+| 实测 | ESP-IDF 5.5.4 编译通过：`module_firmware.bin` 1.08 MB |
+
+桥板 PBR 说明：本快照的 `S3_PiBridge_LinkIt_Host` 是 **PBR1 明文帧 + CRC**（`pbr_send_frame`），
+不是终端侧 `pbr-secure-v1`（X25519/ChaCha20/ECDSA）。安全桥板固件不在公开仓库里，
+终端侧的 TTL 负偏差、`boot_id` 重握手修复**没有对应的固件源码可同步**。
+
 ## 构建固件
 
 ```sh

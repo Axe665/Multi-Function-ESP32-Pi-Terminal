@@ -11,10 +11,10 @@ struct pi_module_handle {
     bool stopped = false;
     std::unique_ptr<History> history;
 };
-extern "C" uint32_t pi_module_api_version() { return 1; }
+extern "C" uint32_t pi_module_api_version() { return PI_MODULE_API_VERSION; }
 extern "C" const char *pi_module_manifest_json() { return MODULE_MANIFEST_JSON; }
 extern "C" pi_module_handle_t *pi_module_create(const pi_host_services_t *h) {
-    if (!h || h->api_version != 1 || !h->emit_event) return nullptr;
+    if (!h || h->api_version != PI_MODULE_API_VERSION || !h->emit_event) return nullptr;
     return new pi_module_handle{h};
 }
 extern "C" int pi_module_on_attach(pi_module_handle_t *m, const char *json) {
