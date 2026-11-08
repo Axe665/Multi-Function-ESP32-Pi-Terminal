@@ -233,12 +233,12 @@ python3 -m http.server 8000 --bind 127.0.0.1
 └── third_party/       Viper、媒体参考代码、GStreamer（头文件 + 运行期插件）等第三方内容
 ```
 
-`toolchain/` 与 `sdk/` 里是两个**完整仓库内容**（不含各自的 `.git`），随主仓一起分发，
+`toolchain/` 与 `sdk/` 都随主仓分发（不含各自的 `.git`），
 保证下一台开发机不需要再猜版本：
 
 | 目录 | 内容 | 固定版本 |
 |---|---|---|
-| `toolchain/qt-6.5.3-aarch64/` | Qt 6.5.3 aarch64 交叉 SDK：sysroot、Qt 库、host 工具、构建脚本 | `d8c0c52` |
+| `toolchain/qt-6.5.3-aarch64/` | Qt 6.5.3 aarch64 交叉 SDK 的构建脚本与文档（二进制按需下载） | `d8c0c52` |
 | `sdk/esp-firmware/` | 桥板 / 模块 ESP-IDF 固件工程（替代旧 `esp/` 引用） | `16aebdd` |
 
 SDK 交叉包和预编译 deb 的分片太大，不跟着 git 走，放在 GitHub Release `sdk-v1` 上。
@@ -256,9 +256,12 @@ SDK 交叉包和预编译 deb 的分片太大，不跟着 git 走，放在 GitHu
 ### 1. 获取代码
 
 ```sh
-git clone https://github.com/Axe665/Multi-Function-ESP32-Pi-Terminal.git
+git clone --depth 1 https://github.com/Axe665/Multi-Function-ESP32-Pi-Terminal.git
 cd Multi-Function-ESP32-Pi-Terminal
 ```
+
+`--depth 1` 只取当前版本（约 700 MB，含交叉 SDK 的脚本但不含 1.7 GB 构建产物分卷）。
+需要完整历史时 `git fetch --unshallow`；需要交叉编译或预编译 deb 时跑 `./tools/fetch_artifacts.sh`。
 
 ### 2. 原生终端
 
