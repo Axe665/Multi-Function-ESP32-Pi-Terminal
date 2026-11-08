@@ -241,13 +241,13 @@ python3 -m http.server 8000 --bind 127.0.0.1
 | `toolchain/qt-6.5.3-aarch64/` | Qt 6.5.3 aarch64 交叉 SDK 的构建脚本与文档（二进制按需下载） | `d8c0c52` |
 | `sdk/esp-firmware/` | 桥板 / 模块 ESP-IDF 固件工程（替代旧 `esp/` 引用） | `16aebdd` |
 
-SDK 交叉包和预编译 deb 的分片太大，不跟着 git 走，放在 GitHub Release `sdk-v1` 上。
+SDK 交叉包的分片太大，不跟着 git 走，放在 GitHub Release `sdk-v1` 上。
 需要时跑 `./tools/fetch_artifacts.sh` 补齐（自动校验 SHA256），构建脚本缺文件时会自己调它。
 
 固件工具链（ESP-IDF / xtensa 编译器）的安装与版本要求见
 [module-devkit/docs/ESP-TOOLCHAIN.md](module-devkit/docs/ESP-TOOLCHAIN.md)。
 
-预编译的 deb 在 [`dist/`](dist/README.md)（arm64 + amd64，含安装说明）。
+预编译的 deb 不再分发，需要时用 [`build_scripts/build_deb.sh`](dist/README.md) 自己打。
 文档入口见 [docs/README.md](docs/README.md)（按“上手 → 构建 → 运行 → 性能 → 专项 → 记录”排序）；
 性能与编译优化先看 [docs/performance.md](docs/performance.md)。
 
@@ -261,7 +261,7 @@ cd Multi-Function-ESP32-Pi-Terminal
 ```
 
 完整 clone 约 630 MB（历史里已不含 1.7 GB 构建产物分卷）。
-需要交叉编译或预编译 deb 时跑 `./tools/fetch_artifacts.sh`。
+需要交叉编译时跑 `./tools/fetch_artifacts.sh`。
 
 ### 2. 原生终端
 
