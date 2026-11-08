@@ -73,3 +73,6 @@ module-devkit/examples/*/module_manifest.h
 /debian/debhelper-build-stamp
 /debian/files
 /debian/*.substvars
+
+# Playwright CLI 会话快照
+.playwright-cli/
