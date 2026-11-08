@@ -192,10 +192,17 @@ Dialog {
                 id: search; objectName: "petManagerSearch"
                 Layout.fillWidth: true; Layout.preferredHeight: 48
                 placeholderText: root.t("搜索角色、服装或模型 ID")
-                placeholderTextColor: root.secondaryInk
+                placeholderTextColor: "transparent"
                 leftPadding: 48; rightPadding: 40
                 color: root.ink; font.pixelSize: 14
                 background: Rectangle { radius: 24; color: root.surfaceHigh; border.width: search.activeFocus?2:0; border.color: root.primary }
+                Text {
+                    anchors.left: parent.left; anchors.leftMargin: parent.leftPadding
+                    anchors.right: parent.right; anchors.rightMargin: parent.rightPadding
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: search.length === 0 ? search.placeholderText : ""
+                    color: root.secondaryInk; font: search.font; elide: Text.ElideRight; z: 1
+                }
                 Image { x:16; anchors.verticalCenter:parent.verticalCenter; width:24;height:24;source:"qrc:/icons/material/light/search.svg" }
                 ToolButton {
                     anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter

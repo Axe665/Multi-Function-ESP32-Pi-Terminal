@@ -30,6 +30,8 @@ private:
 private slots:
     void initTestCase()
     {
+        // 单元测试不依赖已安装的 systemd 单元：强制走降级直连。
+        qputenv("ORANGE_PI_WORKER_FORCE_DEGRADED", "1");
         QVERIFY2(QFile::exists(workerBinary()), qPrintable(workerBinary()));
     }
 

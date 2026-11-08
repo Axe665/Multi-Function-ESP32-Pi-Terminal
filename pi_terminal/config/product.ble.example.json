@@ -10,8 +10,8 @@
         "device_name": "MODULE_EXAMPLE",
         "address": "AA:BB:CC:DD:EE:FF",
         "service_uuid": "9b860001-214c-4de0-a9f4-f70e6a100001",
-        "write_uuid": "9b860002-214c-4de0-a9f4-f70e6a100001",
-        "notify_uuid": "9b860003-214c-4de0-a9f4-f70e6a100001"
+        "write_uuid": "9b860002-214c-4de0-a9f4-f70e6a100002",
+        "notify_uuid": "9b860003-214c-4de0-a9f4-f70e6a100003"
       }
     }
   }

@@ -1,6 +1,7 @@
 #include "core/SecurityService.h"
 
 #include "security/AuditLog.h"
+#include "security/AuthService.h"
 #include "security/Backup.h"
 #include "security/CardMatcher.h"
 #include "security/PermissionMatrix.h"
@@ -76,6 +77,15 @@ QString SecurityService::activeUserId() const {
 }
 
 bool SecurityService::requireUser(const QString &action) {
+    if (session_ && session_->locked()) {
+        // 锁屏是服务端边界：库仍打开，但所有数据 API 必须显式失败。
+        setMessage(QString::fromLatin1(security::AuthResult::SessionLocked));
+        return false;
+    }
+    if (session_ && session_->mustChangePin()) {
+        setMessage(QString::fromLatin1(security::AuthResult::PinChangeRequired));
+        return false;
+    }
     if (activeUserId().isEmpty() || database_ == nullptr || !database_->isOpen()) {
         setMessage(QStringLiteral("NOT_AUTHORIZED"));
         // 未登录也要留痕：谁在什么动作上被拒（actor 记为 anonymous）。
@@ -86,6 +96,14 @@ bool SecurityService::requireUser(const QString &action) {
 }
 
 bool SecurityService::requireAdmin(const QString &action) {
+    if (session_ && session_->locked()) {
+        setMessage(QString::fromLatin1(security::AuthResult::SessionLocked));
+        return false;
+    }
+    if (session_ && session_->mustChangePin()) {
+        setMessage(QString::fromLatin1(security::AuthResult::PinChangeRequired));
+        return false;
+    }
     if (!session_ || !session_->isAdmin()) {
         setMessage(QStringLiteral("NOT_AUTHORIZED"));
         audit(action, QStringLiteral("admin"), QString::fromLatin1(security::AuditResult::Denied));
@@ -130,6 +148,14 @@ QVariantList SecurityService::trustedBridges() const {
     return list;
 }
 
+QVector<QPair<QString, QByteArray>> SecurityService::bridgeHandshakeCandidates(quint8 keyId) const
+{
+    QVector<QPair<QString, QByteArray>> out;
+    for (const auto &record : trustStore()->lookupIdentity(keyId))
+        out.append(qMakePair(record.bridgeId, record.publicKey));
+    return out;
+}
+
 bool SecurityService::healthy() const {
     return trustStore()->healthy();
 }
@@ -164,6 +190,13 @@ bool SecurityService::revokeBridge(const QString &fingerprintHex) {
         setMessage(QStringLiteral("INVALID_MESSAGE"));
         return false;
     }
+    QString revokedBridgeId;
+    for (const auto &record : trustStore()->all()) {
+        if (record.fingerprint == fingerprint) {
+            revokedBridgeId = record.bridgeId;
+            break;
+        }
+    }
     QString error;
     if (!trustStore()->revokeByFingerprint(fingerprint, &error)) {
         setMessage(error.isEmpty() ? QStringLiteral("NOT_FOUND") : error);
@@ -175,6 +208,7 @@ bool SecurityService::revokeBridge(const QString &fingerprintHex) {
           QString::fromLatin1(security::AuditResult::Ok));
     setMessage(QString());
     emit changed();
+    if (!revokedBridgeId.isEmpty()) emit bridgeRevoked(revokedBridgeId);
     return true;
 }
 
@@ -254,6 +288,30 @@ QVariantList SecurityService::boundCards() const {
     return list;
 }
 
+bool SecurityService::openCardBindingWindow() {
+    if (!requireUser(QString::fromLatin1(security::AuditAction::GrantDevice))) return false;
+    cardBindingOpenedAtMs_ = QDateTime::currentMSecsSinceEpoch();
+    emit changed();
+    return true;
+}
+
+void SecurityService::closeCardBindingWindow() {
+    if (cardBindingOpenedAtMs_ < 0) return;
+    cardBindingOpenedAtMs_ = -1;
+    emit changed();
+}
+
+bool SecurityService::cardBindingWindowOpen() const {
+    return cardBindingRemainingMs() > 0;
+}
+
+int SecurityService::cardBindingRemainingMs() const {
+    if (cardBindingOpenedAtMs_ < 0) return 0;
+    const qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - cardBindingOpenedAtMs_;
+    const qint64 remain = 30000 - elapsed;   // D8b：30 秒单次窗口
+    return remain > 0 ? int(remain) : 0;
+}
+
 bool SecurityService::bindCard(const QString &rawUidHex) {
     if (!requireUser(QString::fromLatin1(security::AuditAction::GrantDevice))) return false;
     // 绑卡必须已登录且库已打开（requireUser 已保证）。
@@ -294,6 +352,15 @@ int SecurityService::revokeAllCards() {
           removed > 0 ? QString::fromLatin1(security::AuditResult::Ok)
                       : QString::fromLatin1(security::AuditResult::Failed));
     emit changed();
+    return removed;
+}
+
+int SecurityService::forgetUser(const QString &userId) {
+    if (userId.isEmpty()) return 0;
+    if (!cards_) cards_ = new security::CardIndex();
+    const int removed = cards_->removeUser(userId);
+    permissions()->removeUser(userId);
+    if (removed > 0) emit changed();
     return removed;
 }
 

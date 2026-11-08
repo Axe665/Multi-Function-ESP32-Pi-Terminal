@@ -6,6 +6,11 @@
 class QQmlEngine;
 class QQmlComponent;
 class QQuickItem;
+class NetworkGate;
+class AppNetworkBroker;
+class AppNetworkApi;
+class FileApiBroker;
+class FileApi;
 
 // 模块页沙箱（§0.7 / Z-7）。
 //
@@ -42,6 +47,12 @@ public:
     // 注入模块的数据接口（§6.1：QML 不持有 DB/SQL，只能用语义化接口）。
     // api 的生命周期由宿主管理；为 nullptr 时模块页拿不到数据接口。
     void setModuleDataApi(QObject *api);
+    // 网络 broker 的权限来源与当前模块实例；必须在 load() 前设置。
+    void setNetworkGate(NetworkGate *gate);
+    Q_INVOKABLE void setNetworkInstance(const QString &instance);
+    Q_INVOKABLE void setPackageId(const QString &packageId);
+    // 用户在宿主文件选择器中选好目录后调用；token 只留在宿主/FileApi。
+    Q_INVOKABLE void grantFileWrite(const QString &path);
     Q_INVOKABLE void unload();
     Q_INVOKABLE void updateUserContext(const UserContext &context);
 
@@ -64,6 +75,8 @@ public:
 
 signals:
     void pageChanged();
+    // 模块请求用户选择可写目录；Main 打开 FolderDialog。
+    void fileWriteAccessRequested(const QString &instance, const QString &packageId);
 
 private:
     QQmlEngine *engine_ = nullptr;
@@ -71,6 +84,13 @@ private:
     QObject *page_ = nullptr;
     QQuickItem *container_ = nullptr;
     QObject *moduleDataApi_ = nullptr;
+    NetworkGate *networkGate_ = nullptr;
+    QString networkInstance_;
+    QString packageId_;
+    AppNetworkBroker *appNetworkBroker_ = nullptr;
+    AppNetworkApi *appNetworkApi_ = nullptr;
+    FileApiBroker *fileApiBroker_ = nullptr;
+    FileApi *fileApi_ = nullptr;
     QString lastError_;
     UserContext userContext_;
 };

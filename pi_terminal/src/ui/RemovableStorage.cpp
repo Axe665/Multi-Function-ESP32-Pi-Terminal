@@ -16,7 +16,10 @@ RemovableStorage::RemovableStorage(QObject *parent, const QString &sysRoot,
                                  std::function<QVariantList()> volumes)
     : QObject(parent), sysRoot_(sysRoot), volumes_(std::move(volumes)) {
     refresh(); // Existing devices belong in the sidebar, without startup popups.
-    timer_.setInterval(1500);
+    // 每 1.5 秒全量扫描 /sys/class/block 会在 Pi 上持续吃主线程
+    // （几十个 ram/zram/loop 设备 × 多次 readlink/stat/open）。
+    // USB 插拔检测延迟 5 秒可以接受。
+    timer_.setInterval(5000);
     connect(&timer_, &QTimer::timeout, this, &RemovableStorage::refresh);
     timer_.start();
 }
@@ -31,7 +34,17 @@ void RemovableStorage::refresh() {
     }
     QVariantList next;
     const QDir sys(sysRoot_);
-    const auto names = sys.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+    // 只保留可能对应真实可移动设备的节点；ram/zram/loop/dm/md/fd
+    // 永远不会是 USB 盘，却占扫描量的大头。
+    QStringList names;
+    const auto allNames = sys.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+    for (const auto &id : allNames) {
+        if (id.startsWith(QLatin1String("ram")) || id.startsWith(QLatin1String("zram"))
+            || id.startsWith(QLatin1String("loop")) || id.startsWith(QLatin1String("dm-"))
+            || id.startsWith(QLatin1String("md")) || id.startsWith(QLatin1String("fd")))
+            continue;
+        names.append(id);
+    }
     for (const auto &id : names) {
         const auto node = sys.filePath(id);
         const bool partition = QFileInfo::exists(node + "/partition");
@@ -62,8 +75,14 @@ void RemovableStorage::refresh() {
         if (systemVolume) continue;
         if (label.isEmpty() || label.startsWith('/')) label = readStorageText(physicalNode + "/device/model");
         if (label.isEmpty()) label = "USB " + id;
+        // 只读标记与容量：界面要据此禁用「导出/备份」，并给用户一个能认出的盘。
+        const bool readOnly = readStorageText(node + "/ro") == "1";
+        bool sizeOk = false;
+        const qint64 sectors = readStorageText(node + "/size").toLongLong(&sizeOk);
         next.append(QVariantMap{{"id", id}, {"physical", physical}, {"device", device}, {"name", label},
-                                {"path", path}, {"mounted", !path.isEmpty()}, {"location", "@usb/" + id}});
+                                {"path", path}, {"mounted", !path.isEmpty()}, {"location", "@usb/" + id},
+                                {"readOnly", readOnly},
+                                {"sizeBytes", sizeOk ? sectors * 512 : qint64(0)}});
     }
     QSet<QString> oldPhysical;
     for (const auto &entry : devices_) oldPhysical.insert(entry.toMap().value("physical").toString());

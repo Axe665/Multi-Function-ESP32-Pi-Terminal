@@ -80,3 +80,18 @@ python3 pi_terminal/tests/screenshot_regression.py \
 电脑端 Qt 6.5.3 当前修复版通过普通及 1.5× DPI 的完整审计，各 61 个场景（含 1024×600），结构化报告均为零错误；16 项选定截图场景以及桌宠、管理、启动层和 HTTP seek 时钟共 4 项 CTest 通过。审计按实际主题缩放/字体单位检查，分别验证背景 tint 与始终清晰的前景文字；旋转按现有 Y 轴翻卡设计检查。画图注入坐标从 JSON 小数取整，仅完全没有输入事件时才启用 host 采样回退，不重复追加笔划。
 
 这不是全部 CTest 或 Pi 验收：Xvfb 渲染器为 llvmpipe，host 截图不验证 GPU 模糊像素。启动日志仍可见两条无 QML 位置的 Qt 内部 `Detected recursive rearrange` 警告（审计开始前），不能宣称日志完全无警告；外部网页脚本和宿主多媒体/托盘环境警告也须单独区分。此次未部署或重启 Pi，实机及物理触摸仍需另验。
+
+## Qt 6.4.2 基线下的差异（2026-11-04）
+
+- `ui_responsive_touch` 与 `ui_highdpi_touch` 在 **Qt 6.4.2 + Xvfb** 下返回 77（CTest 记为
+  `Skipped`）：`--ui-audit` 的多尺寸 resize 在页面切换后进入
+  `QQuickLayout::effectiveSizePolicy_helper` 崩溃，Qt 6.5 修复了这条路径。单尺寸
+  `--window-size` 启动（1024×600 / 1024×768）在 6.4.2 上稳定，所以这不是产品回归。
+  控制点在 CMake：`SKIP_RETURN_CODE 77` + `TERMINAL_QT_VERSION` 环境变量；6.5.3 构建里
+  这两个用例照常执行，不隐藏任何回归。
+- 控件字体的逐 Scope 覆盖依赖 `QtQuickTemplates2` 私有头。官方/aqt SDK 自带；Debian/Ubuntu
+  需要 `qt6-declarative-private-dev`。缺失时主程序退化为仅 `QGuiApplication::setFont()`：
+  构建、启动、交互都不受影响，只是 Material 控件的字体族沿用样式默认值（日志
+  `font-theme: QQuickTheme private API unavailable`）。
+- 两套构建入口：`linux-qt642`（系统 Qt，目标机基线）与 `linux-qt653`（作者 SDK）。同一份
+  源码、两套 preset，`env.sh` 会打印实际使用的 Qt 版本并拒绝低于 6.4.0 的安装。

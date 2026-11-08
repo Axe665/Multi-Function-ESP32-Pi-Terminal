@@ -9,6 +9,9 @@
 #include "URL.h"
 #include "AdBlockModel.h"
 #include "SearchEngineManager.h"
+#include "RequestInterceptor.h"
+
+#include "core/NetworkGate.h"
 
 #include <QtWebEngineQuick/qquickwebengineprofile.h>
 #include <QWebEngineCookieStore>
@@ -65,6 +68,37 @@ ViperBrowserController::ViperBrowserController(QObject *parent)
 }
 
 ViperBrowserController::~ViperBrowserController() = default;
+
+void ViperBrowserController::setGuestProfile(bool guest, const QString &guestId)
+{
+    auto *target = profile();
+    if (!target) return;
+
+    const QString base = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+                         + QStringLiteral("/guest-web");
+    if (guest) {
+        if (guestId.isEmpty()) return;
+        const QString dir = base + QLatin1Char('/') + guestId;
+        QDir().mkpath(dir + QStringLiteral("/storage"));
+        QDir().mkpath(dir + QStringLiteral("/cache"));
+        QDir().mkpath(dir + QStringLiteral("/downloads"));
+        target->setPersistentStoragePath(dir + QStringLiteral("/storage"));
+        target->setCachePath(dir + QStringLiteral("/cache"));
+        target->setDownloadPath(dir + QStringLiteral("/downloads"));
+        // 访客不继承任何持久 cookie：先把现有 store 清掉，避免上一个用户的书签态泄漏。
+        target->cookieStore()->deleteAllCookies();
+        qInfo("browser profile: guest at %s", qPrintable(dir));
+    } else {
+        // 传空串让 Qt 回到默认路径（QStandardPaths 下的应用目录）。
+        target->setPersistentStoragePath(QString());
+        target->setCachePath(QString());
+        target->setDownloadPath(downloadDirectory());
+        target->cookieStore()->deleteAllCookies();
+        // 访客目录整棵删掉：退出即清理，不等到下次开机。
+        QDir(base).removeRecursively();
+        qInfo("browser profile: back to default");
+    }
+}
 
 QQuickWebEngineProfile *ViperBrowserController::profile() const
 {
@@ -175,6 +209,24 @@ bool ViperBrowserController::setPreference(const QString &key, const QVariant &v
         ((key == "fontSize" || key == "fixedFontSize") && (value.toInt() < 6 || value.toInt() > 72))) return false;
     browser_->getSettings()->setValue(it.value(), value);
     return true;
+}
+
+// 浏览器的联网门控：命中「总开关关闭」或「浏览器联网关闭」时，
+// 让 Viper 的 RequestInterceptor 把**所有**请求就地取消。
+//
+// 用 permits() 而不是 allow()：allow() 被拒时会 emit changed，而这个槽本身
+// 就挂在 changed 上，会无限递归。
+void ViperBrowserController::setNetworkGate(NetworkGate *gate)
+{
+    if (gate_ == gate) return;
+    gate_ = gate;
+    const auto apply = [this] {
+        const bool blocked = gate_ && !gate_->permits(NetworkGate::Purpose::Browser);
+        RequestInterceptor::setNetworkBlocked(blocked);
+    };
+    if (gate_)
+        QObject::connect(gate_, &NetworkGate::changed, this, [apply] { apply(); });
+    apply();
 }
 
 void ViperBrowserController::configureProfile(QQuickWebEngineProfile *target)

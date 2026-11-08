@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Modular Terminal
+Exec=systemctl --user start pi-module-terminal.service
+Terminal=false
+X-GNOME-Autostart-enabled=true

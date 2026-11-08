@@ -51,8 +51,18 @@ ColumnLayout {
     }
     RowLayout {
         visible:root.searching;Layout.fillWidth:true
-        TextField {id:query;Layout.fillWidth:true;placeholderText:I18n.t("查找");Accessible.name:placeholderText;onAccepted:root.findNext()}
-        TextField {id:replacement;Layout.fillWidth:true;placeholderText:I18n.t("替换为");Accessible.name:placeholderText}
+        TextField {id:query;Layout.fillWidth:true;placeholderText:I18n.t("查找");Accessible.name:placeholderText;onAccepted:root.findNext()
+            placeholderTextColor:"transparent"
+            Text { anchors.left:parent.left; anchors.leftMargin:parent.leftPadding; anchors.right:parent.right; anchors.rightMargin:parent.rightPadding
+                   anchors.verticalCenter:parent.verticalCenter; text:parent.length===0?parent.placeholderText:""
+                   color:Theme.outline; font:parent.font; elide:Text.ElideRight; z:1 }
+        }
+        TextField {id:replacement;Layout.fillWidth:true;placeholderText:I18n.t("替换为");Accessible.name:placeholderText
+            placeholderTextColor:"transparent"
+            Text { anchors.left:parent.left; anchors.leftMargin:parent.leftPadding; anchors.right:parent.right; anchors.rightMargin:parent.rightPadding
+                   anchors.verticalCenter:parent.verticalCenter; text:parent.length===0?parent.placeholderText:""
+                   color:Theme.outline; font:parent.font; elide:Text.ElideRight; z:1 }
+        }
         Button {text:I18n.t("查找");implicitHeight:48;onClicked:root.findNext()}
         Button {text:I18n.t("替换");implicitHeight:48;enabled:query.text.length>0;onClicked:{if(root.editor.selectedText===query.text){const start=root.editor.selectionStart;root.editor.remove(start,root.editor.selectionEnd);root.editor.insert(start,replacement.text)}root.findNext()}}
         CarText {text:root.feedback;visible:text!==""}

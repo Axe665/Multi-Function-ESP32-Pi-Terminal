@@ -41,11 +41,10 @@ Result validate(const QJsonObject &event) {
     static const QSet<QString> kinds{"attach", "status", "detach", "rfid_card", "ack"};
     if (!kinds.contains(name)) return fail("INVALID_MESSAGE");
 
-    // The pre-P0 bridge sends attach/detach without any security fields. It is
-    // reported as legacy so callers cannot mistake it for an authenticated event.
-    // shortcut: unauthenticated entry point, delete this branch in T-07.
-    if (!event.contains("schema"))
-        return (name == "attach" || name == "detach") ? Result{Verdict::Legacy, {}} : fail("INVALID_MESSAGE");
+    // No schema = pre-P0 frame. It used to be accepted as "Legacy" for attach/
+    // detach; command AEAD already breaks that firmware, so T-07 deletes the
+    // unauthenticated compatibility branch entirely.
+    if (!event.contains("schema")) return fail("INVALID_MESSAGE");
     if (event.value("schema").toString() != kSchema) return fail("UNSUPPORTED_VERSION");
 
     if (!label(event.value("bridge_id")) || !keyId(event.value("key_id"))) return fail("IDENTITY_REJECTED");
@@ -86,6 +85,12 @@ Result validate(const QJsonObject &event) {
     double ttl = 0;
     if (!integer(event.value("ttl_ms"), 3000, 3000, &ttl)) return fail("EVENT_EXPIRED");
     return {Verdict::Trusted, {}};
+}
+
+bool bridgeIdMatches(const QString &expected, const QString &actual)
+{
+    if (expected.isEmpty()) return true;   // 没有已认证身份可比
+    return expected == actual;
 }
 
 bool payloadAcceptable(const QByteArray &payload) {

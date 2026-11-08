@@ -134,6 +134,15 @@ public:
     QString filesRoot() const;
     QVariantList removableDevices() const { return removableStorage_.devices(); }
     Q_INVOKABLE void openRemovableDevice(const QString &id) { removableStorage_.open(id); }
+    // 把 "@usb/<id>/<相对路径>" 解析成挂载点下的真实路径；非法、未挂载或越界返回空串。
+    Q_INVOKABLE QString resolveRemovablePath(const QString &location, bool creating) const
+    {
+        return removableStorage_.resolve(location, creating);
+    }
+    // U 盘根目录下的备份文件（*.optbk），按修改时间倒序；只给界面展示名字与时间。
+    Q_INVOKABLE QVariantList removableBackups(const QString &id) const;
+    // 往 U 盘写一个 UTF-8 文本文件（恢复码导出用），路径走 "@usb/<id>/<文件名>"。
+    Q_INVOKABLE bool writeRemovableText(const QString &location, const QString &text) const;
     Q_INVOKABLE QString fileDisplayPath(const QString &relative) const;
     Q_INVOKABLE QVariantList files(const QString &relative) const;
     Q_INVOKABLE QUrl fileUrl(const QString &relative) const;
@@ -269,6 +278,9 @@ private:
     QSettings settings_;
     QBluetoothLocalDevice bluetooth_;
     QVariantMap deviceStatus_;
+    // 输入法选词是高频写入，逐次 sync 会反复打 SD 卡；
+    // 300ms 合并成一次落盘。
+    QTimer settingsSyncTimer_;
     bool hotspotBusy_ = false;
     bool powerActionBusy_ = false;
     bool hotspotActive_ = false, hotspotKnown_ = false, hotspotQueryBusy_ = false;

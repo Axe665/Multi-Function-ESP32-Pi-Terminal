@@ -444,7 +444,15 @@ Item {
         id: ringDialog
         objectName: "alarmRingDialog"
         parent: Overlay.overlay
-        anchors.centerIn: Overlay.overlay
+        // 键盘可见时上移，避免弹窗里的输入框被挡。
+        x: parent ? (parent.width - width) / 2 : 0
+        y: {
+            const host = parent ? parent.Window.window : null
+            const kb = host ? host.virtualKeyboard : null
+            const centered = parent ? Math.max(0, (parent.height - height) / 2) : 0
+            if (!host || !kb || !kb.visible) return centered
+            return Math.max(0, Math.min(centered, host.height - kb.y - height - Theme.gap))
+        }
         modal: true
         dim: true
         closePolicy: Popup.NoAutoClose

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Modular Terminal
+Comment=ESP32 modular terminal
+Exec=/usr/bin/orange-pi-terminal
+Terminal=false
+Categories=Utility;

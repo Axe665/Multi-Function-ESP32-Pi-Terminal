@@ -1,6 +1,7 @@
 // §0.7 / Z-7：模块页必须用独立 QQmlEngine，宿主对象不可见。
 #include "core/ModulePageHost.h"
 #include "core/ModuleDataApi.h"
+#include "core/NetworkGate.h"
 #include "core/PageProvider.h"
 
 #include <QFile>
@@ -318,6 +319,48 @@ Item {
         container->setHeight(480);
         QTRY_COMPARE(item->width(), 640.0);
         QCOMPARE(item->height(), 480.0);
+    }
+
+    void appNetworkAndFilesAreInjectedWithDefaultDeny()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QFile page(dir.filePath("AppApi.qml"));
+        QVERIFY(page.open(QIODevice::WriteOnly));
+        page.write(R"(
+import QtQuick
+Item {
+    property bool hasNetwork: typeof appNetwork !== "undefined"
+    property bool networkAllowed: hasNetwork && appNetwork.allowed
+    property bool hasFiles: typeof appFiles !== "undefined"
+    property bool fileAllowed: hasFiles && appFiles.allowed
+    property string appRoot: hasFiles ? appFiles.appRoot : ""
+}
+)");
+        page.close();
+        QObject model;
+
+        {
+            ModulePageHost host;
+            QVERIFY(host.load(QUrl::fromLocalFile(dir.filePath("AppApi.qml")), &model, {}));
+            QCOMPARE(host.page()->property("hasNetwork").toBool(), true);
+            QCOMPARE(host.page()->property("networkAllowed").toBool(), false);
+            QCOMPARE(host.page()->property("hasFiles").toBool(), true);
+            QCOMPARE(host.page()->property("fileAllowed").toBool(), false);
+        }
+
+        NetworkGate gate;
+        gate.setModuleNetworkAllowed(QStringLiteral("app-api-inst"), true);
+        gate.setModuleFileAllowed(QStringLiteral("app-api-inst"), true);
+        ModulePageHost host;
+        host.setNetworkGate(&gate);
+        host.setNetworkInstance(QStringLiteral("app-api-inst"));
+        host.setPackageId(QStringLiteral("example.device"));
+        QVERIFY2(host.load(QUrl::fromLocalFile(dir.filePath("AppApi.qml")), &model, {}),
+                 qPrintable(host.lastError()));
+        QCOMPARE(host.page()->property("networkAllowed").toBool(), true);
+        QCOMPARE(host.page()->property("fileAllowed").toBool(), true);
+        QVERIFY(!host.page()->property("appRoot").toString().isEmpty());
     }
 
 };

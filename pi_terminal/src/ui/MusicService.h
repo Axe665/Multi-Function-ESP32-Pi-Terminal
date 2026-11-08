@@ -1,11 +1,14 @@
 #pragma once
 #include <QObject>
 #include <QNetworkAccessManager>
+#include <QNetworkProxy>
 #include <QJsonObject>
 #include <QSettings>
 #include <functional>
 #include <QProcess>
 #include <QPointer>
+
+class NetworkGate;
 
 // Third-party API adapter only. Audio is decoded by Qt, never by Node or a CLI.
 class MusicService : public QObject {
@@ -41,6 +44,10 @@ public:
     Q_INVOKABLE void cancelSeekAudioCache(const QString &id);
     Q_INVOKABLE void login();
     Q_INVOKABLE void checkLogin();
+    // 联网门控：宿主注入，未注入时按放行处理（单元测试/独立工具）。
+    void setNetworkGate(NetworkGate *gate) { gate_ = gate; }
+    // 本地出站代理：宿主把音乐通道（34002）指过去。
+    void setNetworkProxy(const QNetworkProxy &proxy) { network_.setProxy(proxy); }
     Q_INVOKABLE void logout();
     Q_INVOKABLE void fetchLyrics(const QString &id);
 signals:
@@ -65,6 +72,7 @@ private:
     void cancelSeekCacheJob();
     QProcess service_;
     QNetworkAccessManager network_;
+    NetworkGate *gate_ = nullptr;
     QSettings settings_;
     QVariantList rows_;
     QString error_, qrUrl_, qrKey_, account_, cookie_;

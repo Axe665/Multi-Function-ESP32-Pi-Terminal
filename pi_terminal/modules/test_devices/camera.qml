@@ -18,11 +18,11 @@ Rectangle {
     Timer {interval:400;repeat:true;running:page.visible && !!page.sample.running
         onTriggered:connectionManager.action(page.instance,"frame")}
     ColumnLayout {anchors.fill:parent;anchors.margins:16;spacing:16
-        Label {text:"相机 · 模拟测试画面";color:"white";font.pointSize:24;wrapMode:Text.Wrap;Layout.fillWidth:true}
+        Label {text:"相机 模拟测试画面";color:"white";font.pointSize:24;wrapMode:Text.Wrap;Layout.fillWidth:true}
         Label {text:"点击上方“开始”预览；画面由 TCP 模拟设备生成，不是真实摄像头。";color:"white";font.pointSize:18;wrapMode:Text.Wrap;Layout.fillWidth:true}
         Image {id:preview;Layout.fillWidth:true;Layout.preferredHeight:240;Layout.minimumHeight:160;fillMode:Image.PreserveAspectFit;source:page.sample.frame || "";cache:false
             Label {anchors.centerIn:parent;visible:preview.status!==Image.Ready;text:preview.status===Image.Error?"图像解码失败":"等待画面";color:"white";font.pointSize:18}}
-        Label {text:(page.sample.running?"预览中":"已停止")+" · 帧序号 "+(page.sample.sequence || 0);color:"white";font.pointSize:18;Layout.fillWidth:true}
+        Label {text:(page.sample.running?"预览中":"已停止")+" 帧序号 "+(page.sample.sequence || 0);color:"white";font.pointSize:18;Layout.fillWidth:true}
         Button {objectName:"cameraSaveButton";text:"拍照 / 保存 PNG";enabled:preview.status===Image.Ready;font.pointSize:18;implicitHeight:64
             onClicked:{page.snapshot=page.sample.frame;page.saveStatus="";savePath.text=systemTools.cameraPhotoPath();saveDialog.open()}}
         Label {text:page.saveStatus;color:"white";font.pointSize:18;Layout.fillWidth:true;wrapMode:Text.Wrap}

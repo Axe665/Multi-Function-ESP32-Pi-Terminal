@@ -2,6 +2,10 @@
 
 #include <stdint.h>
 
+// v2 起每个模块必须返回这个版本，并在 manifest 声明 platform_api/network_api。
+// 缺声明或旧版返回 1 的模块在 ModuleManager/worker 加载前拒绝。
+#define PI_MODULE_API_VERSION 2u
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -35,6 +39,15 @@ struct pi_host_services {
     void (*log)(int level, const char *message);
     // Appended context-aware publication; original v1 prefix remains unchanged.
     void (*emit_event)(void *context, const char *type, const char *json);
+    // v2: 宿主 broker 的同步 HTTP(S) 封装。request_json 为
+    // {method,url,headers:{},bodyBase64,timeoutMs}；返回 UTF-8 JSON，
+    // 生命周期到下一次调用。失败返回 {"ok":false,"error":"..."}。
+    // 目标仅限公网；权限由宿主按模块实例判定。
+    const char *(*network_request)(void *context, const char *request_json);
+    // v2: 文件 API。request_json 的 op 见 docs/devdocs/22；仅允许家目录只读
+    // + 本包 app 数据可写，敏感路径由外置 daemon 拒绝。返回 JSON 生命周期
+    // 到下一次调用。
+    const char *(*file_request)(void *context, const char *request_json);
 };
 
 uint32_t pi_module_api_version(void);

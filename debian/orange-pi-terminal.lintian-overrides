@@ -1,0 +1,6 @@
+# 本项目刻意把自带 Qt 6.5.3 运行时放到 /opt/orange-pi-terminal：
+# 目标机系统 Qt 是 6.4，与项目需要的 6.5.3 私有 API 不兼容。
+orange-pi-terminal: dir-or-file-in-opt *
+orange-pi-terminal: custom-library-search-path *
+# Qt 自带 WebEngine/Pdf，内部静态链接了 freetype/lcms2/jsoncpp/openjpeg；这是 Qt 官方交付形态。
+orange-pi-terminal: embedded-library *

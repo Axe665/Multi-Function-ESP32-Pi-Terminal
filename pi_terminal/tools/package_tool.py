@@ -95,7 +95,8 @@ def verify_descriptor(data, key, module, arch):
     return desc
 def install(url, key, cache, module, arch, fetch=None):
     fetch = fetch or (lambda name, limit: download(url.rstrip('/') + '/' + name, limit))
-    desc = verify_descriptor(fetch('package.json', 262144), key, module, arch)
+    descriptor_data = fetch('package.json', 262144)
+    desc = verify_descriptor(descriptor_data, key, module, arch)
     cache = Path(cache); cache.mkdir(parents=True, exist_ok=True)
     # Keep the cache bounded so repeated signed updates cannot exhaust storage.
     entries = [p for p in cache.iterdir() if p.is_dir() and not p.name.startswith('.incoming-')]
@@ -105,6 +106,8 @@ def install(url, key, cache, module, arch, fetch=None):
         size = sum(f.stat().st_size for f in old.rglob('*') if f.is_file())
         shutil.rmtree(old, ignore_errors=True); total -= size
     target = cache / desc['sha256']
+    sidecar = cache / (desc['sha256'] + '.package.json')
+    if not sidecar.exists(): sidecar.write_bytes(descriptor_data)
     if target.exists():
         validate_tree(target, desc)
         return target
