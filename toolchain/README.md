@@ -26,8 +26,8 @@ cmake --build --preset aarch64-cross
 
 ## 体积与更新
 
-- 约 **1.3 GB**（其中 `artifacts/` 是预编译产物，分片放在 GitHub Release `sdk-v1`，
-  仓库里不再跟踪；`./tools/fetch_artifacts.sh` 按需补齐）；
+- 约 **1 GB** 的 `artifacts/` 是预编译产物，分片放在 GitHub Release `sdk-v1`，
+  仓库里不再跟踪，`./tools/fetch_artifacts.sh` 按需补齐；仓库内只剩脚本和文档；
 - 更新：在来源仓库拉新版本后 `rsync -a --exclude=.git <repo>/ toolchain/qt-6.5.3-aarch64/`，
   再更新本文件的固定版本号；
 - deb 打包时**不**把这个目录放进包，deb 只带裁剪后的运行库（见 `debian/`）。

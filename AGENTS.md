@@ -73,18 +73,22 @@ rm -rf ~/.local/share/ModularTerminal/OrangePiTerminal
   仓库只留 `tools/artifacts.manifest` + `tools/fetch_artifacts.sh`（按需下载并校验 SHA256）。
   CI 会拦下 PR 里新增的 >20 MB 文件（`.github/workflows/large-files.yml`，语音模型白名单除外）。
 
-## 四·半、历史已重写：本地仓库怎么重建
+## 四·半、构建产物已移到 Release：本地仓库怎么办
 
-2026-11 清掉了 `dist/` 分卷、`toolchain/.../artifacts/` 分卷和 `toolchain/.../src/`（旧快照），
-提交号全变了。老 clone 不能 `git pull`，按下面重建：
+2026-11 把 `dist/` 分卷、`toolchain/.../artifacts/` 分卷和 `toolchain/.../src/`（旧快照）
+从仓库里删掉了，**提交号没变，正常 `git pull` 即可**。
+
+拉取后本地那 1.7 GB 分卷会消失；需要交叉编译或预编译 deb 时跑一次：
 
 ```bash
-git clone git@github.com:Axe665/Multi-Function-ESP32-Pi-Terminal.git   # 约 100 MB
-cd Multi-Function-ESP32-Pi-Terminal
-./tools/fetch_artifacts.sh        # 需要交叉编译或预编译 deb 时才跑（约 1.7 GB）
+./tools/fetch_artifacts.sh        # 从 Release sdk-v1 补齐，按 SHA256SUMS 校验
 ```
 
-仍有未合并分支的，把旧提交 `git format-patch` 出来再打到新仓库上。
+新机器用浅克隆，只要约 700 MB：
+
+```bash
+git clone --depth 1 git@github.com:Axe665/Multi-Function-ESP32-Pi-Terminal.git
+```
 
 ## 五、改动风格
 
