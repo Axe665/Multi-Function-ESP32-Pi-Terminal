@@ -1,0 +1,8 @@
+orange-pi-terminal (1.0.0) unstable; urgency=medium
+
+  * Initial Debian packaging.
+  * Bundle Qt 6.5.3 runtime under /opt/orange-pi-terminal.
+  * Ship user service, system units, polkit rules and egress script.
+  * Split module SDK headers/CMake files into -dev.
+
+ -- Axe665 <Axe665@users.noreply.github.com>  Fri, 07 Nov 2026 19:00:00 +0800
