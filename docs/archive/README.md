@@ -5,6 +5,7 @@
 | 路径 | 内容 | 被谁取代 |
 |---|---|---|
 | `deployment-20261018.md` | 2026-10-18 的 Pi 部署快照 | [../DEPLOY.md](../DEPLOY.md) + `build_scripts/deploy_pi.sh` |
+| `端边云-v2.2/` | 端-边-云技术方案与架构图 v2.2（2026-11-07） | [../architecture/](../architecture/README.md) 的 v2.3 |
 
 规则：
 
