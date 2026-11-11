@@ -65,6 +65,7 @@
 | [PARTS-LIST.md](PARTS-LIST.md) | 元件购买清单 |
 | [../module-devkit/README.md](../module-devkit/README.md) | 模块 SDK 与模板 |
 | [../hardware/enclosure/](../hardware/enclosure/) | STL / STEP / 3MF |
+| [../一屏之内.pptx](../一屏之内.pptx) | 挑战杯路演 PPT（17 页，含 19 MB 内嵌演示视频） |
 
 ## 7. 开发记录
 
