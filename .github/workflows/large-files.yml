@@ -22,6 +22,8 @@ jobs:
             case "$f" in
               # 语音模型本来就是这个量级，不是构建产物
               pi_terminal/assets/voices/*) continue ;;
+              # 挑战杯路演 PPT：里面 19 MB 是内嵌演示视频，不是构建产物
+              一屏之内.pptx) continue ;;
             esac
             size=$(stat -c%s "$f")
             if [ "$size" -gt 20971520 ]; then
