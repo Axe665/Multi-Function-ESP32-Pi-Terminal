@@ -44,21 +44,28 @@ v2.2 的三个文件已移到 [`../archive/端边云-v2.2/`](../archive/端边�
 ## 边 / 云实现核对（2026-11）
 
 边、云两仓按 v2.3 §5 / §6 逐条核对过；功能项与两仓 README 的「逐条对照」表一致，
-这里只列**还没完全做到**的部分，避免把「驱动已内置但默认没开」写成「已支持」。
+这里只列**还没完全做到**的部分，避免把「默认没开」写成「已支持」。
 
 | 层 | 章节 | 要求 | 现状 |
 |---|---|---|---|
-| 边 | §5.4 | 稳健 z（MAD）+ 连续窗口 | 用 7 天同时段基线的 z，连续 2 个窗口 ≥2.5 才算异常；没有 MAD |
-| 边 | §5.7.3 | 证书到期前 30 天自动续期 | 只在到期前 30 天写审计提醒；续期由终端提交 CSR 调 `/renew`，边不代签 |
-| 边 | §5.7.6 | 吊销后 1 min 内断开 | 消息层按 `device_id` 立即拒收；broker 要重载 CRL 才真正断连 |
+| 边 | §5.7.3 | 证书到期前 30 天自动续期 | 只在到期前 30 天写审计提醒；续期由终端提交 CSR 调 `/renew`，边不代签（端仓本轮不动） |
 | 边 | §5.1 / §13.2 | 宿主跑 Avahi + chrony | compose 里 mDNS 在容器侧；NTP 由宿主负责，未在目标机验证 |
-| 边 | §8.2 | 边库磁盘加密 | SQLCipher 驱动已内置，设 `EDGE_DB_KEY` 才加密；默认明文 |
+| 边 | §8.2 | 边库磁盘加密 | 新装默认生成 `data/edge.key` 并走 SQLCipher；升级前就是明文的库不自动迁移，要跑 `scripts/encrypt_db.py` |
 | 云 | §6.1 | 数据卷 `uploads` | 没有上传功能；实际卷是 `pgdata` / `caddy_data` / `backups` / `ollama_models` |
 | 云 | §6.4 | AI 报告「生成状态」 | 生成是同步的；报告列表显示模型与 token，没有单独的状态字段 |
 | 云 | §6.8 | 模型文件 SHA256 清单 | `/health` 报 Ollama 的 `digest`，配 `CLOUD_OLLAMA_SHA256` 才比对；没有随包清单 |
-| 云 | §8.2 | Postgres 卷加密 | 需要宿主 LUKS；代码只保证备份 gpg AES256 |
-| 云 | §11.3 | 9B q4 p95 ≤30 s、72 h | 模型未拉取、无推理卡；本机只验了规则模板与 Ollama 桩服务 |
+| 云 | §8.2 | Postgres 卷加密 | `scripts/setup_encrypted_volume.sh` 支持 loop / 块设备，但本机只做了 `--dry-run`，没真格式化盘 |
+| 云 | §11.3 | 9B q4 p95 ≤30 s、72 h | 模型未拉取、无推理卡；`scripts/bench/` 已备好采样脚本，未执行 |
 | 云 | §6.8 / §11.3 | NVIDIA / AMD 真卡 | `/health` 与 compose 覆盖文件已支持 CUDA / ROCm，未在真卡上跑过 |
+
+本轮已补掉的代码项：
+
+- **MAD**：过去 24 h 的 median/MAD 算稳健 z，阈值 3.5、连续 2 窗口；样本 <5 或 MAD=0 回退基线 z。
+- **吊销断连**：宿主 systemd user timer 每 5 s 比对 `crl.pem`，变了就 SIGHUP broker，不用挂 docker socket。
+- **边库默认加密**：新装自动生成 `data/edge.key`；加密库快照改用 `VACUUM INTO`；明文老库有迁移脚本。
+- **TOTP**：只配 `CLOUD_ADMIN_PASSWORD` 不配 `CLOUD_ADMIN_TOTP` 现在会拒绝登录。
+- **文档口径**：P104 具体型号已从 §0.1 / §6.6 / §6.8 / §10 / §13.3 / 附录 D 改成「GPU 卡待定」，只保留在
+  v2.2→v2.3 对比表的旧值列；§6.3 模式 A 改为「OpenAI 兼容 API，默认 qwen3.5，可配」。
 
 2026-11 用容器冒烟验证过的链路：
 
@@ -68,7 +75,6 @@ v2.2 的三个文件已移到 [`../archive/端边云-v2.2/`](../archive/端边�
   报表经 mDNS 地址走 mTLS 上报成功；指纹对不上时写 `mdns.cloud_rejected` 审计。
 - 公网边界：8443 只通 `/ingest/edge-report` 与 `/health`，其余 403，无客户端证书连不上。
 - 备份：`pg_dump` 保留 14 天、周日 gpg 加密副本、每月恢复演练。
+- 吊销重载：`scripts/install_crl_reload.sh` 装 systemd timer，CRL 变化后 5 s 内 broker 日志出现 `Reloading config`。
 
-> 文档自身还有两处待统一的口径：附录 D 与 §13.3 仍按现有 P104-100 写（“卡待定”指下一张卡，
-> 两处需要明确是不是同一件事）；§6.3 的模式 A 写 `deepseek-chat` / `qwen-plus`，而代码默认
-> `qwen3.5`（可用 `CLOUD_PUBLIC_MODEL` 改）。都不影响当前实现。
+> 文档版本仍是 v2.3（内部基线），这轮只做口径修正，不新建版本。
