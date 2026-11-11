@@ -57,6 +57,7 @@ v2.2 的三个文件已移到 [`../archive/端边云-v2.2/`](../archive/端边�
 本轮已补掉的代码项：
 
 - **MAD**：过去 24 h 的 median/MAD 算稳健 z，阈值 3.5、连续 2 窗口；样本 <5 或 MAD=0 回退基线 z。
+- **min/max 拦截**：边与云的摄取白名单补了 `min`/`max`，出端载荷带这两个字段直接 422 并计 `raw_rejected`（§8.2）。
 - **吊销断连**：宿主 systemd user timer 每 5 s 比对 `crl.pem`，变了就 SIGHUP broker，不用挂 docker socket。
 - **边库默认加密**：新装自动生成 `data/edge.key`；加密库快照改用 `VACUUM INTO`；明文老库有迁移脚本。
   这台 demo 边库已用脚本迁成 SQLCipher（`/health` 的 `db_cipher=sqlcipher`、`db_key=file`、`db_plaintext_existing=false`），
@@ -68,7 +69,8 @@ v2.2 的三个文件已移到 [`../archive/端边云-v2.2/`](../archive/端边�
 - **宿主依赖自检**：边仓 `scripts/verify_host.sh` 检查 Avahi 与 chrony。
 - **文档口径**：P104 具体型号已从 §0.1 / §6.6 / §6.8 / §10 / §13.3 / 附录 D 改成「GPU 卡待定」，只保留在
   v2.2→v2.3 对比表的旧值列；§6.3 模式 A 改为「OpenAI 兼容 API，默认 qwen3.5，可配」；
-  §6.1 数据卷去掉没有实现的 `uploads`；§6.2 的 `ai_reports` 补 `scope_id`、`status`；§5.2 的 `ack` 方向改为「边→端」。
+  §6.1 数据卷去掉没有实现的 `uploads`；§6.2 的 `ai_reports` 补 `scope_id`、`status`；§5.2 的 `ack` 方向改为「边→端」；
+  §5.4 趋势的采样与基线口径按实现写清楚（5 min 入库、24 h 按 15 min、更长按 1 h；z 用同小时基线）。
 
 2026-11 用容器冒烟验证过的链路：
 
