@@ -49,11 +49,7 @@ v2.2 的三个文件已移到 [`../archive/端边云-v2.2/`](../archive/端边�
 | 层 | 章节 | 要求 | 现状 |
 |---|---|---|---|
 | 边 | §5.7.3 | 证书到期前 30 天自动续期 | 只在到期前 30 天写审计提醒；续期由终端提交 CSR 调 `/renew`，边不代签（端仓本轮不动） |
-| 边 | §5.1 / §13.2 | 宿主跑 Avahi + chrony | compose 里 mDNS 在容器侧；NTP 由宿主负责，未在目标机验证 |
-| 边 | §8.2 | 边库磁盘加密 | 新装默认生成 `data/edge.key` 并走 SQLCipher；升级前就是明文的库不自动迁移，要跑 `scripts/encrypt_db.py` |
-| 云 | §6.1 | 数据卷 `uploads` | 没有上传功能；实际卷是 `pgdata` / `caddy_data` / `backups` / `ollama_models` |
-| 云 | §6.4 | AI 报告「生成状态」 | 生成是同步的；报告列表显示模型与 token，没有单独的状态字段 |
-| 云 | §6.8 | 模型文件 SHA256 清单 | `/health` 报 Ollama 的 `digest`，配 `CLOUD_OLLAMA_SHA256` 才比对；没有随包清单 |
+| 边 | §5.1 / §13.2 | 宿主跑 Avahi + chrony | 已加 `scripts/verify_host.sh`，本机 avahi-daemon + chrony 均 active；目标机还没跑 |
 | 云 | §8.2 | Postgres 卷加密 | `scripts/setup_encrypted_volume.sh` 支持 loop / 块设备，但本机只做了 `--dry-run`，没真格式化盘 |
 | 云 | §11.3 | 9B q4 p95 ≤30 s、72 h | 模型未拉取、无推理卡；`scripts/bench/` 已备好采样脚本，未执行 |
 | 云 | §6.8 / §11.3 | NVIDIA / AMD 真卡 | `/health` 与 compose 覆盖文件已支持 CUDA / ROCm，未在真卡上跑过 |
@@ -63,9 +59,16 @@ v2.2 的三个文件已移到 [`../archive/端边云-v2.2/`](../archive/端边�
 - **MAD**：过去 24 h 的 median/MAD 算稳健 z，阈值 3.5、连续 2 窗口；样本 <5 或 MAD=0 回退基线 z。
 - **吊销断连**：宿主 systemd user timer 每 5 s 比对 `crl.pem`，变了就 SIGHUP broker，不用挂 docker socket。
 - **边库默认加密**：新装自动生成 `data/edge.key`；加密库快照改用 `VACUUM INTO`；明文老库有迁移脚本。
+  这台 demo 边库已用脚本迁成 SQLCipher（`/health` 的 `db_cipher=sqlcipher`、`db_key=file`、`db_plaintext_existing=false`），
+  迁移后同一把 key 会被重启复用。
+- **报告状态与 token**：`ai_reports.status` 记 `ok`（模型生成）/ `fallback`（规则兜底），列表与详情都显示，token 一并展示。
+- **模型 SHA256 清单**：首次看到模型 digest 就写进 `data/model_manifest.json`，`/health` 用它比对；
+  `CLOUD_OLLAMA_SHA256` 仍可覆盖。
 - **TOTP**：只配 `CLOUD_ADMIN_PASSWORD` 不配 `CLOUD_ADMIN_TOTP` 现在会拒绝登录。
+- **宿主依赖自检**：边仓 `scripts/verify_host.sh` 检查 Avahi 与 chrony。
 - **文档口径**：P104 具体型号已从 §0.1 / §6.6 / §6.8 / §10 / §13.3 / 附录 D 改成「GPU 卡待定」，只保留在
-  v2.2→v2.3 对比表的旧值列；§6.3 模式 A 改为「OpenAI 兼容 API，默认 qwen3.5，可配」。
+  v2.2→v2.3 对比表的旧值列；§6.3 模式 A 改为「OpenAI 兼容 API，默认 qwen3.5，可配」；
+  §6.1 数据卷去掉没有实现的 `uploads`；§6.2 的 `ai_reports` 补 `scope_id`、`status`；§5.2 的 `ack` 方向改为「边→端」。
 
 2026-11 用容器冒烟验证过的链路：
 
@@ -76,5 +79,6 @@ v2.2 的三个文件已移到 [`../archive/端边云-v2.2/`](../archive/端边�
 - 公网边界：8443 只通 `/ingest/edge-report` 与 `/health`，其余 403，无客户端证书连不上。
 - 备份：`pg_dump` 保留 14 天、周日 gpg 加密副本、每月恢复演练。
 - 吊销重载：`scripts/install_crl_reload.sh` 装 systemd timer，CRL 变化后 5 s 内 broker 日志出现 `Reloading config`。
+- 加密边库：迁移后设备、总览、异常接口都正常；预览快照用普通 sqlite3 打不开。
 
 > 文档版本仍是 v2.3（内部基线），这轮只做口径修正，不新建版本。
