@@ -40,3 +40,35 @@ v2.2 的三个文件已移到 [`../archive/端边云-v2.2/`](../archive/端边�
 
 > 这些是**规划文档**，描述目标架构，不代表当前代码已全部实现。
 > 代码现状以 [`../project-code-map.md`](../project-code-map.md) 和 `pi_terminal/` 为准。
+
+## 边 / 云实现核对（2026-11）
+
+边、云两仓按 v2.3 §5 / §6 逐条核对过；功能项与两仓 README 的「逐条对照」表一致，
+这里只列**还没完全做到**的部分，避免把「驱动已内置但默认没开」写成「已支持」。
+
+| 层 | 章节 | 要求 | 现状 |
+|---|---|---|---|
+| 边 | §5.4 | 稳健 z（MAD）+ 连续窗口 | 用 7 天同时段基线的 z，连续 2 个窗口 ≥2.5 才算异常；没有 MAD |
+| 边 | §5.7.3 | 证书到期前 30 天自动续期 | 只在到期前 30 天写审计提醒；续期由终端提交 CSR 调 `/renew`，边不代签 |
+| 边 | §5.7.6 | 吊销后 1 min 内断开 | 消息层按 `device_id` 立即拒收；broker 要重载 CRL 才真正断连 |
+| 边 | §5.1 / §13.2 | 宿主跑 Avahi + chrony | compose 里 mDNS 在容器侧；NTP 由宿主负责，未在目标机验证 |
+| 边 | §8.2 | 边库磁盘加密 | SQLCipher 驱动已内置，设 `EDGE_DB_KEY` 才加密；默认明文 |
+| 云 | §6.1 | 数据卷 `uploads` | 没有上传功能；实际卷是 `pgdata` / `caddy_data` / `backups` / `ollama_models` |
+| 云 | §6.4 | AI 报告「生成状态」 | 生成是同步的；报告列表显示模型与 token，没有单独的状态字段 |
+| 云 | §6.8 | 模型文件 SHA256 清单 | `/health` 报 Ollama 的 `digest`，配 `CLOUD_OLLAMA_SHA256` 才比对；没有随包清单 |
+| 云 | §8.2 | Postgres 卷加密 | 需要宿主 LUKS；代码只保证备份 gpg AES256 |
+| 云 | §11.3 | 9B q4 p95 ≤30 s、72 h | 模型未拉取、无推理卡；本机只验了规则模板与 Ollama 桩服务 |
+| 云 | §6.8 / §11.3 | NVIDIA / AMD 真卡 | `/health` 与 compose 覆盖文件已支持 CUDA / ROCm，未在真卡上跑过 |
+
+2026-11 用容器冒烟验证过的链路：
+
+- 群体分析开关：边 `PUT /settings` 关掉后，总览、设备详情、series、heatmap、anomalies、advice、batches、wordcloud 全部 `insufficient`；
+  报表只带设备在线状态；云 `edges.group_analysis=false`，总览标出该边、日聚合与对比不再包含它；重新打开后恢复。
+- mDNS：云广播的 `ca_fp` 与边预置 `cloud-ca` 的 DER 指纹一致（`d7f1ea4c0b11d9de`），边 `/discovery` 的 `source` 为 `mdns`，
+  报表经 mDNS 地址走 mTLS 上报成功；指纹对不上时写 `mdns.cloud_rejected` 审计。
+- 公网边界：8443 只通 `/ingest/edge-report` 与 `/health`，其余 403，无客户端证书连不上。
+- 备份：`pg_dump` 保留 14 天、周日 gpg 加密副本、每月恢复演练。
+
+> 文档自身还有两处待统一的口径：附录 D 与 §13.3 仍按现有 P104-100 写（“卡待定”指下一张卡，
+> 两处需要明确是不是同一件事）；§6.3 的模式 A 写 `deepseek-chat` / `qwen-plus`，而代码默认
+> `qwen3.5`（可用 `CLOUD_PUBLIC_MODEL` 改）。都不影响当前实现。
