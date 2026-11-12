@@ -213,7 +213,9 @@ static size_t pbr_open(const uint8_t *payload, size_t length, const uint8_t key[
 
     uint64_t seq = 0;
     for (int i = 0; i < 8; ++i) seq |= (uint64_t)payload[2 + 4 + i] << (8 * i);
-    if (seq == 0 || seq <= s_rx_seq) return 0; /* 单向单调，重放直接丢 */
+    /* 规范 §10 的拒绝顺序：tag 必须先于 auth_seq 单调性验证。否则未认证的
+     * 伪造帧可以把接收序号推高，造成合法帧被拒的 DoS。这里先解密验 tag，
+     * 单调性检查放到 tag 通过之后。 */
 
     uint8_t aad[10];
     pbr_build_aad(aad, payload[1], kind, dir, seq, (uint16_t)plain_len);
@@ -227,6 +229,8 @@ static size_t pbr_open(const uint8_t *payload, size_t length, const uint8_t key[
     if (ok) ok = mbedtls_chachapoly_finish(&ctx, payload + PBR_HDR_BYTES + plain_len) == 0;
     mbedtls_chachapoly_free(&ctx);
     if (!ok) return 0;
+    /* tag 已通过：现在才认这个序号。auth_seq=0 或回退一律失败关闭。 */
+    if (seq == 0 || seq <= s_rx_seq) return 0;
     s_rx_seq = seq;
     return plain_len;
 }
