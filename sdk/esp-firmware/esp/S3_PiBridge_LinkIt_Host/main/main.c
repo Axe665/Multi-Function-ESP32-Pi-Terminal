@@ -17,8 +17,10 @@
 #include "linkit_pins.h"
 #include "bridge_pins.h"
 #include "rfid_service.h"
+#include "max17043.h"
+#include "pbr_secure.h"
 
-#define LINKIT_TASK_STACK_BYTES 8192U
+#define LINKIT_TASK_STACK_BYTES 16384U
 #define LINKIT_TASK_PRIORITY    8U
 
 #define POGO_HOST_MODULE_ID     0x00u /* module_id used when host sends frames */
@@ -30,6 +32,22 @@
 #define PBRIDGE_UART            UART_NUM_0
 #define PBRIDGE_BAUD            115200
 #define PBRIDGE_ANNOUNCE_MS      3000U
+#define PBRIDGE_BATTERY_MS       5000U
+
+/* PBR secure v1 测试身份：P-256 私钥/公钥由本机生成，Pi 侧用
+ * securityService.pairBridge("br-test-01", <pub hex>) 注册后才能握手。 */
+static const uint8_t k_pbr_bridge_priv[32] = {
+    0xa5, 0xe8, 0xeb, 0x50, 0xf9, 0x77, 0x0c, 0xca, 0x83, 0xa4, 0xe0, 0x74, 0xd6, 0x37, 0xef, 0xb3,
+    0xcc, 0x44, 0x8f, 0xb4, 0x69, 0x98, 0x0c, 0x82, 0x75, 0xb6, 0x12, 0xe8, 0x21, 0x53, 0x9a, 0x67};
+static const uint8_t k_pbr_bridge_pub[65] = {
+    0x04, 0xf0, 0x0a, 0x06, 0xbe, 0x55, 0x43, 0x2c, 0x20, 0x83, 0x7b, 0x95, 0x51, 0x3d, 0x08, 0xb2,
+    0x97, 0x2b, 0x3e, 0xc6, 0x41, 0x96, 0xe2, 0xc9, 0xdd, 0xce, 0xe2, 0x61, 0x28, 0xe6, 0x13, 0x84,
+    0x2b, 0xd6, 0x9a, 0xc8, 0xd8, 0x57, 0x77, 0x37, 0x5b, 0x21, 0xcf, 0xe6, 0x42, 0x92, 0x30, 0x1c,
+    0x8d, 0x9a, 0x90, 0x0b, 0x12, 0x77, 0x93, 0x0e, 0xc0, 0xd9, 0x1a, 0x99, 0x08, 0xcb, 0xd9, 0xdc,
+    0xa7};
+#define PBR_BRIDGE_KEY_ID 0x24u
+#define PBR_BRIDGE_ID "br-test-01"
+
 #define PBRIDGE_TX_GPIO         BRIDGE_UART_TX_GPIO
 #define PBRIDGE_RX_GPIO         BRIDGE_UART_RX_GPIO
 #define PBRIDGE_MODULE_ID       CONFIG_PBRIDGE_MODULE_ID
@@ -74,10 +92,9 @@ static void pbr_put_le32(uint8_t *out, uint32_t value)
     out[3] = (uint8_t)(value >> 24);
 }
 
-static bool pbr_send_frame(uint8_t kind, const char *json)
+static bool pbr_send_frame_raw(uint8_t kind, const uint8_t *payload, size_t length)
 {
-    if (!json || !s_pbr_tx_mutex) return false;
-    const size_t length = strlen(json);
+    if (!payload || !s_pbr_tx_mutex) return false;
     if (length > PBRIDGE_MAX_PAYLOAD) return false;
     /* Lock sequence allocation AND the complete UART write across both tasks. */
     if (xSemaphoreTake(s_pbr_tx_mutex, pdMS_TO_TICKS(100)) != pdTRUE) return false;
@@ -86,7 +103,7 @@ static bool pbr_send_frame(uint8_t kind, const char *json)
     pbr_put_le32(frame + 6, s_pbr_sequence++);
     if (!s_pbr_sequence) s_pbr_sequence = 1;
     pbr_put_le16(frame + 10, (uint16_t)length);
-    memcpy(frame + 12, json, length);
+    memcpy(frame + 12, payload, length);
     pbr_put_le16(frame + 12 + length, pbr_crc16(frame + 4, 8 + length));
     size_t sent = 0;
     while (sent < 14 + length) {
@@ -100,6 +117,30 @@ static bool pbr_send_frame(uint8_t kind, const char *json)
     /* uart_write_bytes copies into the driver ring; FIFO order is preserved. */
     xSemaphoreGive(s_pbr_tx_mutex);
     return true;
+}
+
+/* 认证后事件必须带 bridge_id（Pi 侧 §6.4 会逐字节比对），再整体封 AEAD。 */
+static bool pbr_send_frame(uint8_t kind, const char *json)
+{
+    if (!json) return false;
+    char with_id[PBRIDGE_MAX_PAYLOAD];
+    const char *payload_json = json;
+    const char *bridge_id = pbr_secure_bridge_id();
+    if (pbr_secure_authenticated() && bridge_id && bridge_id[0] && json[0] == '{') {
+        char boot_id[9];
+        pbr_secure_boot_id_hex(boot_id);
+        const int written = snprintf(with_id, sizeof(with_id),
+                                     "{\"bridge_id\":\"%s\",\"boot_id\":\"%s\",\"ttl_ms\":3000,%s",
+                                     bridge_id, boot_id, json + 1);
+        if (written <= 0 || (size_t)written >= sizeof(with_id)) return false;
+        payload_json = with_id;
+    }
+    uint8_t wrapped[PBRIDGE_MAX_PAYLOAD];
+    const size_t wrapped_len = pbr_secure_wrap_tx(kind, (const uint8_t *)payload_json,
+                                                  strlen(payload_json), wrapped,
+                                                  sizeof(wrapped));
+    if (wrapped_len == 0) return false;
+    return pbr_send_frame_raw(kind, wrapped, wrapped_len);
 }
 
 static bool pbr_send_link_event(bool attached, uint8_t module_id)
@@ -150,14 +191,19 @@ static void pbr_handle_command(const uint8_t *payload, size_t length, uint32_t s
                       (cJSON_IsNumber(command) && command->valuedouble == 1);
     const bool status = cJSON_IsString(command) && !strcmp(command->valuestring, "status");
     if (ping || status) {
-        char reply[512];
+        char reply[768];
+        char battery[96];
         const rfid_status_t rfid = rfid_service_status();
+        /* A missing gauge yields {"valid":false}; never a fabricated 0 %. */
+        (void)max17043_json(battery, sizeof(battery));
         snprintf(reply, sizeof(reply),
                  "{\"event\":\"%s\",\"request_sequence\":%lu,\"attached\":%s,\"module_id\":%u,"
+                 "\"battery\":%s,"
                  "\"rfid\":{\"enabled\":%s,\"online\":%s,\"version\":%u,\"reports\":%lu,"
                  "\"read_errors\":%lu,\"tx_failures\":%lu,\"last_error\":%d}}",
                  ping ? "pong" : "bridge_status", (unsigned long)sequence,
                  s_contact_attached ? "true" : "false", PBRIDGE_MODULE_ID,
+                 battery,
                  rfid.enabled ? "true" : "false", rfid.online ? "true" : "false",
                  rfid.version, (unsigned long)rfid.reports, (unsigned long)rfid.read_errors,
                  (unsigned long)rfid.tx_failures, (int)rfid.last_error);
@@ -209,7 +255,22 @@ static void pbr_poll_control(void)
         const uint32_t distance = sequence - s_control_sequence;
         if (sequence && (!s_have_control_sequence || (distance && distance < 0x80000000u))) {
             s_control_sequence = sequence; s_have_control_sequence = true;
-            pbr_handle_command(s_control_rx + 12, length, sequence);
+            /* 先让 PBR secure 层处理：握手帧 / AEAD 业务帧 / 旧明文帧。 */
+            const uint8_t *secure_plain = NULL;
+            size_t secure_plain_len = 0;
+            uint8_t secure_reply[PBRIDGE_MAX_PAYLOAD];
+            size_t secure_reply_len = 0;
+            const int secure = pbr_secure_handle_pi_frame(
+                2, s_control_rx + 12, length, &secure_plain, &secure_plain_len,
+                secure_reply, sizeof(secure_reply), &secure_reply_len);
+            if (secure == 1) {
+                if (secure_reply_len)
+                    pbr_send_frame_raw(1, secure_reply, secure_reply_len);
+                if (secure_plain && secure_plain_len)
+                    pbr_handle_command(secure_plain, secure_plain_len, sequence);
+            } else if (secure == 0) {
+                pbr_handle_command(s_control_rx + 12, length, sequence);
+            }
         }
         memmove(s_control_rx, s_control_rx + total, s_control_rx_length - total);
         s_control_rx_length -= total;
@@ -270,6 +331,7 @@ static void linkit_task(void *arg)
     bool pbr_attached = false;
     linkit_state_t last_linkit_state = LINKIT_STATE_DISCONNECTED;
     TickType_t last_pbr_announce_tick = 0;
+    TickType_t last_battery_tick = 0;
     TickType_t removal_since = 0;
     uint8_t pbr_module_id = PBRIDGE_MODULE_ID;
 
@@ -340,6 +402,21 @@ static void linkit_task(void *arg)
                 };
                 (void)linkit_write_frame(&hb, 0);
             }
+        }
+
+        /* Battery telemetry is independent of module presence: the pack powers
+         * the whole terminal, not just the plug-in module. */
+        const TickType_t battery_now = xTaskGetTickCount();
+        if ((battery_now - last_battery_tick) >= pdMS_TO_TICKS(PBRIDGE_BATTERY_MS)) {
+            last_battery_tick = battery_now;
+            char battery[96];
+            char battery_event[192];
+            (void)max17043_json(battery, sizeof(battery));
+            const int battery_len = snprintf(battery_event, sizeof(battery_event),
+                "{\"event\":\"battery\",\"uptime_ms\":%lld,\"battery\":%s}",
+                (long long)(esp_timer_get_time() / 1000), battery);
+            if (battery_len > 0 && (size_t)battery_len < sizeof(battery_event))
+                (void)pbr_send_frame(1, battery_event);
         }
 
         linkit_link_status_t pbr_status = {0};
@@ -425,6 +502,16 @@ void app_main(void)
 
     ESP_LOGI(TAG, "pogo host ready: TX=GPIO%d RX=GPIO%d DET=GPIO%d",
              POGO_PIN_TX, POGO_PIN_RX, POGO_PIN_DET);
+    /* The fuel gauge is optional: an unpopulated part must not stop the bridge. */
+    ESP_ERROR_CHECK_WITHOUT_ABORT(max17043_start());
+    /* PBR secure v1：测试身份；Pi 侧配对公钥后才可能握手成功。 */
+    static const pbr_secure_identity_t secure_identity = {
+        .key_id = PBR_BRIDGE_KEY_ID,
+        .bridge_id = PBR_BRIDGE_ID,
+        .priv = k_pbr_bridge_priv,
+        .pub = k_pbr_bridge_pub,
+    };
+    pbr_secure_init(&secure_identity);
     /* Reader absence is recoverable and must never stop the LinkIt service. */
     ESP_ERROR_CHECK_WITHOUT_ABORT(rfid_service_start(pbr_send_frame));
 }
