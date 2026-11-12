@@ -7,7 +7,7 @@
 #define BRIDGE_UART_TX_GPIO 43
 #define BRIDGE_UART_RX_GPIO 44
 
-/* Reserved only: no battery driver or I2C bus is started by this firmware. */
+/* MAX17043 fuel gauge: I2C bus is started by max17043.c, ALRT stays unused. */
 #define BRIDGE_MAX17043_SDA_GPIO 8
 #define BRIDGE_MAX17043_SCL_GPIO 9
 #define BRIDGE_MAX17043_ALERT_GPIO 7
