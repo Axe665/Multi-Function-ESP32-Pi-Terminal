@@ -577,6 +577,13 @@ size_t pbr_secure_wrap_tx(uint8_t kind, const uint8_t *plain, size_t plain_len,
         return plain_len;
     }
     if (s_lock) xSemaphoreTake(s_lock, portMAX_DELAY);
+    /* §10：auth_seq 接近 2^64-1 时不允许继续发（否则回绕后对端会判回退）。
+     * 桥板无法主动重握手，这里失败关闭并丢弃会话。 */
+    if (s_tx_seq >= (0xffffffffffffffffULL - (1ULL << 20))) {
+        s_authenticated = false;
+        if (s_lock) xSemaphoreGive(s_lock);
+        return 0;
+    }
     const size_t total = pbr_seal(plain, plain_len, s_keys + 64, s_nonce_prefix,
                                   ++s_tx_seq, s_id.key_id, kind, 1, out, out_capacity);
     if (s_lock) xSemaphoreGive(s_lock);
