@@ -83,6 +83,7 @@ Rectangle {
 
     // =========================================================== 数据
     property var latest: ({})          // 最近一条 sample 记录
+    property string storeMessage: ""   // 手动保存结果
     property real lastSeenMs: 0
     property var trendPoints: []
     property double clock: Date.now()
@@ -133,6 +134,24 @@ Rectangle {
     function refreshTrend() {
         if (!dataReady || trendField === "") return
         trendPoints = appData.series(sampleRecord, trendField, trendSpanMs, trendStepMs)
+    }
+
+    // DB API 写路径：显式保存最近一行，返回 {ok,error}；不自动每秒写入。
+    function persistLatest() {
+        if (!dataReady) { storeMessage = "未连接宿主数据接口"; return }
+        const a = number(latest.value_a), b = number(latest.value_b), c = number(latest.value_c)
+        if (!isFinite(a) && !isFinite(b) && !isFinite(c)) {
+            storeMessage = "没有可保存的读数"
+            return
+        }
+        const fields = { "online": latest.online === true }
+        if (isFinite(a)) fields.value_a = a
+        if (isFinite(b)) fields.value_b = b
+        if (isFinite(c)) fields.value_c = c
+        const result = appData.append(sampleRecord, fields)
+        storeMessage = result && result.ok
+            ? "已保存最近一行"
+            : "保存失败：" + (result && result.error ? result.error : (appData.lastError || "未知原因"))
     }
 
     // 脱离宿主单独打开时用演示数据，先验收布局；接上宿主后自动改用真实数据。
@@ -499,12 +518,34 @@ Rectangle {
 
                     Row {
                         width: parent.width
+                        spacing: u * 8
                         Text {
-                            width: parent.width - spanLabel.implicitWidth
+                            width: parent.width - spanLabel.implicitWidth - saveButton.width - u * 16
                             text: "最近趋势 · " + page.trendField
                             color: cForeground
                             font.pixelSize: u * 16
                             font.bold: true
+                            elide: Text.ElideRight
+                        }
+                        Rectangle {
+                            id: saveButton
+                            width: 96 * u; height: 44 * u; radius: 12 * u
+                            opacity: page.dataReady ? 1 : 0.45
+                            color: accentVeil(0.18)
+                            border.width: u
+                            border.color: accentVeil(0.55)
+                            Text {
+                                anchors.centerIn: parent
+                                text: "保存读数"
+                                color: cForeground
+                                font.pixelSize: u * 13
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: page.dataReady
+                                onClicked: page.persistLatest()
+                                Accessible.name: "保存最近一行模块读数"
+                            }
                         }
                         Text {
                             id: spanLabel
@@ -535,9 +576,10 @@ Rectangle {
                 wrapMode: Text.Wrap
                 font.pixelSize: u * 12
                 color: veil(0.50)
-                text: page.demoMode
-                      ? "演示数据 · 未连接宿主；接入后改为 appData.query('" + page.sampleRecord + "')"
-                      : page.schemaReady
+                text: page.storeMessage !== "" ? page.storeMessage
+                      : page.demoMode
+                        ? "演示数据 · 未连接宿主；接入后改为 appData.query('" + page.sampleRecord + "')"
+                        : page.schemaReady
                         ? "最后更新：" + page.receivedText()
                           + "   ·   记录名 " + page.sampleRecord + " 已在 data_schema 中声明"
                         : "宿主未就绪或 data_schema 未加载；检查 manifest.json 的 platform_api 与 data_schema 字段"

@@ -28,6 +28,9 @@ python3 module_devkit.py test <本目录>
 
 它依次做 cmake 配置、构建、ctest；Qt 默认优先使用 6.5.3，也可用 `--qt-prefix` 指定。
 
+模板的 `sampleRecord` 是可配置属性，`schema check --strict` 会把它当成动态 record 名打
+`WARN`；这是静态分析的限制，运行时以宿主 `DataSchema` 的校验结果为准。
+
 固件：
 
 ```sh
