@@ -1,0 +1,7 @@
+.private/
+**/__pycache__/
+firmware/verification/native-tests.exe
+pi/build/
+firmware/artifacts/*.elf
+firmware/artifacts/*.elf
+!firmware/artifacts/*.bin

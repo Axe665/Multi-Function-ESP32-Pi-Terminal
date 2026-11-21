@@ -89,7 +89,7 @@ python3 -m http.server 8000 --bind 127.0.0.1
 | 方向 | 当前主线中的实现 | 阅读入口 / 注意事项 |
 | :--- | :--- | :--- |
 | 原生触屏桌面 | Qt Quick / QML、应用入口、中英文文案、窗口内输入法、启动遮罩 | [界面与回归说明](docs/pi-ui-regression.md)。主要面向 1024×600 触屏；不是 Web 桌面套壳。 |
-| 模块接入 | 控制面与数据面分离、认证会话、签名包验证、`QLibrary` 加载 C ABI 插件 | [模块 SDK](module-devkit/README.md)。串口连接成功不等于业务会话就绪。 |
+| 模块接入 | 控制面与数据面分离、认证会话、签名包验证、`QLibrary` 加载 C ABI 插件 | [模块 SDK](module-devkit/README.md) · [模块索引](MODULES.md)。串口连接成功不等于业务会话就绪。 |
 | 基础触屏浏览器 | Qt WebEngine + Viper 核心能力，导航、标签、书签、历史、下载与权限提示 | [浏览器范围](docs/viper-browser-port.md)。不是完整移植 Viper；不提供用户脚本、凭据自动填充等全部上游功能。 |
 | 音乐 | 原生音乐服务、在线 API、本地播放、歌词与整曲缓存后的跳转 | [音乐实现](docs/native-music.md)。在线 API 按需拉起；可用性受上游服务及网络影响。 |
 | 本地视频与网络电视 | 本地视频使用 VLC（`VlcVideoItem`，已并入主线）；电视页面使用 `GstVideoItem` / GStreamer，含频道与线路选择 | [电视内核说明](docs/tv-hls-player-notes.md) · [VLC 说明](docs/vlc-joystick.md)。VLC 后端尚未做树莓派实机性能验证。 |
@@ -222,24 +222,27 @@ python3 -m http.server 8000 --bind 127.0.0.1
 ```text
 .
 ├── pi_terminal/       C++ / Qt Quick 主程序、原生库、QML、媒体与测试
-├── module-devkit/     可独立使用的模块 SDK、模板与智能盆栽完整示例
+├── module-devkit/     可独立使用的模块 SDK、模板与示例
+├── MODULES.md         模块索引：目录 / 中文名 / manifest.id / module_id / 形态
+├── esp/               设备固件：modules/ 按模块分类，bridge/ 控制桥
+├── projects/          独立产品基线（啸天 pogo 等，不是模块包）
+├── archive/           历史交接快照，只读，不是构建入口
 ├── hardware/
 │   └── enclosure/    外壳 CAD、STL / STEP / 3MF、打印和装配资料
 ├── build_scripts/     构建/依赖检查/部署/验证/打包/出 deb
 ├── toolchain/         交叉编译 SDK：Qt 6.5.3 aarch64 完整仓库快照
-├── sdk/               设备固件：ESP 固件完整仓库快照
 ├── docs/              架构、专项实现、验证记录和项目展示
 ├── tools/             配包、维护、数据生成和文档素材工具
 └── third_party/       Viper、媒体参考代码、GStreamer（头文件 + 运行期插件）等第三方内容
 ```
 
-`toolchain/` 与 `sdk/` 都随主仓分发（不含各自的 `.git`），
+`toolchain/` 与 `esp/` 都随主仓分发（不含各自的 `.git`），
 保证下一台开发机不需要再猜版本：
 
 | 目录 | 内容 | 固定版本 |
 |---|---|---|
 | `toolchain/qt-6.5.3-aarch64/` | Qt 6.5.3 aarch64 交叉 SDK 的构建脚本与文档（二进制按需下载） | `d8c0c52` |
-| `sdk/esp-firmware/` | 桥板 / 模块 ESP-IDF 固件工程（替代旧 `esp/` 引用） | `16aebdd` |
+| `esp/` | 桥板 / 模块 ESP-IDF 固件工程（`bridge/` + `modules/`） | `16aebdd` |
 
 SDK 交叉包的分片太大，不跟着 git 走，放在 GitHub Release `sdk-v1` 上。
 需要时跑 `./tools/fetch_artifacts.sh` 补齐（自动校验 SHA256），构建脚本缺文件时会自己调它。

@@ -15,21 +15,24 @@ MANIFEST = KIT / "sdk" / "SOURCE-MANIFEST.json"
 
 def mappings():
     pairs = []
+    module = ROOT / "esp/modules/smart-planter"
     for name in ("linkit_sdk", "board_pins", "diagnostics"):
-        pairs.append((ROOT / "esp/S3_Pi_Module/components" / name,
+        pairs.append((module / "components" / name,
                       KIT / "sdk/esp32/components" / name))
     for name in ("module_data_service", "module_control_service"):
         pairs.append((ROOT / "esp/shared" / name, KIT / "sdk/esp32/components" / name))
     for name in ("lcd_st7789", "ui_env", "power_guard"):
-        pairs.append((ROOT / "esp/S3_Pi_Module/components" / name,
+        pairs.append((module / "components" / name,
                       KIT / "examples/smart-planter/firmware/components" / name))
     for name in ("pi_sensor_device", "lvgl"):
         pairs.append((ROOT / "esp/shared" / name,
                       KIT / "examples/smart-planter/firmware/components" / name))
     for name in ("main/main.c", "main/Kconfig.projbuild", "partitions.csv"):
-        pairs.append((ROOT / "esp/S3_Pi_Module" / name,
+        pairs.append((module / name,
                       KIT / "examples/smart-planter/firmware" / name))
-    pairs.append((ROOT / "pi_terminal/src/modules/api/pi_module_api.h", KIT / "sdk/include/pi_module_api.h"))
+    # pi_module_api.h 故意不做逐字同步：devkit 已按 v3 发布（platform_api=2 /
+    # data_schema），仓库宿主源码仍是 v2，最新终端软件还在另一台机器上开发。
+    # 等宿主迁到 v3 后再把这一对加回来；当前两边的版本差异见 MAINTENANCE.md。
     for name in ("package_tool.py", "mock_module.py"):
         pairs.append((ROOT / "pi_terminal/tools" / name, KIT / "tools" / name))
     return pairs

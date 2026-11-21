@@ -1,0 +1,135 @@
+menu "Module SDK"
+choice MODULE_TRANSPORT
+    prompt "Module business transport"
+    default MODULE_TRANSPORT_BLE
+config MODULE_TRANSPORT_BLE
+    bool "BLE"
+config MODULE_TRANSPORT_LAN
+    bool "Hotspot LAN"
+endchoice
+config MODULE_INSTANCE
+    string "Module instance"
+    default "module-84"
+config MODULE_TOKEN
+    string "Provisioned module token"
+    default ""
+    help
+        Set privately. Do not commit credentials.
+config MODULE_PORT
+    int "Business TCP port"
+    default 4580
+config MODULE_BLE_NAME
+    string "BLE device name"
+    default "PiModule-84"
+if MODULE_TRANSPORT_LAN
+config PI_HOTSPOT_SSID
+    string "Fixed Pi hotspot SSID"
+    default "PI_MODULE_NET"
+config PI_HOTSPOT_PASSWORD
+    string "Fixed Pi hotspot password"
+config PI_MODULE_STATIC_IP
+    string "Module static IPv4 (empty for DHCP)"
+    default ""
+config PI_MODULE_NETMASK
+    string "Module netmask"
+    default ""
+config PI_HOTSPOT_GATEWAY
+    string "Fixed Pi hotspot IPv4 gateway"
+    default ""
+endif
+endmenu
+
+menu "Bed sensor"
+
+comment "Channel order is fixed: 0 head-left, 1 head-right, 2 foot-left, 3 foot-right."
+
+config BED_HX711_DOUT0
+    int "HX711 DOUT channel 0 (head-left)"
+    default 4
+config BED_HX711_SCK0
+    int "HX711 SCK channel 0 (head-left)"
+    default 15
+config BED_HX711_DOUT1
+    int "HX711 DOUT channel 1 (head-right)"
+    default 5
+config BED_HX711_SCK1
+    int "HX711 SCK channel 1 (head-right)"
+    default 16
+config BED_HX711_DOUT2
+    int "HX711 DOUT channel 2 (foot-left)"
+    default 6
+config BED_HX711_SCK2
+    int "HX711 SCK channel 2 (foot-left)"
+    default 17
+config BED_HX711_DOUT3
+    int "HX711 DOUT channel 3 (foot-right)"
+    default 7
+config BED_HX711_SCK3
+    int "HX711 SCK channel 3 (foot-right)"
+    default 18
+
+config BED_SAMPLE_RATE_SPS
+    int "Expected HX711 rate (10 or 80, set by the RATE pin)"
+    default 80
+    range 10 80
+
+config BED_READ_TIMEOUT_MS
+    int "Per-channel read timeout (ms)"
+    default 150
+
+config BED_PUBLISH_MS
+    int "Status publish period (ms)"
+    default 500
+
+config BED_BED_WIDTH_MM
+    int "Bed width, head-left to head-right (mm)"
+    default 1500
+config BED_BED_LENGTH_MM
+    int "Bed length, head to foot (mm)"
+    default 2000
+
+config BED_NOMINAL_COUNTS_PER_KG
+    int "Nominal HX711 counts per kg before calibration"
+    default 21474
+    help
+        Approximately 2^23 * 128 * 1 mV/V / 50 kg with a 4.3 V excitation.
+        Per-corner calibration overrides this.
+
+config BED_PRESENT_KG
+    int "Weight that starts an enter debounce (kg)"
+    default 8
+config BED_ABSENT_KG
+    int "Weight that starts an exit debounce (kg)"
+    default 4
+config BED_ENTER_MS
+    int "Enter debounce (ms)"
+    default 800
+config BED_EXIT_MS
+    int "Exit debounce (ms)"
+    default 1500
+
+config BED_TURN_CM
+    int "CoM jump that counts as a posture change (cm)"
+    default 6
+config BED_SIT_CM
+    int "Head-foot CoM shift reported as sitting up (cm)"
+    default 15
+config BED_SHIFT_HOLD_MS
+    int "Posture shift must hold this long (ms)"
+    default 600
+config BED_EDGE_CM
+    int "Edge zone width from each bed side (cm)"
+    default 20
+config BED_EDGE_HOLD_MS
+    int "Edge zone must hold this long (ms)"
+    default 1000
+
+config BED_NO_RETURN_MIN
+    int "No-return event after leaving bed (minutes, 0 disables)"
+    default 0
+
+config BED_CAL_WEIGHT_KG
+    int "Known calibration weight placed on each corner (kg)"
+    default 20
+
+endmenu

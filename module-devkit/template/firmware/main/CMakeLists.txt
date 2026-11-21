@@ -7,4 +7,5 @@ endforeach()
 idf_component_register(SRCS "main.c"
     INCLUDE_DIRS "."
     REQUIRES module_data_service module_control_service nvs_flash esp_netif
+    PRIV_REQUIRES esp_timer
     EMBED_FILES "${MODULE_EMBED_DIR}/embedded_package.json" "${MODULE_EMBED_DIR}/embedded_package.tar.zst")

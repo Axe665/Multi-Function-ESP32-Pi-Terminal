@@ -1,0 +1,71 @@
+--- a/main/main.c
++++ b/main/main.c
+@@ -51,6 +51,15 @@
+ static bool s_module_config_valid;
+ static char s_module_transport_mode[32];
+ static char s_module_package_transport[24];
++/* Infrared baseline: explicit profile, never infer a product ID from GENERIC. */
++static bool s_xiaotian_profile;
++static char s_xiaotian_instance[65];
++static bool valid_xiaotian_instance(const char *s) {
++    if (!s || strlen(s) != 21 || strncmp(s, "xiaotian-", 9)) return false;
++    for (unsigned i=9; i<21; ++i)
++        if (!((s[i]>='0' && s[i]<='9') || (s[i]>='a' && s[i]<='f'))) return false;
++    return true;
++}
+ 
+ static uint16_t pbr_crc16(const uint8_t *data, size_t length)
+ {
+@@ -171,6 +180,15 @@
+     int json_len;
+     if (attached) {
+         if (!s_module_config_valid) return false;
++        if (s_xiaotian_profile) {
++            json_len = snprintf(json, sizeof(json),
++                "{\"event\":\"attach\",\"module_id\":81,\"module_instance\":\"%s\","
++                "\"module_config\":{\"schema\":\"module-transport-v1\","
++                "\"transport_mode\":\"fixed_hotspot_lan\",\"package_transport\":\"data\","
++                "\"business_adapter\":\"xiaotian_https_v2\",\"https_port\":8443,\"package_available\":false}}",
++                s_xiaotian_instance);
++            return json_len>0 && (size_t)json_len<sizeof(json) && pbr_send_frame(1,json);
++        }
+         json_len = snprintf(json, sizeof(json),
+             "{\"event\":\"attach\",\"module_id\":%u,\"module_instance\":\"%s\","
+             "\"module_config\":{\"schema\":\"module-transport-v1\",\"transport_mode\":\"%s\",\"package_transport\":\"%s\"}}",
+@@ -178,7 +196,7 @@
+     } else {
+         json_len = snprintf(json, sizeof(json),
+             "{\"event\":\"detach\",\"module_id\":%u,\"module_instance\":\"%s\"}",
+-            module_id, PBRIDGE_INSTANCE);
++            module_id, s_xiaotian_profile ? s_xiaotian_instance : PBRIDGE_INSTANCE);
+     }
+     if (json_len <= 0 || (size_t)json_len >= sizeof(json)) return false;
+     return pbr_send_frame(1, json);
+@@ -416,7 +434,17 @@
+                     (!strcmp(package->valuestring, "data") || !strcmp(package->valuestring, "hotspot_lan"));
+                 const bool combo_valid = valid &&
+                     (!strcmp(mode->valuestring, "fixed_ble") || !strcmp(package->valuestring, "data"));
+-                if (combo_valid) {
++                const cJSON *adapter = cJSON_GetObjectItemCaseSensitive(config, "business_adapter");
++                const cJSON *instance = cJSON_GetObjectItemCaseSensitive(config, "module_instance");
++                const cJSON *https_port = cJSON_GetObjectItemCaseSensitive(config, "https_port");
++                const bool infrared = cJSON_IsString(adapter) && !strcmp(adapter->valuestring, "xiaotian_https_v2");
++                const bool infrared_valid = infrared && rx.frame.module_id==0x51 &&
++                    cJSON_IsString(instance) && valid_xiaotian_instance(instance->valuestring) &&
++                    cJSON_IsNumber(https_port) && https_port->valuedouble==8443 && combo_valid &&
++                    !strcmp(mode->valuestring,"fixed_hotspot_lan");
++                if (combo_valid && (!adapter || infrared_valid)) {
++                    s_xiaotian_profile=infrared_valid;
++                    if(infrared_valid) strlcpy(s_xiaotian_instance,instance->valuestring,sizeof(s_xiaotian_instance));
+                     strlcpy(s_module_transport_mode, mode->valuestring, sizeof(s_module_transport_mode));
+                     strlcpy(s_module_package_transport, package->valuestring, sizeof(s_module_package_transport));
+                     s_module_config_valid = true;
+@@ -472,7 +500,7 @@
+             (pbr_now - last_pbr_announce_tick) >= pdMS_TO_TICKS(PBRIDGE_ANNOUNCE_MS))) {
+             /* LinkIt status.module_id is the peer's generic LinkIt type (1),
+              * not the Pi product/profile ID. Map this tested module explicitly. */
+-            pbr_module_id = PBRIDGE_MODULE_ID;
++            pbr_module_id = s_xiaotian_profile ? 0x51 : PBRIDGE_MODULE_ID;
+             if (pbr_send_link_event(true, pbr_module_id)) {
+                 pbr_attached = true; s_contact_attached = true;
+                 last_pbr_announce_tick = pbr_now;

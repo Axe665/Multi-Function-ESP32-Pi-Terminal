@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
     QFile broken(tmp.path() + "/broken"); CHECK(broken.open(QIODevice::WriteOnly)); broken.write("not JSON"); broken.close();
     History corrupt(broken.fileName()); CHECK(!corrupt.error.isEmpty());
     directory = tmp.path().toUtf8(); pi_host_services_t host{};
-    host.api_version = 1; host.emit_event = emitEvent; host.data_directory = dataDirectory;
+    host.api_version = PI_MODULE_API_VERSION; host.emit_event = emitEvent; host.data_directory = dataDirectory;
     auto m = pi_module_create(&host); CHECK(m);
     CHECK(pi_module_on_attach(m, "{\"module_instance\":\"test-device\"}") == 0);
     const QByteArray payload("{\"temperature_C\":24,\"battery_pct\":null}");

@@ -1,9 +1,36 @@
 cmake_minimum_required(VERSION 3.16)
 project(module LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# 全项目唯一基线是 Qt 6.5.3，6.4.x 已不支持（见仓库 AGENTS.md）。
+# 交叉编译时用 devkit 自带的 toolchain，它会校验 SDK 里的 Qt 不低于 6.5：
+#   cmake -DCMAKE_TOOLCHAIN_FILE=<devkit>/toolchain/module-aarch64.cmake ...
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core)
+
 add_library(module SHARED module.cpp)
+target_link_libraries(module PRIVATE Qt6::Core)
 target_include_directories(module PRIVATE "${MODULE_SDK_DIR}/include")
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/manifest.json" MODULE_MANIFEST_JSON)
 configure_file(module_manifest.h.in module_manifest.h @ONLY)
 target_include_directories(module PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 set_target_properties(module PROPERTIES OUTPUT_NAME module)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/manifest.json")
+
+# 业务逻辑测试：直接编译 module.cpp 并喂一个假 host，不需要真机、不需要装模块。
+option(MODULE_TESTING "Build this module's business-logic tests" OFF)
+if(MODULE_TESTING)
+    enable_testing()
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Test Qml Quick)
+    set(CMAKE_AUTOMOC ON)
+    add_executable(module_test tests/module_test.cpp module.cpp)
+    target_include_directories(module_test PRIVATE "${MODULE_SDK_DIR}/include" "${CMAKE_CURRENT_BINARY_DIR}")
+    target_link_libraries(module_test PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME module_business_logic COMMAND module_test)
+
+    add_executable(module_qml_load_test "${MODULE_SDK_DIR}/tests/qml_load_test.cpp")
+    target_link_libraries(module_qml_load_test PRIVATE Qt6::Qml Qt6::Quick)
+    add_test(NAME module_qml_load
+             COMMAND module_qml_load_test "${CMAKE_CURRENT_SOURCE_DIR}/qml/ModulePage.qml")
+    set_tests_properties(module_qml_load PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()

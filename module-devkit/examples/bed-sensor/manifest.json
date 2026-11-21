@@ -1,0 +1,121 @@
+{
+  "id": "bed.guardian",
+  "name": "床边守护",
+  "version": "0.1.0",
+  "module_id": 84,
+  "package_id": "bed.guardian-0.1.0-arm64",
+  "package_version": "0.1.0",
+  "host_arch": [
+    "aarch64",
+    "arm64"
+  ],
+  "library": "libmodule.so",
+  "qml_page": "qml/ModulePage.qml",
+  "abi_version": 1,
+  "min_host_api": 3,
+  "qt_major": 6,
+  "platform_api": 2,
+  "network_api": "none",
+  "file_api": "none",
+  "unload_contract": "synchronous-stop-v1",
+  "max_payload": 65532,
+  "control_protocol": "pogo-control-v1",
+  "data_protocol": "bed-guardian-v1",
+  "capabilities": [
+    "bed.weight",
+    "bed.position",
+    "bed.events"
+  ],
+  "permissions": [
+    "transport.ble"
+  ],
+  "actions": [
+    "tare",
+    "calibrate",
+    "reset"
+  ],
+  "data_schema": {
+    "version": 1,
+    "records": {
+      "sample.bed": {
+        "kind": "sample",
+        "label": "bed sample",
+        "retention_days": 365,
+        "fields": {
+          "w": {
+            "type": "double",
+            "unit": "kg"
+          },
+          "x": {
+            "type": "double",
+            "unit": "cm"
+          },
+          "y": {
+            "type": "double",
+            "unit": "cm"
+          },
+          "bw": {
+            "type": "double",
+            "unit": "cm"
+          },
+          "bl": {
+            "type": "double",
+            "unit": "cm"
+          },
+          "em": {
+            "type": "double",
+            "unit": "cm"
+          },
+          "state": {
+            "type": "string"
+          },
+          "out_ms": {
+            "type": "int",
+            "unit": "ms"
+          },
+          "in_ms": {
+            "type": "int",
+            "unit": "ms"
+          },
+          "mov": {
+            "type": "double"
+          },
+          "evt": {
+            "type": "int"
+          },
+          "event": {
+            "type": "string"
+          },
+          "night": {
+            "type": "bool"
+          },
+          "fault": {
+            "type": "int"
+          },
+          "received_at": {
+            "type": "int",
+            "unit": "ms"
+          },
+          "v": {
+            "type": "int"
+          },
+          "present": {
+            "type": "bool"
+          },
+          "cal": {
+            "type": "string"
+          },
+          "cw": {
+            "type": "double",
+            "unit": "kg"
+          },
+          "t": {
+            "type": "int",
+            "unit": "ms"
+          }
+        }
+      }
+    },
+    "kv_keys": []
+  }
+}

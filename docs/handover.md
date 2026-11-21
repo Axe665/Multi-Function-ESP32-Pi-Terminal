@@ -29,7 +29,7 @@ git checkout pr/sync-terminal-2026-11     # 当前交付分支
 仓库自带两个完整外部仓库快照（不需要联网再拉）：
 
 - `toolchain/qt-6.5.3-aarch64/` — Qt 交叉 SDK（含 artifacts 分片）
-- `sdk/esp-firmware/` — ESP 固件工程
+- `esp/` — ESP 固件工程
 
 ## 3. 跑起来（最快路径，x86 桌面 Qt 6.5.3）
 
