@@ -254,7 +254,7 @@ Rectangle {
                         border.color: "#dbe4ea"
                         Text {
                             x: 14; y: 10
-                            text: "床上重量"
+                            text: "床上重量 · kg"
                             color: "#6b8192"
                             font.pixelSize: 12
                         }
@@ -264,12 +264,6 @@ Rectangle {
                             color: "#1d3446"
                             font.pixelSize: 34
                             font.bold: true
-                        }
-                        Text {
-                            x: 14 + 104; y: 46
-                            text: "kg"
-                            color: "#6b8192"
-                            font.pixelSize: 14
                         }
                     }
 
