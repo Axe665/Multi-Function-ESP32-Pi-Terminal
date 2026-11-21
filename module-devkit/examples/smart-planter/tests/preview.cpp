@@ -1,6 +1,7 @@
 #include <QGuiApplication>
 #include <QQuickView>
 #include <QQuickItem>
+#include <QQmlContext>
 #include <QQmlEngine>
 #include <QTimer>
 #include <QDateTime>
@@ -19,8 +20,6 @@ int main(int argc, char **argv) {
         warnings = true; for (const auto &e : errors) fprintf(stderr, "%s\n", qPrintable(e.toString()));
     });
     view.setResizeMode(QQuickView::SizeRootObjectToView);
-    view.setSource(QUrl::fromLocalFile(QString::fromLocal8Bit(argv[1])));
-    if (view.status() != QQuickView::Ready) return 3;
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     QVariantList day, week;
     for (int i = 0; i < 96; ++i) {
@@ -35,7 +34,12 @@ int main(int argc, char **argv) {
         {"pressure_hPa", 1015.1}, {"battery_pct", 54}, {"battery_V", 3.85},
         {"power_source", "unknown"}, {"power_protection", "source_unknown_auto_sleep_inhibited"},
         {"received_at", double(now)}, {"history_day", day}, {"history_week", week}};
-    view.rootObject()->setProperty("sessionModel", QVariantMap{{"data", data}});
+    view.rootContext()->setContextProperty("hostTheme", QVariantMap{
+        {"background", "#08121f"}, {"surface", "#102238"}, {"foreground", "#ffffff"},
+        {"accent", "#85deff"}, {"scale", 1.0}});
+    view.rootContext()->setContextProperty("sessionModel", QVariantMap{{"data", data}});
+    view.setSource(QUrl::fromLocalFile(QString::fromLocal8Bit(argv[1])));
+    if (view.status() != QQuickView::Ready) return 3;
     view.resize(840, 1120); view.show();
     QTimer::singleShot(1000, [&] {
         if (!view.grabWindow().save(QString::fromLocal8Bit(argv[2]) + "-day.png")) warnings = true;

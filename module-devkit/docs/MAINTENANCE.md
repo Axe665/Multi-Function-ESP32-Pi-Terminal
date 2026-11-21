@@ -1,17 +1,14 @@
 # SDK源码归属与维护
 
-> 路径说明：旧文档里的 `esp/...` 现位于 `sdk/esp-firmware/esp/...`（完整仓库快照随主仓分发）。外部仓库
-> [gggitj/ESP-Modular-Terminal-Service](https://github.com/gggitj/ESP-Modular-Terminal-Service) 里的相对路径不变。
-
-
 ## 正式工程与独立SDK
 
-- 仓库正式模块固件：`esp/S3_Pi_Module/`。
+- 仓库正式模块固件：`esp/modules/smart-planter/`（智能盆栽 · 环境看板，id 80）。
+- 控制桥固件：`esp/bridge/S3_PiBridge_LinkIt_Host/`。
 - 共享传感器、数据面及LVGL：`esp/shared/`。
 - SDK示例的固件：`module-devkit/examples/smart-planter/firmware/`，是正式源码的独立导出副本。
 - 主机插件、QML及其业务测试：只在SDK示例维护，不放进ESP执行代码。
 - SDK通用模板、CLI、AI引导属于SDK本身，不覆盖到正式ESP工程。
-- 用户提供的 `esp/ESP32_Env_Module_Firmware_20261018/` 保留为历史参考，不是当前维护入口。
+- 用户提供的 2026-10-18 历史交接快照保留在 `archive/20261018-env-module-handover/`，仅作参考，不是当前维护入口。
 
 为满足外部开发者拿不到主仓库的条件，SDK不能通过符号链接或相对主仓库路径引用正式固件；部分源文件必须随包提供。它们是有清单的导出副本，不是两个并行维护分支。
 
@@ -25,8 +22,8 @@ python3 tools/sync_module_devkit.py --write
 ```
 
 工具使用明确映射，校验每个源文件和副本SHA256，清单位于 `sdk/SOURCE-MANIFEST.json`。
-主仓库快照若没有 `esp/`（独立仓库），缺失的 canonical source 会输出 `SKIP` 而不是
-让整条闸门失败；仍会校验 `pi_module_api.h`、`package_tool.py`、`mock_module.py`
+独立仓库或交接快照若没有 `esp/`，缺失的 canonical source 会输出 `SKIP` 而不是
+让整条闸门失败；此时仍会校验 `pi_module_api.h`、`package_tool.py`、`mock_module.py`
 三份实际存在的副本。`ctest -R module_devkit_sync_check` 已接入同一检查。
 
 - `--check` 只读。
@@ -34,12 +31,13 @@ python3 tools/sync_module_devkit.py --write
 - SDK副本与上次登记哈希不符时拒绝覆盖，需维护者先审查合并。
 - 多余文件只报告，不自动删除；不复制 sdkconfig、密钥或嵌入包。
 - 公开 SDK 的 ESP 数据面目前只有裸 TCP/BLE 无 HMAC，不能对接强制 TLS+挑战应答的
-  当前 Pi；LAN TLS/BLE 认证由正式 `esp/S3_Pi_Module` 线推进，导出副本尚未带上。
+  当前 Pi；LAN TLS/BLE 认证由正式 `esp/modules/smart-planter` 线推进，导出副本尚未带上。
 - 固件顶层/main CMake 各有必要差异：正式工程使用仓库组件及外部包目录；SDK示例使用自带SDK组件及构建脚本准备的包文件。它们不做逐字同步。
 
 ## SDK目录说明
 
 - 根目录保留稳定CLI入口和README，避免移动脚本破坏独立使用命令。
+- `template/` 是最小完整工程（固件 + 主机插件 + QML + 测试）；`sdk/tests/qml_load_test.cpp` 是所有模块共用的离屏 QML 加载检查。
 - `docs/` 集中开发流程及验收文档。
 - `examples/smart-planter/tests/` 保存长期原生回归及QML布局预览，不复制测试产物。
 - LCD长期测试随固件放在 `examples/smart-planter/firmware/components/ui_env/tests/`；字体C数组、来源清单、Roboto及Noto许可证完整保留，目标文案为简体中文。

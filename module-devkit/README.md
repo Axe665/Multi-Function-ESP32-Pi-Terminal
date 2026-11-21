@@ -1,9 +1,5 @@
 # 模块开发者工具包
 
-> 路径说明：旧文档里的 `esp/...` 现位于 `sdk/esp-firmware/esp/...`（完整仓库快照随主仓分发）。外部仓库
-> [gggitj/ESP-Modular-Terminal-Service](https://github.com/gggitj/ESP-Modular-Terminal-Service) 里的相对路径不变。
-
-
 面向固定 ESP32-S3 / LinkIt / Pi 终端平台的独立 SDK。复制本目录即可开发，不需要主仓库源码。主机 `.so` 在 Pi 上运行，ESP 负责传感器、控制面、数据面及插件包提供。
 
 ## 能力边界（先读）
@@ -16,7 +12,7 @@
 - 公开 SDK 的 ESP 数据面仍是裸 TCP / 无 HMAC 实现（`module_data_service`）。
 
 因此用本 SDK 的 `examples/` 或 `template/` 构建的固件，在当前 Pi 上会停在
-`session_ready` 之前。正式 `esp/S3_Pi_Module` 是否已带安全数据面不在本快照内；
+`session_ready` 之前。正式 `esp/modules/smart-planter` 是否已带安全数据面不在本快照内；
 在补齐前，请把本文的“离线包验证”与“业务面联调”分开验收。
 
 另外注意：BLE 示例配置的 write/notify UUID 是
@@ -27,21 +23,24 @@
 
 | 路径 | 内容 |
 | --- | --- |
-| `module_devkit.py` | 初始化、环境检查、校验、资源整理、签名发布、准备固件嵌入包 |
+| `module_devkit.py` | 初始化、环境检查、离线测试、校验、资源整理、签名发布、准备固件嵌入包 |
 | `firmware-build.sh` | 构建指定模块工程的固定 BLE/LAN 变体，不烧录 |
 | `ai_guide.py` | 为模块生成 AI 开发上下文 |
 | `mock-device.py` | 本机回环 TCP/HTTP 模拟设备入口 |
 | `sdk/include/` | 稳定主机 C ABI 和 C++ 辅助头文件 |
 | `sdk/esp32/` | 独立 LinkIt、控制面、业务数据面、标准板组件 |
-| `template/` | 新模块的最小双端工程模板 |
-| `examples/smart-planter/` | 完整环境模块：植物图示、日/周温度历史、电量、LCD与供电保护策略 |
-| `examples/bed-sensor/` | 四点称重床边守护：四路 HX711、重心/离床/翻身/坐起状态机、QML 页面和离线逻辑测试 |
+| `template/` | 新模块的最小完整工程：ESP 固件 + 主机插件 + QML 页面 + 测试 |
+| `examples/smart-planter/` | 智能盆栽 · 环境看板（id 80）：完整双端，植物图示、日/周温度历史、电量、LCD与供电保护 |
+| `examples/bed-sensor/` | 床边守护（id 84）：完整双端，四路 HX711、重心/离床/翻身/坐起状态机 |
+| `examples/blood-pressure/` | 血压读数（id 83）：仅主机，录入/接收测量并校验边界 |
+| `examples/xiaotian-fence/` | 啸天红外围界（id 82）：仅主机，布防/告警页面与离线状态机，固件规划中 |
 | `tools/` | 自带的签名/验签配包器和模拟协议实现 |
 | `docs/` | AI 分阶段指南、物理验收清单、SDK维护与同步说明 |
 | `artifacts/` | 本机比赛构建产物。**`.gitignore` 已列出该目录，但已跟踪的文件不受其保护**——当前这些文件仍随仓库分发；含私有 provision 的固件在 B-07 核查与处置完成前不得再分发 |
 
 ### 主要文档
 
+- [模块索引（目录 / 中文名 / manifest.id / module_id / 形态）](../MODULES.md)
 - [AI coding 引导](docs/AI-CODING-GUIDE.md)
 - [物理 Pi 验收清单](docs/PHYSICAL-PI-TEST.md)
 - [SDK 与正式 ESP 源码的维护关系](docs/MAINTENANCE.md)
@@ -57,9 +56,14 @@
 ```sh
 python3 module_devkit.py doctor
 python3 module_devkit.py init /path/to/my-module --module-id 200 --name "我的模块"
+python3 module_devkit.py test /path/to/my-module
 python3 ai_guide.py /path/to/my-module --module-id 200 --transport LAN
 python3 module_devkit.py validate /path/to/my-module
 ```
+
+`init` 生成的是可编译的最小完整模块：ESP 固件（含占位嵌入包）、主机插件、带宿主注入项的
+QML 页面、通用组件、QtTest 和 README。`test` 跑主机插件构建 + ctest（ABI/manifest/action +
+QML 离屏加载）；Qt 不在默认路径时加 `--qt-prefix`。
 
 让 AI 阅读生成的 `AI-CONTEXT.md` 和 `docs/AI-CODING-GUIDE.md`。最小模板不是完整业务实现；希望直接参考真实传感器、图示、历史存储和测试时，阅读智能盆栽示例。
 

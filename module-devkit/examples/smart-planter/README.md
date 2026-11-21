@@ -1,8 +1,10 @@
 # 智能盆栽 · 环境看板（SDK 完整示例）
 
+> 模块：智能盆栽 · 环境看板 ｜ id 80 ｜ 形态：完整双端（ESP + 主机 + QML）
+
 本示例由 `module_devkit.py init` 生成，再实现真实模块业务。仅依赖此 SDK、ESP-IDF 5.5.4、与 Pi 匹配的 ARM64/Qt 6.4 工具链，不需主程序源码。不修改 Pi 主程序、配置或发布公钥。
 
-正式 ESP 代码位于**独立仓库** `gggitj/ESP-Modular-Terminal-Service` 的 `esp/S3_Pi_Module/` 与 `esp/shared/`（本 Pi 仓库不跟踪 `esp/`）；本目录的 `firmware/` 保留为可单独分发的SDK导出副本。维护关系及一致性检查见 [SDK维护说明](../../docs/MAINTENANCE.md)，不手工维护两个不同版本。
+正式 ESP 代码来自**独立仓库** `gggitj/ESP-Modular-Terminal-Service` 的 `esp/S3_Pi_Module/` 与 `esp/shared/`，本仓库按模块归类为 `esp/modules/smart-planter/` 与 `esp/shared/`；本目录的 `firmware/` 保留为可单独分发的SDK导出副本。维护关系及一致性检查见 [SDK维护说明](../../docs/MAINTENANCE.md)，不手工维护两个不同版本。
 
 ## 硬件与身份
 
@@ -66,7 +68,7 @@ module-devkit/firmware-build.sh module-devkit/examples/smart-planter LAN /path/t
 
 ```sh
 cmake -S module-devkit/examples/smart-planter -B /path/to/tests \
-  -DMODULE_SDK_DIR="$PWD/module-devkit/sdk" -DPLANTER_TESTING=ON
+  -DMODULE_SDK_DIR="$PWD/module-devkit/sdk" -DMODULE_TESTING=ON
 cmake --build /path/to/tests --parallel 4
 ctest --test-dir /path/to/tests --output-on-failure
 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software /path/to/tests/planter_preview \

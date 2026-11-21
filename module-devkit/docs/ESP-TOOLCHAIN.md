@@ -1,14 +1,13 @@
 # ESP 固件工具链（ESP-IDF 5.5.4 / ESP32-S3）
 
-设备侧固件（桥板 + 模块）在 **独立仓库** 里构建，本仓不跟踪 `esp/` 目录。
-完整工程内容随主仓放在 [`sdk/esp-firmware/`](../../sdk/esp-firmware/)，固定版本
-`16aebdd`。
+设备侧固件（桥板 + 模块）来自 **独立仓库** `gggitj/ESP-Modular-Terminal-Service` 的固定版本
+`16aebdd`，完整工程随主仓放在 [`esp/`](../../esp/)。
 
 ## 1. 版本要求（写死，不要用 latest）
 
 | 组件 | 版本 | 说明 |
 |---|---|---|
-| ESP-IDF | **5.5.4** | 与 `sdk/esp-firmware/` 的 `sdkconfig.defaults` 对齐 |
+| ESP-IDF | **5.5.4** | 与 `esp/` 的 `sdkconfig.defaults` 对齐 |
 | mbedTLS | **3.6.5** | 随 IDF 5.5.4 提供；PBR 协议向量按此版本生成 |
 | 目标芯片 | ESP32-S3（Xtensa LX7） | 桥板 LinkIt Host 与模块都用 S3 |
 | 工具链 | `xtensa-esp32s3-elf-gcc`（IDF 5.5.4 自带，GCC 14.2） | `install.sh esp32s3` 自动装 |
@@ -38,9 +37,10 @@ idf.py --version        # 应输出 ESP-IDF v5.5.4
 ## 3. 构建
 
 ```sh
-# 工程在 sdk/esp-firmware/esp/ 下（旧文档写 esp/，等价）
+# 模块在 esp/modules/ 下，桥板在 esp/bridge/ 下
 export PI_MODULE_SDKCONFIG=$PWD/sdkconfig.private     # 私有配置，不入库
-./build_scripts/build_esp32.sh S3_Pi_Module
+export PI_MODULE_PACKAGE_DIR=/path/to/embedded-package
+./build_scripts/build_module.sh smart-planter
 ./build_scripts/build_esp32.sh S3_PiBridge_LinkIt_Host
 ```
 
@@ -58,7 +58,8 @@ idf.py -B build set-target esp32s3 build
 `module_firmware.bin` 1.2 MB / `.elf` 12 MB，构建通过。
 
 `build_esp32.sh` 只做两件事：检查 `idf.py` 已在 PATH、把 `ESP_BUILD_DIR` 指到
-`~/esp32_workspace/builds/<project>`。它**不会**替你 source IDF。
+`~/esp32_workspace/builds/<project>`。它**不会**替你 source IDF。模块也可以直接用
+`build_module.sh <模块名>`，后者额外要求签名嵌入包。
 
 模块工程还有一层封装：
 
@@ -72,7 +73,7 @@ idf.py -B build set-target esp32s3 build
 ## 4. 烧录与调试
 
 ```sh
-idf.py -C sdk/esp-firmware/esp/S3_Pi_Module -p /dev/ttyACM0 flash monitor
+idf.py -C esp/modules/smart-planter -p /dev/ttyACM0 flash monitor
 ```
 
 - 桥板走 CH343（`/dev/ttyUSB0`），模块走原生 USB-Serial/JTAG（`/dev/ttyACM0`）；
@@ -84,7 +85,7 @@ idf.py -C sdk/esp-firmware/esp/S3_Pi_Module -p /dev/ttyACM0 flash monitor
 | 现象 | 原因 | 处理 |
 |---|---|---|
 | `ESP-IDF is not exported; source export.sh first` | 新 shell 没 export | `. ~/esp/esp-idf/export.sh` |
-| `Unknown ESP32 project` | 工程名不是 `S3_Pi_Module` / `S3_PiBridge_LinkIt_Host` | 用 `sdk/esp-firmware/esp/` 下的目录名 |
+| `Unknown ESP32 project` | 工程名不是模块名或 `S3_PiBridge_LinkIt_Host` | 用 `esp/modules/` 或 `esp/bridge/` 下的目录名 |
 | `mbedtls/ecdsa.h: No such file` | IDF 版本不对（不是 5.5.4） | 重新 clone `-b v5.5.4` |
 | `ninja: build stopped: subcommand failed` + 找不到 `xtensa-esp32s3-elf-gcc` | 只跑了 `install.sh` 没 export | export 后再 build |
 | 固件能跑但 PBR 握手失败 | 私钥/公钥与终端信任库不匹配 | 见 `docs/pbr-secure-v1/` |
@@ -93,6 +94,6 @@ idf.py -C sdk/esp-firmware/esp/S3_Pi_Module -p /dev/ttyACM0 flash monitor
 
 - 主仓的 `module-devkit/sdk/esp32/` 是**设备侧组件 SDK**（LinkIt、board_pins、
   data/control service、diagnostics），随主仓构建；
-- `sdk/esp-firmware/` 是**完整固件工程**，用于桥板和模块的最终产物；
+- `esp/` 是**完整固件工程**，用于桥板和模块的最终产物；
 - 两者版本要一起升：组件接口变了，固件工程的 `CMakeLists.txt` 里
   `EXTRA_COMPONENT_DIRS` 指向 `module-devkit/sdk/esp32/components`。

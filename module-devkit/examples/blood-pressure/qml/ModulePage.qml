@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Material
+import "components"
 
 // 血压读数模块页面（模块自带 QML，由宿主独立引擎加载）。
 //
@@ -26,8 +27,17 @@ Rectangle {
     readonly property color background: theme.background || "#08121f"
     readonly property color surface: theme.surface || "#102238"
     readonly property color foreground: theme.foreground || "#ffffff"
+    readonly property color accent: theme.accent || "#85deff"
+    readonly property color muted: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.62)
+    readonly property color line: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.14)
+    readonly property color warn: "#fbbf24"
     readonly property real gap: 16 * uiScale
     readonly property real hit: Math.max(48, 64 * uiScale)
+
+    readonly property bool hasHostData: typeof moduleData !== "undefined" && moduleData
+    readonly property string statusKind: !hasHostData ? "empty" : rows.length === 0 ? "empty" : "live"
+    readonly property string statusText: !hasHostData ? "未连接宿主"
+        : rows.length === 0 ? "还没有读数" : ("已加载 " + rows.length + " 条")
 
     function reload() {
         if (typeof moduleData === "undefined" || !moduleData) { rows = []; return }
@@ -81,130 +91,187 @@ Rectangle {
     }
 
     color: page.background
+    Material.theme: Material.Dark
+    Material.accent: page.accent
 
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: page.gap
         spacing: page.gap
 
-        Text {
+        Item {
             Layout.fillWidth: true
-            text: page.english
-                  ? "Daily reference only; not for diagnosis"
-                  : "家庭日常参考，不作诊断依据"
-            color: "#6e9abb"
-            font.pixelSize: 12 * page.uiScale
-            wrapMode: Text.Wrap
+            implicitHeight: Math.max(titleColumn.implicitHeight, badge.implicitHeight)
+
+            Column {
+                id: titleColumn
+                width: parent.width - badge.implicitWidth - page.gap
+                spacing: 4 * page.uiScale
+                Text {
+                    text: page.english ? "Blood pressure" : "血压读数"
+                    color: page.foreground
+                    font.pixelSize: 22 * page.uiScale
+                    font.bold: true
+                }
+                Text {
+                    text: page.english
+                          ? "Daily reference only; not for diagnosis"
+                          : "家庭日常参考，不作诊断依据"
+                    color: page.muted
+                    font.pixelSize: 12 * page.uiScale
+                    wrapMode: Text.Wrap
+                    width: parent.width
+                }
+            }
+
+            StateBadge {
+                id: badge
+                anchors.right: parent.right
+                anchors.top: parent.top
+                theme: page.theme
+                kind: page.statusKind
+                text: page.statusText
+            }
         }
 
         // ---- 手工录入 ----
-        Text {
-            text: page.english ? "Manual entry" : "手工录入"
-            color: page.foreground
-            font.pixelSize: 14 * page.uiScale
-        }
-        RowLayout {
+        Rectangle {
             Layout.fillWidth: true
-            spacing: page.gap / 2
-            TextField {
-                id: sysField
-                Layout.fillWidth: true
-                Layout.preferredHeight: page.hit
-                placeholderText: page.english ? "Systolic" : "收缩压"
-                text: page.entrySys
-                inputMethodHints: Qt.ImhDigitsOnly
-                onTextChanged: page.entrySys = text
-            }
-            TextField {
-                id: diaField
-                Layout.fillWidth: true
-                Layout.preferredHeight: page.hit
-                placeholderText: page.english ? "Diastolic" : "舒张压"
-                text: page.entryDia
-                inputMethodHints: Qt.ImhDigitsOnly
-                onTextChanged: page.entryDia = text
-            }
-            TextField {
-                id: pulseField
-                Layout.fillWidth: true
-                Layout.preferredHeight: page.hit
-                placeholderText: page.english ? "Pulse" : "脉搏"
-                text: page.entryPulse
-                inputMethodHints: Qt.ImhDigitsOnly
-                onTextChanged: page.entryPulse = text
-            }
-            Button {
-                Layout.preferredHeight: page.hit
-                text: page.entryUnit
-                onClicked: page.entryUnit = (page.entryUnit === "mmHg") ? "kPa" : "mmHg"
-            }
-            Button {
-                Layout.preferredHeight: page.hit
-                text: page.english ? "Save" : "保存"
-                enabled: page.entrySys.length > 0 || page.entryDia.length > 0
-                         || page.entryPulse.length > 0
-                onClicked: page.submit()
-            }
-        }
-        Text {
-            Layout.fillWidth: true
-            visible: page.message.length > 0
-            text: page.message
-            color: "#ffdaa0"
-            font.pixelSize: 12 * page.uiScale
-            wrapMode: Text.Wrap
-        }
+            implicitHeight: formColumn.implicitHeight + 2 * page.gap
+            radius: 16 * page.uiScale
+            color: page.surface
+            border.width: 1
+            border.color: page.line
 
-        // ---- 读数列表 ----
-        Text {
-            text: page.english ? "Recent readings" : "最近读数"
-            color: "#6e9abb"
-            font.pixelSize: 14 * page.uiScale
-        }
-        Text {
-            Layout.fillWidth: true
-            visible: page.rows.length === 0
-            text: page.english ? "No readings yet" : "还没有读数"
-            color: "#6e9abb"
-            font.pixelSize: 12 * page.uiScale
-        }
-        Repeater {
-            model: page.rows
-            delegate: Rectangle {
-                required property var modelData
-                Layout.fillWidth: true
-                Layout.preferredHeight: page.hit
-                radius: 12 * page.uiScale
-                color: page.surface
+            ColumnLayout {
+                id: formColumn
+                anchors.fill: parent
+                anchors.margins: page.gap
+                spacing: page.gap / 2
+                Text {
+                    text: page.english ? "Manual entry" : "手工录入"
+                    color: page.foreground
+                    font.pixelSize: 14 * page.uiScale
+                }
                 RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: page.gap / 2
-                    Text {
+                    Layout.fillWidth: true
+                    spacing: page.gap / 2
+                    TextField {
+                        id: sysField
                         Layout.fillWidth: true
-                        // 每个指标独立判断：缺失显示"—"，不写 0。
-                        readonly property string unit: modelData.unit || ""
-                        text: (modelData.systolic !== undefined ? String(modelData.systolic) : "—")
-                              + "/" + (modelData.diastolic !== undefined ? String(modelData.diastolic) : "—")
-                              + (modelData.pulse !== undefined ? "  ♥" + modelData.pulse : "")
-                              + (unit.length > 0 ? "  " + unit : "")
-                        color: modelData.valid ? page.foreground : "#ffdaa0"
-                        font.pixelSize: 14 * page.uiScale
+                        Layout.preferredHeight: page.hit
+                        placeholderText: page.english ? "Systolic" : "收缩压"
+                        text: page.entrySys
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        onTextChanged: page.entrySys = text
                     }
-                    Text {
-                        text: page.sourceLabel(modelData.source)
-                        color: "#6e9abb"
-                        font.pixelSize: 12 * page.uiScale
+                    TextField {
+                        id: diaField
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: page.hit
+                        placeholderText: page.english ? "Diastolic" : "舒张压"
+                        text: page.entryDia
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        onTextChanged: page.entryDia = text
                     }
-                    Text {
-                        visible: !modelData.valid
-                        text: page.english ? "Invalid" : "无效"
-                        color: "#ffdaa0"
-                        font.pixelSize: 12 * page.uiScale
+                    TextField {
+                        id: pulseField
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: page.hit
+                        placeholderText: page.english ? "Pulse" : "脉搏"
+                        text: page.entryPulse
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        onTextChanged: page.entryPulse = text
                     }
+                    Button {
+                        Layout.preferredHeight: page.hit
+                        text: page.entryUnit
+                        onClicked: page.entryUnit = (page.entryUnit === "mmHg") ? "kPa" : "mmHg"
+                    }
+                    Button {
+                        Layout.preferredHeight: page.hit
+                        text: page.english ? "Save" : "保存"
+                        enabled: page.entrySys.length > 0 || page.entryDia.length > 0
+                                 || page.entryPulse.length > 0
+                        onClicked: page.submit()
+                    }
+                }
+                Text {
+                    Layout.fillWidth: true
+                    visible: page.message.length > 0
+                    text: page.message
+                    color: page.warn
+                    font.pixelSize: 12 * page.uiScale
+                    wrapMode: Text.Wrap
                 }
             }
         }
 
-        Item { Layout.fillHeight: true }
+        // ---- 读数列表 ----
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            radius: 16 * page.uiScale
+            color: page.surface
+            border.width: 1
+            border.color: page.line
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: page.gap
+                spacing: page.gap / 2
+
+                Text {
+                    text: page.english ? "Recent readings" : "最近读数"
+                    color: page.muted
+                    font.pixelSize: 14 * page.uiScale
+                }
+                Text {
+                    Layout.fillWidth: true
+                    visible: page.rows.length === 0
+                    text: page.english ? "No readings yet" : "还没有读数"
+                    color: page.muted
+                    font.pixelSize: 12 * page.uiScale
+                }
+                Repeater {
+                    model: page.rows
+                    delegate: Rectangle {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: page.hit
+                        radius: 12 * page.uiScale
+                        color: Qt.rgba(page.foreground.r, page.foreground.g, page.foreground.b, 0.05)
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: page.gap / 2
+                            Text {
+                                Layout.fillWidth: true
+                                // 每个指标独立判断：缺失显示"—"，不写 0。
+                                readonly property string unit: modelData.unit || ""
+                                text: (modelData.systolic !== undefined ? String(modelData.systolic) : "—")
+                                      + "/" + (modelData.diastolic !== undefined ? String(modelData.diastolic) : "—")
+                                      + (modelData.pulse !== undefined ? "  ♥" + modelData.pulse : "")
+                                      + (unit.length > 0 ? "  " + unit : "")
+                                color: modelData.valid ? page.foreground : page.warn
+                                font.pixelSize: 14 * page.uiScale
+                            }
+                            Text {
+                                text: page.sourceLabel(modelData.source)
+                                color: page.muted
+                                font.pixelSize: 12 * page.uiScale
+                            }
+                            Text {
+                                visible: !modelData.valid
+                                text: page.english ? "Invalid" : "无效"
+                                color: page.warn
+                                font.pixelSize: 12 * page.uiScale
+                            }
+                        }
+                    }
+                }
+
+                Item { Layout.fillHeight: true }
+            }
+        }
     }
 }

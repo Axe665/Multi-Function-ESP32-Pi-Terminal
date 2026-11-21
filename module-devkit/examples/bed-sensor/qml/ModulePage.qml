@@ -1,16 +1,32 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Material
+import "components"
 
 Rectangle {
     id: page
-    implicitHeight: content.implicitHeight + 40
-    color: "#eef2f5"
-    radius: 20
-    Material.theme: Material.Light
-    Material.accent: "#3f6f9f"
+    implicitHeight: content.implicitHeight + 2 * gap
+    radius: 18 * uiScale
 
-    property var d: sessionModel ? sessionModel.data : ({})
+    readonly property var theme: (typeof hostTheme !== "undefined" && hostTheme) ? hostTheme : ({})
+    readonly property real uiScale: (theme.scale > 0) ? theme.scale : 1
+    readonly property color background: theme.background || "#08121f"
+    readonly property color surface: theme.surface || "#102238"
+    readonly property color foreground: theme.foreground || page.surface
+    readonly property color accent: theme.accent || "#85deff"
+    readonly property color muted: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.62)
+    readonly property color line: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.14)
+    readonly property color bedSurface: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.06)
+    readonly property color warn: "#fbbf24"
+    readonly property color error: "#f87171"
+    readonly property real gap: 14 * uiScale
+
+    readonly property bool hosted: typeof sessionModel !== "undefined" && sessionModel
+    readonly property var demo: ({
+        w: 62.4, x: 48, y: 92, bw: 150, bl: 200, em: 20, state: "in",
+        out_ms: 0, in_ms: 5400000, mov: 0.35, evt: 1, event: "none",
+        received_at: Date.now(), night: false, fault: 0
+    })
+    property var d: hosted ? (sessionModel.data || ({})) : page.demo
     property int lastSeq: -1
     property double clock: Date.now()
     property bool fresh: d.received_at !== undefined && clock - Number(d.received_at) < 5000
@@ -22,6 +38,18 @@ Rectangle {
     property string st: String(d.state || "out")
     property string cal: String(d.cal || "idle")
     property real edgeCm: Math.max(0, Number(d.em || 20))
+
+    readonly property bool faulted: Number(d.fault || 0) !== 0
+    readonly property string statusKind: !hosted ? "empty"
+        : faulted ? "error"
+        : d.received_at === undefined ? "loading"
+        : fresh ? "live" : "stale"
+    readonly property string statusText: !hosted ? "演示数据 · 未连接宿主"
+        : faulted ? "称重通道异常"
+        : d.received_at === undefined ? "等待数据"
+        : fresh ? (d.night ? "夜间 · 实时" : "实时监测") : "数据已过期"
+
+    color: background
 
     ListModel { id: eventModel }
 
@@ -109,38 +137,32 @@ Rectangle {
             spacing: 12
 
             Column {
-                width: parent.width - 220
-                spacing: 6
+                width: parent.width - statusBadge.implicitWidth - 12 * page.uiScale
+                spacing: 6 * page.uiScale
                 Text {
                     text: "BED GUARDIAN / 床边守护"
-                    color: "#5b7487"
+                    color: page.muted
                     font.pixelSize: 12
                     font.letterSpacing: 1
                 }
                 Text {
                     text: "四点称重，看得见起身与离床"
-                    color: "#1d3446"
+                    color: page.foreground
                     font.pixelSize: 22
                     font.bold: true
                 }
                 Text {
                     text: "只输出重量、重心和事件；不测睡姿、不装摄像头。"
-                    color: "#5b7487"
+                    color: page.muted
                     font.pixelSize: 13
                 }
             }
 
-            Rectangle {
-                width: 200
-                height: 44
-                radius: 22
-                color: page.fresh ? (page.d.night ? "#dbe6f4" : "#d9ecdf") : "#f4e1c8"
-                Text {
-                    anchors.centerIn: parent
-                    text: page.fresh ? (page.d.night ? "夜间 · 实时" : "实时监测") : "等待数据"
-                    color: "#26465c"
-                    font.pixelSize: 14
-                }
+            StateBadge {
+                id: statusBadge
+                theme: page.theme
+                kind: page.statusKind
+                text: page.statusText
             }
         }
 
@@ -148,7 +170,7 @@ Rectangle {
             width: parent.width
             visible: Number(page.d.fault || 0) !== 0
             text: "有称重通道读数异常，重量和重心可能不准，请检查 HX711 接线。"
-            color: "#a33a2c"
+            color: page.error
             font.pixelSize: 12
             wrapMode: Text.Wrap
         }
@@ -161,34 +183,34 @@ Rectangle {
                 width: 250
                 height: 330
                 radius: 18
-                color: "#dfe8ee"
-                border.color: "#b9c8d3"
+                color: page.bedSurface
+                border.color: page.line
 
                 property real marginX: page.edgeCm / page.bw * width
                 property real marginY: page.edgeCm / page.bl * height
 
                 Rectangle {
                     x: 0; y: 0; width: parent.marginX; height: parent.height
-                    color: "#8fa9bb"; opacity: 0.18
+                    color: page.accent; opacity: 0.18
                 }
                 Rectangle {
                     x: parent.width - parent.marginX; y: 0; width: parent.marginX; height: parent.height
-                    color: "#8fa9bb"; opacity: 0.18
+                    color: page.accent; opacity: 0.18
                 }
                 Rectangle {
                     x: 0; y: 0; width: parent.width; height: parent.marginY
-                    color: "#8fa9bb"; opacity: 0.12
+                    color: page.accent; opacity: 0.12
                 }
                 Rectangle {
                     x: 0; y: parent.height - parent.marginY; width: parent.width; height: parent.marginY
-                    color: "#8fa9bb"; opacity: 0.12
+                    color: page.accent; opacity: 0.12
                 }
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     y: 8
                     text: "床头"
-                    color: "#4c6475"
+                    color: page.muted
                     font.pixelSize: 12
                 }
                 Text {
@@ -196,14 +218,14 @@ Rectangle {
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: 8
                     text: "床尾"
-                    color: "#4c6475"
+                    color: page.muted
                     font.pixelSize: 12
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     x: 8
                     text: "左"
-                    color: "#4c6475"
+                    color: page.muted
                     font.pixelSize: 12
                 }
                 Text {
@@ -211,7 +233,7 @@ Rectangle {
                     anchors.right: parent.right
                     anchors.rightMargin: 8
                     text: "右"
-                    color: "#4c6475"
+                    color: page.muted
                     font.pixelSize: 12
                 }
 
@@ -220,8 +242,8 @@ Rectangle {
                     width: 22
                     height: 22
                     radius: 11
-                    color: "#e07a3f"
-                    border.color: "#ffffff"
+                    color: page.warn
+                    border.color: page.surface
                     border.width: 3
                     x: Math.max(0, Math.min(parent.width - width,
                                              page.cx / page.bw * parent.width - width / 2))
@@ -233,7 +255,7 @@ Rectangle {
                     anchors.centerIn: parent
                     visible: page.weight <= 0.5
                     text: "床上无人"
-                    color: "#7b929f"
+                    color: page.muted
                     font.pixelSize: 15
                 }
             }
@@ -250,18 +272,18 @@ Rectangle {
                         width: (parent.width - 10) / 2
                         height: 92
                         radius: 14
-                        color: "#ffffff"
-                        border.color: "#dbe4ea"
+                        color: page.surface
+                        border.color: page.line
                         Text {
                             x: 14; y: 10
                             text: "床上重量 · kg"
-                            color: "#6b8192"
+                            color: page.muted
                             font.pixelSize: 12
                         }
                         Text {
                             x: 14; y: 30
                             text: page.weight.toFixed(1)
-                            color: "#1d3446"
+                            color: page.foreground
                             font.pixelSize: 34
                             font.bold: true
                         }
@@ -271,18 +293,20 @@ Rectangle {
                         width: (parent.width - 10) / 2
                         height: 92
                         radius: 14
-                        color: page.st === "out" ? "#fff1e3" : page.st === "edge" ? "#fff6d9" : "#e6f2ea"
-                        border.color: "#dbe4ea"
+                        color: page.st === "out" ? Qt.rgba(0.98, 0.55, 0.25, 0.16)
+                             : page.st === "edge" ? Qt.rgba(0.98, 0.75, 0.25, 0.16)
+                             : Qt.rgba(0.29, 0.87, 0.50, 0.14)
+                        border.color: page.line
                         Text {
                             x: 14; y: 10
                             text: "状态"
-                            color: "#6b8192"
+                            color: page.muted
                             font.pixelSize: 12
                         }
                         Text {
                             x: 14; y: 34
                             text: page.stateLabel(page.st)
-                            color: "#1d3446"
+                            color: page.foreground
                             font.pixelSize: 26
                             font.bold: true
                         }
@@ -290,7 +314,7 @@ Rectangle {
                             x: 14; y: 66
                             text: page.st === "out" ? "离床 " + page.duration(page.d.out_ms)
                                                     : "在床 " + page.duration(page.d.in_ms)
-                            color: "#6b8192"
+                            color: page.muted
                             font.pixelSize: 12
                         }
                     }
@@ -304,12 +328,12 @@ Rectangle {
                         width: (parent.width - 10) / 2
                         height: 78
                         radius: 14
-                        color: "#ffffff"
-                        border.color: "#dbe4ea"
+                        color: page.surface
+                        border.color: page.line
                         Text {
                             x: 14; y: 8
                             text: "重心位置"
-                            color: "#6b8192"
+                            color: page.muted
                             font.pixelSize: 12
                         }
                         Text {
@@ -317,13 +341,13 @@ Rectangle {
                             text: page.weight > 0.5 && page.cx >= 0
                                   ? "左右 " + page.cx.toFixed(0) + " · 头脚 " + page.cy.toFixed(0) + " cm"
                                   : "--"
-                            color: "#1d3446"
+                            color: page.foreground
                             font.pixelSize: 15
                         }
                         Text {
                             x: 14; y: 52
                             text: "床宽 " + page.bw.toFixed(0) + " × 床长 " + page.bl.toFixed(0) + " cm"
-                            color: "#8598a6"
+                            color: page.muted
                             font.pixelSize: 11
                         }
                     }
@@ -332,18 +356,18 @@ Rectangle {
                         width: (parent.width - 10) / 2
                         height: 78
                         radius: 14
-                        color: "#ffffff"
-                        border.color: "#dbe4ea"
+                        color: page.surface
+                        border.color: page.line
                         Text {
                             x: 14; y: 8
                             text: "体动强度"
-                            color: "#6b8192"
+                            color: page.muted
                             font.pixelSize: 12
                         }
                         Text {
                             x: 14; y: 28
                             text: Number(page.d.mov || 0).toFixed(2) + " kg RMS"
-                            color: "#1d3446"
+                            color: page.foreground
                             font.pixelSize: 15
                         }
                         Rectangle {
@@ -351,12 +375,12 @@ Rectangle {
                             width: parent.width - 28
                             height: 8
                             radius: 4
-                            color: "#e4ebf0"
+                            color: page.line
                             Rectangle {
                                 width: parent.width * Math.min(1, Number(page.d.mov || 0) / 2)
                                 height: parent.height
                                 radius: 4
-                                color: "#e0a24a"
+                                color: page.warn
                             }
                         }
                     }
@@ -367,13 +391,14 @@ Rectangle {
                     width: parent.width
                     height: 46
                     radius: 12
-                    color: page.cal === "error" ? "#fde7e4" : "#fff4de"
+                    color: page.cal === "error" ? Qt.rgba(0.97, 0.44, 0.44, 0.16)
+                                                : Qt.rgba(0.98, 0.75, 0.25, 0.14)
                     Text {
                         anchors.fill: parent
                         anchors.margins: 10
                         verticalAlignment: Text.AlignVCenter
                         text: page.calHint(page.cal)
-                        color: "#6b4a1d"
+                        color: page.cal === "error" ? page.error : page.warn
                         font.pixelSize: 13
                         wrapMode: Text.Wrap
                     }
@@ -383,20 +408,20 @@ Rectangle {
                     width: parent.width
                     height: 176
                     radius: 14
-                    color: "#ffffff"
-                    border.color: "#dbe4ea"
+                    color: page.surface
+                    border.color: page.line
 
                     Text {
                         x: 14; y: 10
                         text: "最近事件"
-                        color: "#6b8192"
+                        color: page.muted
                         font.pixelSize: 12
                     }
                     Text {
                         x: 14; y: 30
                         visible: eventModel.count === 0
                         text: "暂无事件"
-                        color: "#9aabb7"
+                        color: page.muted
                         font.pixelSize: 14
                     }
                     Column {
@@ -413,12 +438,12 @@ Rectangle {
                                 Text {
                                     width: 66
                                     text: page.clockText(at)
-                                    color: "#8598a6"
+                                    color: page.muted
                                     font.pixelSize: 12
                                 }
                                 Text {
                                     text: page.eventLabel(name)
-                                    color: "#1d3446"
+                                    color: page.foreground
                                     font.pixelSize: 13
                                 }
                             }
@@ -431,7 +456,7 @@ Rectangle {
         Text {
             width: parent.width
             text: "去皮 / 四点标定 / 复位校准：在功能页的模块动作里点击 tare、calibrate 或 reset。标定时按页面提示依次放砝码；标定和去皮都要求床面空载。"
-            color: "#6b8192"
+            color: page.muted
             font.pixelSize: 11
             wrapMode: Text.Wrap
         }

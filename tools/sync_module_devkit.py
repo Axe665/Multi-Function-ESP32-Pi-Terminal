@@ -15,19 +15,20 @@ MANIFEST = KIT / "sdk" / "SOURCE-MANIFEST.json"
 
 def mappings():
     pairs = []
+    module = ROOT / "esp/modules/smart-planter"
     for name in ("linkit_sdk", "board_pins", "diagnostics"):
-        pairs.append((ROOT / "esp/S3_Pi_Module/components" / name,
+        pairs.append((module / "components" / name,
                       KIT / "sdk/esp32/components" / name))
     for name in ("module_data_service", "module_control_service"):
         pairs.append((ROOT / "esp/shared" / name, KIT / "sdk/esp32/components" / name))
     for name in ("lcd_st7789", "ui_env", "power_guard"):
-        pairs.append((ROOT / "esp/S3_Pi_Module/components" / name,
+        pairs.append((module / "components" / name,
                       KIT / "examples/smart-planter/firmware/components" / name))
     for name in ("pi_sensor_device", "lvgl"):
         pairs.append((ROOT / "esp/shared" / name,
                       KIT / "examples/smart-planter/firmware/components" / name))
     for name in ("main/main.c", "main/Kconfig.projbuild", "partitions.csv"):
-        pairs.append((ROOT / "esp/S3_Pi_Module" / name,
+        pairs.append((module / name,
                       KIT / "examples/smart-planter/firmware" / name))
     pairs.append((ROOT / "pi_terminal/src/modules/api/pi_module_api.h", KIT / "sdk/include/pi_module_api.h"))
     for name in ("package_tool.py", "mock_module.py"):

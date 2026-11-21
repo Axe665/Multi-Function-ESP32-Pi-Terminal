@@ -57,9 +57,10 @@ python3 module-devkit/module_devkit.py init ./my-module \
 
 - `manifest.json`
 - `module.cpp`
-- `qml/ModulePage.qml`
+- `qml/ModulePage.qml` 与 `qml/components/`
 - `firmware/main/main.c`
 - `firmware/main/Kconfig.projbuild`
+- `tests/` 与 `README.md`
 
 ### 阶段 2：实现业务
 
@@ -77,6 +78,7 @@ AI 只修改模块工程，不修改 SDK 内置协议组件。实现顺序：
 
 ```sh
 python3 module-devkit/module_devkit.py doctor
+python3 module-devkit/module_devkit.py test ./my-module
 python3 module-devkit/module_devkit.py validate ./my-module
 ```
 

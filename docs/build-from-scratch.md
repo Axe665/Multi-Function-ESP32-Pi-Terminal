@@ -10,7 +10,7 @@
 | `third_party/deps/` | OpenSSL 3.0.13、mbedTLS、SQLCipher 的头文件与库 | **不需要** |
 | `third_party/flite/`、`gst/`、`vlc/`、`Viper-Browser/`、`YesPlayMusic/`、`sqlite-amalgamation/` | 第三方源码；`gst/<arch>/plugins/` 已带运行期插件 | **不需要** |
 | `toolchain/qt-6.5.3-aarch64/` | Qt 6.5.3 aarch64 交叉 SDK 完整仓库（含 artifacts/sysroot） | **不需要**（交叉编译用） |
-| `sdk/esp-firmware/` | ESP 固件完整仓库 | **不需要**（固件用） |
+| `esp/` | ESP 固件工程（独立仓库固定版本快照） | **不需要**（固件用） |
 | `pi_terminal/assets/` | 界面资源、电视源、语音声库（`voices/`） | **不需要** |
 | `pi_terminal/tts/` | flite 声库构建材料 | **不需要** |
 

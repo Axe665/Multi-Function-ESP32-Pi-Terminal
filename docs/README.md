@@ -25,7 +25,7 @@
 | [archive/deployment-20261018.md](archive/deployment-20261018.md) | 当前 Pi 的部署与维护细节 |
 | [../build_scripts/](../build_scripts/) | 构建/检查依赖/部署/验证/打包脚本 |
 | [../toolchain/README.md](../toolchain/README.md) | Qt 6.5.3 aarch64 交叉 SDK（完整仓库） |
-| [../sdk/README.md](../sdk/README.md) | ESP 固件完整仓库 |
+| [../esp/README.md](../esp/README.md) | ESP 固件工程（独立仓库固定版本快照） |
 | [../module-devkit/docs/ESP-TOOLCHAIN.md](../module-devkit/docs/ESP-TOOLCHAIN.md) | ESP-IDF 5.5.4 工具链安装与构建 |
 
 ## 3. 运行、安全与网络

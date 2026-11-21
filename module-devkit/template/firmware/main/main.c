@@ -1,8 +1,13 @@
 #include "module_data_service.h"
 #include "module_control_service.h"
 #include "esp_log.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "nvs_flash.h"
 #include "esp_netif.h"
+#include <inttypes.h>
+#include <stdio.h>
 #include <string.h>
 
 #define MODULE_ID @MODULE_ID@
@@ -33,10 +38,26 @@ static size_t package_reader(const char *file, uint32_t offset, uint8_t *buffer,
 static bool on_command(const char *event, const char *json, void *context) {
     (void)context;
     ESP_LOGI(TAG, "command event=%s payload=%s", event ? event : "", json ? json : "");
-    // Replace this callback with the module's hardware command dispatcher.
-    if (event && strcmp(event, "data") == 0)
-        module_data_service_publish((const uint8_t *)"{\"status\":\"ok\"}", 15);
     return true;
+}
+
+// 最小数据源：每秒发布一条模拟读数。
+// shortcut: 这里没有传感器驱动，换成真实采样时保留字段名和发布节奏。
+static void publish_task(void *arg) {
+    (void)arg;
+    uint32_t counter = 0;
+    char payload[192];
+    while (true) {
+        const int len = snprintf(payload, sizeof payload,
+            "{\"temperature_C\":%.1f,\"humidity_RH\":%.1f,\"light_lux\":%d,"
+            "\"counter\":%" PRIu32 ",\"received_at\":%" PRId64 "}",
+            24.0 + (counter % 10) * 0.1, 60.0 + (counter % 5) * 0.2,
+            700 + (int)(counter % 20), counter,
+            (int64_t)(esp_timer_get_time() / 1000));
+        if (len > 0) module_data_service_publish((const uint8_t *)payload, (size_t)len);
+        counter++;
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 }
 
 void app_main(void) {
@@ -70,5 +91,6 @@ void app_main(void) {
     };
     ESP_ERROR_CHECK(module_data_wifi_start(&wifi));
 #endif
+    xTaskCreate(publish_task, "publish", 3072, NULL, 5, NULL);
     ESP_LOGI(TAG, "module data service started");
 }

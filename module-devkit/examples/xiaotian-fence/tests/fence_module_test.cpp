@@ -59,7 +59,7 @@ private slots:
     {
         g_events.clear();
         services_ = {};
-        services_.api_version = 1;
+        services_.api_version = PI_MODULE_API_VERSION;
         services_.context = nullptr;
         services_.emit_event = &captureEvent;
         services_.send_data = &noopSend;

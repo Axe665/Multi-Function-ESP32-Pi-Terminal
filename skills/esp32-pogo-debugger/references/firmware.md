@@ -28,7 +28,7 @@
 
 ## 构建
 
-先 export ESP-IDF，再读 `build_scripts/build_esp32.sh` / `build_pi_module_variant.sh`。
+先 export ESP-IDF，再读 `build_scripts/build_esp32.sh` / `build_module_variant.sh`。
 BLE、LAN 使用不同构建目录；变体脚本要求私有 `PI_MODULE_SDKCONFIG` 和签名包 `PI_MODULE_PACKAGE_DIR`，输出私有 sdkconfig 权限 0600。
 `build_all_esp32.sh` 在缺少这些输入时会跳过模块变体，不代表已经构建全部固件。不能用编译成功冒充烧录或现场验证。
 

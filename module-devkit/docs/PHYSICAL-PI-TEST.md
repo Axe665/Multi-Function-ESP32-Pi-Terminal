@@ -2,7 +2,7 @@
 
 SDK 自动发布和编译不等于物理验收。部署人员必须逐项填写并保留日志；本文件不包含凭据。
 
-本文件的勾选记录为早期 SDK 基线，不代表所有后续构建。当前智能盆栽3.0.0的实际固件、页面与历史测试范围见 [示例验收记录](../examples/smart-planter/VALIDATION.md)。仓库正式ESP源码已归并到 `esp/S3_Pi_Module/`，SDK保留独立导出副本，见 [维护说明](MAINTENANCE.md)。
+本文件的勾选记录为早期 SDK 基线，不代表所有后续构建。当前智能盆栽3.0.0的实际固件、页面与历史测试范围见 [示例验收记录](../examples/smart-planter/VALIDATION.md)。仓库正式ESP源码已归到 `esp/modules/smart-planter/`，SDK保留独立导出副本，见 [维护说明](MAINTENANCE.md)。
 
 ## 脱机能力声明
 
