@@ -247,7 +247,7 @@
     },
     "examples/smart-planter/firmware/components/ui_env/LCD-DESIGN.md": {
       "source": "esp/modules/smart-planter/components/ui_env/LCD-DESIGN.md",
-      "sha256": "d36f6529b4c36402fd7c3c539e5348ef9bbc407bc7478b54f7e6d1aad07f6828"
+      "sha256": "ed7c026398e8daf15b0f0643bb0eba09d80b93c7f25aec3de559a8d608bff58b"
     },
     "examples/smart-planter/firmware/components/ui_env/fonts/Noto-CJK-COPYRIGHT.txt": {
       "source": "esp/modules/smart-planter/components/ui_env/fonts/Noto-CJK-COPYRIGHT.txt",
