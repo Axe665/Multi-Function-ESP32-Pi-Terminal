@@ -1,0 +1,17 @@
+# Safe non-secret defaults for the bed sensor module.
+# Provisioned token, Pi hotspot credentials and board-specific options belong
+# in a private sdkconfig supplied to firmware-build.sh.
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
+
+# 1 ms tick: the HX711 wait loop polls DOUT through vTaskDelay(1).
+CONFIG_FREERTOS_HZ=1000
+
+# BLE 业务数据面：模块固件默认走 NimBLE（BLE 挑战应答 / 包传输）。
+# 没有这几项时 `idf.py build` 会在 bt 组件报 host/ble_gap.h 缺失。
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=4096
