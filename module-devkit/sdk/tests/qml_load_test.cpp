@@ -78,8 +78,8 @@ public:
         return out;
     }
 
-    Q_INVOKABLE bool append(const QString &, const QVariantMap &) { return true; }
-    Q_INVOKABLE bool appendBatch(const QString &, const QVariantList &) { return true; }
+    Q_INVOKABLE QVariantMap append(const QString &, const QVariantMap &) { return {{"ok", true}}; }
+    Q_INVOKABLE QVariantMap appendBatch(const QString &, const QVariantList &) { return {{"ok", true}}; }
     Q_INVOKABLE bool validateRecord(const QString &, const QVariantMap &) { return true; }
     Q_INVOKABLE QVariantList records() const { return {}; }
     Q_INVOKABLE QVariantList historySeries(qint64, qint64) { return series({}, {}, 0, 0); }

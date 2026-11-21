@@ -71,6 +71,7 @@ Rectangle {
         page.adviceBusy = true
         page.adviceStatus = ""
         // windowMs 只接受 5m/1h/24h；7 天是 HV 的基线口径，不是窗口本身。
+        appAdvice.setModuleId(typeof appData !== "undefined" && appData ? appData.moduleId : 0)
         appAdvice.request({ record: "measurement.blood_pressure", windowMs: 86400000 })
     }
 
@@ -176,7 +177,7 @@ Rectangle {
         // 与 C++ 侧一致的物理范围：越界读数不是"正常数据"，走旧接口保留
         // valid=false + invalid_reason 的审计记录，不交给 schema 拒绝。
         const problems = []
-        if (payload.systolic !== undefined && (payload.systolic < 40 || payload.systolic > 300))
+        if (payload.systolic !== undefined && (payload.systolic < 40 || payload.systolic > 260))
             problems.push("systolic_out_of_range")
         if (payload.diastolic !== undefined && (payload.diastolic < 20 || payload.diastolic > 200))
             problems.push("diastolic_out_of_range")

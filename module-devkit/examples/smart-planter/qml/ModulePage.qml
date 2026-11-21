@@ -51,7 +51,8 @@ Rectangle {
         if (typeof appAdvice === "undefined" || !appAdvice) return
         adviceBusy = true
         adviceStatus = "refreshing"
-        appAdvice.request({ windowMs: 300000 })
+        appAdvice.setModuleId(typeof appData !== "undefined" && appData ? appData.moduleId : 0)
+        appAdvice.request({ record: "sample.environment", windowMs: 300000 })
         appAdvice.loadHistory()
     }
     function formatTime(ms) {
@@ -124,15 +125,15 @@ Rectangle {
         if (typeof appData === "undefined" || !appData) return
         const t = page.number(page.latest.temperature_C)
         if (!isFinite(t)) return
-        const ok = appData.append("sample.environment", {
+        const result = appData.append("sample.environment", {
             "temperature_c": t,
             "humidity_rh": page.number(page.latest.humidity_RH),
             "light_lux": page.number(page.latest.light_lux),
             "source": "device.auto",
             "valid": true
         })
-        if (!ok) storeMessage = "数据存储不可用"
-        else { storeMessage = ""; page.refreshHistory() }
+        if (result && result.ok) { storeMessage = ""; page.refreshHistory() }
+        else storeMessage = "保存失败：" + (result && result.error ? result.error : (appData.lastError || "未知原因"))
     }
 
     Component.onCompleted: {

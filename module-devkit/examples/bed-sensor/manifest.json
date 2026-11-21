@@ -95,6 +95,23 @@
           "received_at": {
             "type": "int",
             "unit": "ms"
+          },
+          "v": {
+            "type": "int"
+          },
+          "present": {
+            "type": "bool"
+          },
+          "cal": {
+            "type": "string"
+          },
+          "cw": {
+            "type": "double",
+            "unit": "kg"
+          },
+          "t": {
+            "type": "int",
+            "unit": "ms"
           }
         }
       }

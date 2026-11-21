@@ -8,7 +8,7 @@
 // 为什么不在模块里用 QTimer：模块运行在 module_worker 的同步阻塞循环里
 // （module_worker_main.cpp 只有 QCoreApplication 构造、没有 exec()），
 // 没有 Qt 事件循环，QTimer 永远不会触发。定时必须放在有事件循环的一端。
-#include "pi_module_api.h"
+#include "pi_module_sdk.h"
 #include "module_manifest.h"
 #include "History.h"
 #include <QDateTime>
@@ -37,7 +37,7 @@ extern "C" int pi_module_on_attach(pi_module_handle_t *m, const char *json) {
     const auto config = QJsonDocument::fromJson(json).object();
     const auto instance = config.value("module_instance").toString();
     if (instance.isEmpty()) return -1;
-    const auto base = m->host->data_directory ? m->host->data_directory() : nullptr;
+    const char *base = pi_module_sdk::data_directory(m->host);
     const auto key = QCryptographicHash::hash(instance.toUtf8(), QCryptographicHash::Sha256).toHex();
     const QString file = base ? QString::fromUtf8(base) + "/planter/" + key + ".json" : QString();
     m->history.reset(new History(file));

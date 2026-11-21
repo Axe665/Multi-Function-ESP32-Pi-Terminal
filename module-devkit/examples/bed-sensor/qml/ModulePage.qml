@@ -49,6 +49,13 @@ Rectangle {
         : d.received_at === undefined ? "等待数据"
         : fresh ? (d.night ? "夜间 · 实时" : "实时监测") : "数据已过期"
 
+    // v3 数据接口与建议接口；离线/演示时按钮会提示未连接，不伪造成功。
+    readonly property bool dbReady: typeof appData !== "undefined" && appData && appData.ready
+    readonly property bool adviceReady: typeof appAdvice !== "undefined" && appAdvice && appAdvice.ready
+    property string storeMessage: ""
+    property string adviceMessage: ""
+    property bool adviceBusy: false
+
     color: background
 
     ListModel { id: eventModel }
@@ -102,11 +109,61 @@ Rectangle {
         }
     }
 
+    // DB API：把当前读数显式落库（不自动每秒写入，避免把 1 Hz 遥测灌进历史表）。
+    function persistSample() {
+        if (!page.dbReady) { page.storeMessage = "未连接宿主数据接口"; return }
+        const v = page.d
+        if (!v || v.received_at === undefined) { page.storeMessage = "没有可保存的读数"; return }
+        const fields = {
+            state: String(v.state || ""),
+            event: String(v.event || "none"),
+            night: v.night === true,
+            fault: page.num(v.fault) || 0
+        }
+        const w = page.num(v.w); if (isFinite(w)) fields.w = w
+        const x = page.num(v.x); if (isFinite(x)) fields.x = x
+        const y = page.num(v.y); if (isFinite(y)) fields.y = y
+        const bw = page.num(v.bw); if (isFinite(bw)) fields.bw = bw
+        const bl = page.num(v.bl); if (isFinite(bl)) fields.bl = bl
+        const em = page.num(v.em); if (isFinite(em)) fields.em = em
+        const outMs = page.num(v.out_ms); if (isFinite(outMs)) fields.out_ms = outMs
+        const inMs = page.num(v.in_ms); if (isFinite(inMs)) fields.in_ms = inMs
+        const mov = page.num(v.mov); if (isFinite(mov)) fields.mov = mov
+        const evt = page.num(v.evt); if (isFinite(evt)) fields.evt = evt
+        const receivedAt = page.num(v.received_at); if (isFinite(receivedAt)) fields.received_at = receivedAt
+        const result = appData.append("sample.bed", fields)
+        if (result && result.ok) page.storeMessage = "已保存本次读数"
+        else page.storeMessage = "保存失败：" + (result && result.error ? result.error : (appData.lastError || "未知原因"))
+    }
+
+    // User-side API：建议按“当前用户 + 本模块”请求，不把用户身份带进模块。
+    function requestAdvice() {
+        if (!page.adviceReady) { page.adviceMessage = "登录后可查看睡眠建议"; return }
+        if (page.adviceBusy) return
+        page.adviceBusy = true
+        page.adviceMessage = ""
+        appAdvice.setModuleId(appData.moduleId)
+        appAdvice.request({ record: "sample.bed", windowMs: 86400000 })
+    }
+
     Component.onCompleted: page.capture()
 
     Connections {
         target: typeof sessionModel !== "undefined" ? sessionModel : null
         function onChanged() { page.capture() }
+    }
+
+    Connections {
+        target: typeof appAdvice !== "undefined" ? appAdvice : null
+        function onAdviceReady(requestId, payload) {
+            page.adviceBusy = false
+            const items = (payload && payload.items) ? payload.items : []
+            page.adviceMessage = items.length > 0 ? items[0].text : "当前数据没有需要提醒的事项"
+        }
+        function onAdviceFailed(requestId, code) {
+            page.adviceBusy = false
+            page.adviceMessage = "建议生成失败：" + (code || "未知原因")
+        }
     }
 
     Timer {
@@ -449,6 +506,90 @@ Rectangle {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        Rectangle {
+            width: parent.width
+            height: recordColumn.implicitHeight + 24
+            radius: 14
+            color: page.surface
+            border.color: page.line
+
+            Column {
+                id: recordColumn
+                x: 14; y: 12; width: parent.width - 28; spacing: 8
+
+                Row {
+                    width: parent.width
+                    spacing: 8
+
+                    Text {
+                        width: parent.width - saveButton.width - adviceButton.width - 16
+                        height: 44
+                        verticalAlignment: Text.AlignVCenter
+                        text: "记录与建议"
+                        color: page.foreground
+                        font.pixelSize: 15
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+
+                    Rectangle {
+                        id: saveButton
+                        width: 104; height: 44; radius: 12
+                        opacity: page.dbReady ? 1 : 0.45
+                        color: Qt.rgba(page.accent.r, page.accent.g, page.accent.b, 0.18)
+                        border.width: 1
+                        border.color: Qt.rgba(page.accent.r, page.accent.g, page.accent.b, 0.55)
+                        Text {
+                            anchors.centerIn: parent
+                            text: "保存读数"
+                            color: page.foreground
+                            font.pixelSize: 13
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            enabled: page.dbReady
+                            onClicked: page.persistSample()
+                            Accessible.name: "保存本次床边读数"
+                        }
+                    }
+
+                    Rectangle {
+                        id: adviceButton
+                        width: 104; height: 44; radius: 12
+                        opacity: page.adviceReady ? 1 : 0.45
+                        color: Qt.rgba(page.accent.r, page.accent.g, page.accent.b, 0.18)
+                        border.width: 1
+                        border.color: Qt.rgba(page.accent.r, page.accent.g, page.accent.b, 0.55)
+                        Text {
+                            anchors.centerIn: parent
+                            text: page.adviceBusy ? "生成中…" : "提建议"
+                            color: page.foreground
+                            font.pixelSize: 13
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            enabled: page.adviceReady && !page.adviceBusy
+                            onClicked: page.requestAdvice()
+                            Accessible.name: "按最近24小时数据生成睡眠建议"
+                        }
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    font.pixelSize: 12
+                    color: page.adviceMessage !== "" || page.storeMessage !== "" ? page.foreground : page.muted
+                    text: page.adviceMessage !== ""
+                          ? page.adviceMessage
+                          : page.storeMessage !== "" ? page.storeMessage
+                          : page.dbReady || page.adviceReady
+                            ? "保存当前读数，或按最近 24 小时数据生成睡眠建议。"
+                            : "未连接宿主数据/建议接口。"
                 }
             }
         }

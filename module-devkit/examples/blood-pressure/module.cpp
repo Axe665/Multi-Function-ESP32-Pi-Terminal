@@ -9,7 +9,7 @@
 // 上报字段（module-defined-v1）：
 //   source          device.auto / device.manual / user.entry
 //   device_model    型号
-//   measured_at_ms  设备侧测量时间
+//   measured_at     设备侧测量时间（输入兼容 measured_at_ms）
 //   systolic / diastolic / pulse   各自可缺（null 表示未测）
 //   unit            mmHg / kPa
 //   valid / invalid_reason
@@ -26,7 +26,7 @@
 namespace {
 
 // 边界值：超出即标无效，不裁剪、不补造（§12.3）。
-constexpr double kSystolicMin = 40.0, kSystolicMax = 300.0;
+constexpr double kSystolicMin = 40.0, kSystolicMax = 260.0;
 constexpr double kDiastolicMin = 20.0, kDiastolicMax = 200.0;
 constexpr double kPulseMin = 20.0, kPulseMax = 250.0;
 
@@ -112,14 +112,16 @@ extern "C" int pi_module_on_data(pi_module_handle_t *m, uint8_t, const uint8_t *
          (source == QLatin1String("device.manual") || source == QLatin1String("user.entry"))
              ? source : QStringLiteral("device.auto")},
         {QStringLiteral("device_model"), pressure.deviceModel},
-        {QStringLiteral("measured_at_ms"), input.value(QStringLiteral("measured_at_ms"))},
-        {QStringLiteral("unit"),
+                {QStringLiteral("unit"),
          input.value(QStringLiteral("unit")).toString().isEmpty()
              ? QStringLiteral("mmHg") : input.value(QStringLiteral("unit")).toString()},
         {QStringLiteral("received_at"), double(QDateTime::currentMSecsSinceEpoch())},
         {QStringLiteral("valid"), problems.isEmpty()},
         {QStringLiteral("invalid_reason"), problems.join(QLatin1Char(','))},
     };
+    const QJsonValue measuredAt = input.value(QStringLiteral("measured_at_ms"));
+    if (measuredAt.isDouble()) output.insert(QStringLiteral("measured_at"), measuredAt);
+
     // 缺失值不写进 JSON：QML 侧用 undefined 判断"未检测"。
     if (hasSys) output.insert(QStringLiteral("systolic"), input.value(QStringLiteral("systolic")));
     if (hasDia) output.insert(QStringLiteral("diastolic"), input.value(QStringLiteral("diastolic")));

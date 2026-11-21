@@ -15,7 +15,7 @@ Pi 侧插件与 QML 页面：手工录入一次收缩压 / 舒张压 / 脉搏，
 
 ## 数据
 
-- 上报字段：`source` / `device_model` / `measured_at_ms` / `systolic` / `diastolic` /
+- 上报字段：`source` / `device_model` / `measured_at` / `systolic` / `diastolic` /
   `pulse` / `unit` / `valid` / `invalid_reason`。
 - 页面持久化走宿主注入的 `appData.append()` / `appData.query()`；越界读数保留旧审计接口，
   不直接访问数据库。

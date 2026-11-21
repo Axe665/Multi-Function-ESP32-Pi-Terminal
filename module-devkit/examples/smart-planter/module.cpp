@@ -1,4 +1,4 @@
-#include "pi_module_api.h"
+#include "pi_module_sdk.h"
 #include "module_manifest.h"
 #include "History.h"
 #include <QDateTime>
@@ -22,7 +22,7 @@ extern "C" int pi_module_on_attach(pi_module_handle_t *m, const char *json) {
     const auto config = QJsonDocument::fromJson(json).object();
     const auto instance = config.value("module_instance").toString();
     if (instance.isEmpty()) return -1;
-    const auto base = m->host->data_directory ? m->host->data_directory() : nullptr;
+    const char *base = pi_module_sdk::data_directory(m->host);
     const auto key = QCryptographicHash::hash(instance.toUtf8(), QCryptographicHash::Sha256).toHex();
     const QString file = base ? QString::fromUtf8(base) + "/planter/" + key + ".json" : QString();
     m->history.reset(new History(file));
