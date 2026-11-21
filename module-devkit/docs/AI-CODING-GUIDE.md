@@ -157,6 +157,7 @@ AI 只修改模块工程，不修改 SDK 内置协议组件。实现顺序：
 
 ```sh
 python3 module-devkit/module_devkit.py doctor
+python3 module-devkit/module_devkit.py test ./my-module
 python3 module-devkit/module_devkit.py validate ./my-module
 python3 module-devkit/module_devkit.py schema check ./my-module
 ```

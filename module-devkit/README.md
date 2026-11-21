@@ -46,6 +46,7 @@
 
 ### 主要文档
 
+- [模块索引（仓库根 MODULES.md）](../MODULES.md)
 - [AI coding 引导](docs/AI-CODING-GUIDE.md)
 - [物理 Pi 验收清单](docs/PHYSICAL-PI-TEST.md)
 - [SDK 与正式 ESP 源码的维护关系](docs/MAINTENANCE.md)
