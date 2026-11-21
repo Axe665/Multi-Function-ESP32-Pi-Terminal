@@ -147,6 +147,7 @@ int main(int argc, char **argv) {
     });
     context.setContextProperty(QStringLiteral("sessionModel"), &model);
     context.setContextProperty(QStringLiteral("appData"), &appData);
+    context.setContextProperty(QStringLiteral("moduleData"), &appData);
     context.setContextProperty(QStringLiteral("appAdvice"), &appAdvice);
     model.setData(appData.query({}, {}).value(0).toMap());
 

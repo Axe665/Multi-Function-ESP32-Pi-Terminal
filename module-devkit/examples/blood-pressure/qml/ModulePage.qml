@@ -186,9 +186,11 @@ Rectangle {
         if (problems.length > 0) {
             payload.valid = false
             payload.invalid_reason = problems.join(",")
-            const ok = appData.appendMeasurement(payload)
+            // 越界读数不能进 data_schema（会被 SCHEMA_OUT_OF_RANGE 拒），
+            // 这里走 moduleData 兼容别名保留 valid=false 的审计记录。
+            const ok = moduleData.appendMeasurement(payload)
             if (!ok) {
-                message = page.schemaErrorText(appData.lastError)
+                message = page.schemaErrorText(moduleData.lastError)
                 return
             }
             entrySys = ""; entryDia = ""; entryPulse = ""
