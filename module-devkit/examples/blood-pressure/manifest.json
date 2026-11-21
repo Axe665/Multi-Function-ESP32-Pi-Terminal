@@ -5,21 +5,71 @@
   "module_id": 83,
   "package_id": "health.pressure-0.1.0-arm64",
   "package_version": "0.1.0",
-  "host_arch": ["aarch64", "arm64"],
+  "host_arch": [
+    "aarch64",
+    "arm64"
+  ],
   "library": "libmodule.so",
   "qml_page": "qml/ModulePage.qml",
   "abi_version": 1,
-  "min_host_api": 1,
+  "min_host_api": 3,
   "qt_major": 6,
-  "platform_api": 1,
-  "network_api": "none",
-  "file_api": "none",
   "qml_schema_version": 1,
   "unload_contract": "synchronous-stop-v1",
   "max_payload": 65532,
   "control_protocol": "pogo-control-v1",
   "data_protocol": "module-defined-v1",
-  "capabilities": ["measurement.submit"],
-  "permissions": ["transport.hotspot_lan"],
-  "actions": ["request_disconnect"]
+  "capabilities": [
+    "measurement.submit"
+  ],
+  "permissions": [
+    "transport.hotspot_lan"
+  ],
+  "actions": [
+    "request_disconnect"
+  ],
+  "platform_api": 2,
+  "network_api": "none",
+  "file_api": "none",
+  "data_schema": {
+    "version": 1,
+    "records": {
+      "measurement.blood_pressure": {
+        "kind": "measurement",
+        "label": "measurement",
+        "retention_days": 365,
+        "fields": {
+          "systolic": {
+            "type": "int",
+            "unit": "mmHg",
+            "min": 40,
+            "max": 260
+          },
+          "diastolic": {
+            "type": "int",
+            "unit": "mmHg",
+            "min": 20,
+            "max": 200
+          },
+          "pulse": {
+            "type": "int",
+            "unit": "bpm",
+            "min": 20,
+            "max": 250
+          },
+          "unit": {
+            "type": "string"
+          },
+          "device_model": {
+            "type": "string"
+          },
+          "measured_at": {
+            "type": "int",
+            "unit": "ms"
+          }
+        }
+      }
+    },
+    "kv_keys": []
+  }
 }

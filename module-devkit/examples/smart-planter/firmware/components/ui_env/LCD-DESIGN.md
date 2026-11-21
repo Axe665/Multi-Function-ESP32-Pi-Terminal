@@ -32,7 +32,7 @@ LVGL使用 `LV_COLOR_DEPTH=16`、`LV_COLOR_16_SWAP=0`。ESP小端内存中的RGB
 ## 回归入口
 
 ```sh
-cmake -S esp/S3_Pi_Module/components/ui_env/tests -B /tmp/opencode/lcd-view-tests
+cmake -S esp/modules/smart-planter/components/ui_env/tests -B /tmp/opencode/lcd-view-tests
 cmake --build /tmp/opencode/lcd-view-tests --parallel 4
 ctest --test-dir /tmp/opencode/lcd-view-tests --output-on-failure
 ```

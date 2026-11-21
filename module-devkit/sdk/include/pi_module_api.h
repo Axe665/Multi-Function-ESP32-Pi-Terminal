@@ -2,9 +2,9 @@
 
 #include <stdint.h>
 
-// v2 起每个模块必须返回这个版本，并在 manifest 声明 platform_api/network_api。
-// 缺声明或旧版返回 1 的模块在 ModuleManager/worker 加载前拒绝。
-#define PI_MODULE_API_VERSION 2u
+// v3 起每个模块必须返回这个版本，并在 manifest 声明 platform_api=2 / data_schema。
+// 缺 data_schema 或旧版返回 1/2 的模块在 ModuleManager/worker 加载前拒绝。
+#define PI_MODULE_API_VERSION 3u
 
 #ifdef __cplusplus
 extern "C" {

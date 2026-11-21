@@ -45,7 +45,7 @@ flowchart LR
 
 ## 所有代码文件
 
-共 **3123 个**代码/构建脚本文件（不含依赖目录 `node_modules`）。下列清单按仓库目录列出，`third_party/` 按子目录汇总：
+共 **3202 个**代码/构建脚本文件（不含依赖目录 `node_modules`）。下列清单按仓库目录列出，`third_party/` 按子目录汇总：
 
 ### `build_scripts/`（14 个）
 
@@ -89,7 +89,7 @@ hardware/enclosure/scripts/pack_v32.py
 hardware/enclosure/scripts/rebuild_v32.py
 ```
 
-### `module-devkit/`（492 个）
+### `module-devkit/`（498 个）
 
 ```text
 module-devkit/ai_guide.py
@@ -113,6 +113,15 @@ module-devkit/examples/blood-pressure/module.cpp
 module-devkit/examples/blood-pressure/qml/ModulePage.qml
 module-devkit/examples/blood-pressure/qml/components/StateBadge.qml
 module-devkit/examples/blood-pressure/tests/pressure_module_test.cpp
+module-devkit/examples/planter-fake/CMakeLists.txt
+module-devkit/examples/planter-fake/History.h
+module-devkit/examples/planter-fake/module.cpp
+module-devkit/examples/planter-fake/qml/ModulePage.qml
+module-devkit/examples/planter-fake/qml/PlantScene.qml
+module-devkit/examples/planter-fake/qml/components/MetricTile.qml
+module-devkit/examples/planter-fake/qml/components/StateBadge.qml
+module-devkit/examples/planter-fake/qml/components/TrendChart.qml
+module-devkit/examples/planter-fake/tests/planter_fake_test.cpp
 module-devkit/examples/smart-planter/CMakeLists.txt
 module-devkit/examples/smart-planter/History.h
 module-devkit/examples/smart-planter/firmware/CMakeLists.txt
@@ -506,12 +515,6 @@ module-devkit/examples/smart-planter/qml/components/StateBadge.qml
 module-devkit/examples/smart-planter/qml/components/TrendChart.qml
 module-devkit/examples/smart-planter/tests/planter_test.cpp
 module-devkit/examples/smart-planter/tests/preview.cpp
-module-devkit/examples/xiaotian-fence/CMakeLists.txt
-module-devkit/examples/xiaotian-fence/module.cpp
-module-devkit/examples/xiaotian-fence/qml/FenceState.qml
-module-devkit/examples/xiaotian-fence/qml/ModulePage.qml
-module-devkit/examples/xiaotian-fence/qml/components/StateBadge.qml
-module-devkit/examples/xiaotian-fence/tests/fence_module_test.cpp
 module-devkit/firmware-build.sh
 module-devkit/mock-device.py
 module-devkit/module_devkit.py
@@ -561,10 +564,12 @@ module-devkit/sdk/esp32/components/module_control_service/module_control_service
 module-devkit/sdk/esp32/components/module_data_service/CMakeLists.txt
 module-devkit/sdk/esp32/components/module_data_service/include/module_data_ble.h
 module-devkit/sdk/esp32/components/module_data_service/include/module_data_ble_gatt.h
+module-devkit/sdk/esp32/components/module_data_service/include/module_data_mdns.h
 module-devkit/sdk/esp32/components/module_data_service/include/module_data_service.h
 module-devkit/sdk/esp32/components/module_data_service/module_data_ble.c
 module-devkit/sdk/esp32/components/module_data_service/module_data_ble_gatt.c
 module-devkit/sdk/esp32/components/module_data_service/module_data_http_package.c
+module-devkit/sdk/esp32/components/module_data_service/module_data_mdns.c
 module-devkit/sdk/esp32/components/module_data_service/module_data_package.c
 module-devkit/sdk/esp32/components/module_data_service/module_data_service.c
 module-devkit/sdk/esp32/components/module_data_service/module_data_wifi.c
@@ -582,6 +587,7 @@ module-devkit/template/qml/components/MetricTile.qml
 module-devkit/template/qml/components/StateBadge.qml
 module-devkit/template/qml/components/TrendChart.qml
 module-devkit/template/tests/module_test.cpp
+module-devkit/toolchain/module-aarch64.cmake
 module-devkit/tools/mock_module.py
 module-devkit/tools/package_tool.py
 ```
@@ -980,7 +986,7 @@ pi_terminal/tts/tools/render_units.py
 pi_terminal/tts/tools/synth_edge_voice.py
 ```
 
-### `projects/`（11 个）
+### `projects/`（76 个）
 
 ```text
 projects/native-browser-wheel/CMakeLists.txt
@@ -994,6 +1000,71 @@ projects/native-browser-wheel/tests/main.cpp
 projects/native-browser-wheel/tests/page.html
 projects/native-browser-wheel/tests/tst_web.qml
 projects/native-browser-wheel/tests/tst_wheel.qml
+projects/xiaotian-pogo/firmware/CMakeLists.txt
+projects/xiaotian-pogo/firmware/components/board_pins/CMakeLists.txt
+projects/xiaotian-pogo/firmware/components/board_pins/include/board_pins.h
+projects/xiaotian-pogo/firmware/components/board_pins/include/linkit_pins.h
+projects/xiaotian-pogo/firmware/components/diagnostics/CMakeLists.txt
+projects/xiaotian-pogo/firmware/components/diagnostics/diagnostics.c
+projects/xiaotian-pogo/firmware/components/diagnostics/include/diagnostics.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/CMakeLists.txt
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/board_config.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit_common.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit_config.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit_crc16.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit_det.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit_device.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit_err.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit_frame.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit_handshake.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit_host.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit_parser.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit_protocol.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit_transport.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/include/linkit_types.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/core/linkit_config.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/core/linkit_core.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/core/linkit_core_internal.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/core/linkit_crc16.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/core/linkit_frame.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/core/linkit_handshake.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/core/linkit_parser.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/core/linkit_state.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/hal/linkit_hal_board.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/hal/linkit_hal_gpio.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/hal/linkit_hal_time.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/internal/linkit_hs_internal.h
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/roles/linkit_role_device.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/roles/linkit_role_host.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/transport/linkit_transport_espnow.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/transport/linkit_transport_i2c.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/transport/linkit_transport_spi.c
+projects/xiaotian-pogo/firmware/components/linkit_sdk/src/transport/linkit_transport_uart.c
+projects/xiaotian-pogo/firmware/main/CMakeLists.txt
+projects/xiaotian-pogo/firmware/main/main.c
+projects/xiaotian-pogo/firmware/main/node_main.c
+projects/xiaotian-pogo/firmware/main/node_state.c
+projects/xiaotian-pogo/firmware/main/node_state.h
+projects/xiaotian-pogo/firmware/main/pogo_service.c
+projects/xiaotian-pogo/firmware/main/pogo_service.h
+projects/xiaotian-pogo/firmware/tests/state_test.c
+projects/xiaotian-pogo/pi/CMakeLists.txt
+projects/xiaotian-pogo/pi/controller.cpp
+projects/xiaotian-pogo/pi/controller.h
+projects/xiaotian-pogo/pi/main.cpp
+projects/xiaotian-pogo/pi/qml/Main.qml
+projects/xiaotian-pogo/pi/qml/ModulePage.qml
+projects/xiaotian-pogo/pi/run-pi.sh
+projects/xiaotian-pogo/pi/worker.py
+projects/xiaotian-pogo/tools/flash_node.py
+projects/xiaotian-pogo/tools/make_bridge_patch.py
+projects/xiaotian-pogo/tools/node_client.py
+projects/xiaotian-pogo/tools/package_baseline.py
+projects/xiaotian-pogo/tools/read_port.py
+projects/xiaotian-pogo/tools/test_client.py
+projects/xiaotian-pogo/tools/test_panel_worker.py
+projects/xiaotian-pogo/tools/verify_device.py
 ```
 
 ### `third_party/`（1496 个，按子目录汇总）
@@ -1025,7 +1096,7 @@ tools/tests/test_modules_index.py
 tools/tests/test_sync_module_devkit.py
 ```
 
-### `esp/`（494 个）
+### `esp/`（497 个）
 
 ```text
 esp/bridge/S3_PiBridge_LinkIt_Host/CMakeLists.txt
@@ -1082,6 +1153,7 @@ esp/bridge/S3_PiBridge_LinkIt_Host/main/rfid_service.c
 esp/bridge/S3_PiBridge_LinkIt_Host/main/rfid_service.h
 esp/bridge/S3_PiBridge_LinkIt_Host/main/rfid_tracker.c
 esp/bridge/S3_PiBridge_LinkIt_Host/main/rfid_tracker.h
+esp/bridge/S3_PiBridge_LinkIt_Host/releases/2026-11-21/flash.sh
 esp/bridge/S3_PiBridge_LinkIt_Host/tests/run_host_tests.py
 esp/bridge/S3_PiBridge_LinkIt_Host/tests/test_pbr_sender.c
 esp/bridge/S3_PiBridge_LinkIt_Host/tests/test_rc522.c
@@ -1512,10 +1584,12 @@ esp/shared/module_control_service/module_control_service.c
 esp/shared/module_data_service/CMakeLists.txt
 esp/shared/module_data_service/include/module_data_ble.h
 esp/shared/module_data_service/include/module_data_ble_gatt.h
+esp/shared/module_data_service/include/module_data_mdns.h
 esp/shared/module_data_service/include/module_data_service.h
 esp/shared/module_data_service/module_data_ble.c
 esp/shared/module_data_service/module_data_ble_gatt.c
 esp/shared/module_data_service/module_data_http_package.c
+esp/shared/module_data_service/module_data_mdns.c
 esp/shared/module_data_service/module_data_package.c
 esp/shared/module_data_service/module_data_service.c
 esp/shared/module_data_service/module_data_wifi.c

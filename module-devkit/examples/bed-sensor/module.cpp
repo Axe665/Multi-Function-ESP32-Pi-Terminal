@@ -60,7 +60,7 @@ extern "C" int pi_module_on_data(pi_module_handle_t *module, uint8_t, const uint
     sample.insert(QStringLiteral("night"), hour >= 22 || hour < 6);
 
     const QByteArray data = QJsonDocument(sample).toJson(QJsonDocument::Compact);
-    module->host->emit_event(module->host->context, "sample", data.constData());
+    module->host->emit_event(module->host->context, "sample.bed", data.constData());
     return 0;
 }
 

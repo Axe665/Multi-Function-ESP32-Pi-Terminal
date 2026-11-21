@@ -66,6 +66,36 @@ static bool s_contact_attached;
 static bool s_module_config_valid;
 static char s_module_transport_mode[32];
 static char s_module_package_transport[24];
+/* 模块在 POGO_CMD_MODULE_CONFIG 里自报的身份；未自报时回退编译期配置。 */
+static char s_module_instance[65];
+static char s_module_business_adapter[65];
+static uint16_t s_module_https_port;
+static bool s_module_https_port_set;
+static bool s_module_package_available;
+static bool s_module_package_available_set;
+static uint8_t s_module_reported_id;
+
+static bool pbr_module_token_ok(const char *text, size_t max_length)
+{
+    if (!text || !text[0] || strlen(text) >= max_length) return false;
+    for (const char *p = text; *p; ++p) {
+        if (!((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') ||
+              (*p >= '0' && *p <= '9') || *p == '_' || *p == '-' || *p == '.'))
+            return false;
+    }
+    return true;
+}
+
+static void pbr_clear_module_identity(void)
+{
+    s_module_instance[0] = '\0';
+    s_module_business_adapter[0] = '\0';
+    s_module_https_port = 0;
+    s_module_https_port_set = false;
+    s_module_package_available = false;
+    s_module_package_available_set = false;
+    s_module_reported_id = 0;
+}
 
 static uint16_t pbr_crc16(const uint8_t *data, size_t length)
 {
@@ -145,20 +175,39 @@ static bool pbr_send_frame(uint8_t kind, const char *json)
 
 static bool pbr_send_link_event(bool attached, uint8_t module_id)
 {
-    char json[512];
-    int json_len;
+    char json[768];
+    char extra[192] = "";
+    const char *instance = s_module_instance[0] ? s_module_instance : PBRIDGE_INSTANCE;
+    if (module_id == 0) module_id = PBRIDGE_MODULE_ID;
     if (attached) {
         if (!s_module_config_valid) return false;
-        json_len = snprintf(json, sizeof(json),
+        size_t used = 0;
+        if (s_module_business_adapter[0]) {
+            used += (size_t)snprintf(extra + used, sizeof(extra) - used,
+                                     ",\"business_adapter\":\"%s\"", s_module_business_adapter);
+        }
+        if (s_module_https_port_set) {
+            used += (size_t)snprintf(extra + used, sizeof(extra) - used,
+                                     ",\"https_port\":%u", (unsigned)s_module_https_port);
+        }
+        if (s_module_package_available_set) {
+            used += (size_t)snprintf(extra + used, sizeof(extra) - used,
+                                     ",\"package_available\":%s",
+                                     s_module_package_available ? "true" : "false");
+        }
+        if (used >= sizeof(extra)) return false;
+        const int json_len = snprintf(json, sizeof(json),
             "{\"event\":\"attach\",\"module_id\":%u,\"module_instance\":\"%s\","
-            "\"module_config\":{\"schema\":\"module-transport-v1\",\"transport_mode\":\"%s\",\"package_transport\":\"%s\"}}",
-            module_id, PBRIDGE_INSTANCE, s_module_transport_mode, s_module_package_transport);
+            "\"module_config\":{\"schema\":\"module-transport-v1\",\"transport_mode\":\"%s\","
+            "\"package_transport\":\"%s\"%s}}",
+            module_id, instance, s_module_transport_mode, s_module_package_transport, extra);
+        if (json_len <= 0 || (size_t)json_len >= sizeof(json)) return false;
     } else {
-        json_len = snprintf(json, sizeof(json),
+        const int json_len = snprintf(json, sizeof(json),
             "{\"event\":\"detach\",\"module_id\":%u,\"module_instance\":\"%s\"}",
-            module_id, PBRIDGE_INSTANCE);
+            module_id, instance);
+        if (json_len <= 0 || (size_t)json_len >= sizeof(json)) return false;
     }
-    if (json_len <= 0 || (size_t)json_len >= sizeof(json)) return false;
     return pbr_send_frame(1, json);
 }
 
@@ -202,7 +251,8 @@ static void pbr_handle_command(const uint8_t *payload, size_t length, uint32_t s
                  "\"rfid\":{\"enabled\":%s,\"online\":%s,\"version\":%u,\"reports\":%lu,"
                  "\"read_errors\":%lu,\"tx_failures\":%lu,\"last_error\":%d}}",
                  ping ? "pong" : "bridge_status", (unsigned long)sequence,
-                 s_contact_attached ? "true" : "false", PBRIDGE_MODULE_ID,
+                 s_contact_attached ? "true" : "false",
+                 s_module_reported_id ? s_module_reported_id : PBRIDGE_MODULE_ID,
                  battery,
                  rfid.enabled ? "true" : "false", rfid.online ? "true" : "false",
                  rfid.version, (unsigned long)rfid.reports, (unsigned long)rfid.read_errors,
@@ -355,22 +405,47 @@ static void linkit_task(void *arg)
                 const cJSON *schema = cJSON_GetObjectItemCaseSensitive(config, "schema");
                 const cJSON *mode = cJSON_GetObjectItemCaseSensitive(config, "transport_mode");
                 const cJSON *package = cJSON_GetObjectItemCaseSensitive(config, "package_transport");
+                const cJSON *adapter = cJSON_GetObjectItemCaseSensitive(config, "business_adapter");
+                const cJSON *https_port = cJSON_GetObjectItemCaseSensitive(config, "https_port");
+                const cJSON *instance = cJSON_GetObjectItemCaseSensitive(config, "module_instance");
+                const cJSON *package_available = cJSON_GetObjectItemCaseSensitive(config, "package_available");
                 const bool valid = cJSON_IsObject(config) && cJSON_IsString(schema) &&
                     strcmp(schema->valuestring, "module-transport-v1") == 0 &&
                     cJSON_IsString(mode) &&
                     (!strcmp(mode->valuestring, "fixed_ble") || !strcmp(mode->valuestring, "fixed_hotspot_lan")) &&
                     cJSON_IsString(package) &&
-                    (!strcmp(package->valuestring, "data") || !strcmp(package->valuestring, "hotspot_lan"));
-                const bool combo_valid = valid &&
-                    (!strcmp(mode->valuestring, "fixed_ble") || !strcmp(package->valuestring, "data"));
-                if (combo_valid) {
+                    (!strcmp(package->valuestring, "data") || !strcmp(package->valuestring, "hotspot_lan") ||
+                     !strcmp(package->valuestring, "http"));
+                bool identity_valid = valid;
+                if (adapter && (!cJSON_IsString(adapter) || !pbr_module_token_ok(adapter->valuestring, 65)))
+                    identity_valid = false;
+                if (instance && (!cJSON_IsString(instance) || !pbr_module_token_ok(instance->valuestring, 65)))
+                    identity_valid = false;
+                if (https_port && (!cJSON_IsNumber(https_port) || https_port->valuedouble < 1 ||
+                                   https_port->valuedouble > 65535 ||
+                                   https_port->valuedouble != (double)(uint16_t)https_port->valuedouble))
+                    identity_valid = false;
+                if (package_available && !cJSON_IsBool(package_available))
+                    identity_valid = false;
+                if (identity_valid) {
                     strlcpy(s_module_transport_mode, mode->valuestring, sizeof(s_module_transport_mode));
                     strlcpy(s_module_package_transport, package->valuestring, sizeof(s_module_package_transport));
+                    s_module_instance[0] = '\0';
+                    s_module_business_adapter[0] = '\0';
+                    if (instance) strlcpy(s_module_instance, instance->valuestring, sizeof(s_module_instance));
+                    if (adapter) strlcpy(s_module_business_adapter, adapter->valuestring, sizeof(s_module_business_adapter));
+                    s_module_https_port_set = https_port != NULL;
+                    s_module_https_port = https_port ? (uint16_t)https_port->valuedouble : 0;
+                    s_module_package_available_set = package_available != NULL;
+                    s_module_package_available = package_available && cJSON_IsTrue(package_available);
                     s_module_config_valid = true;
-                    ESP_LOGI(TAG, "module transport config accepted mode=%s package=%s",
-                             s_module_transport_mode, s_module_package_transport);
+                    ESP_LOGI(TAG, "module transport config accepted mode=%s package=%s adapter=%s port=%u instance=%s",
+                             s_module_transport_mode, s_module_package_transport,
+                             s_module_business_adapter[0] ? s_module_business_adapter : "(none)",
+                             (unsigned)s_module_https_port, s_module_instance[0] ? s_module_instance : "(none)");
                 } else {
                     s_module_config_valid = false;
+                    pbr_clear_module_identity();
                     ESP_LOGW(TAG, "reject invalid module transport configuration frame");
                     (void)pbr_send_frame(3, "invalid module transport configuration");
                 }
@@ -432,9 +507,14 @@ static void linkit_task(void *arg)
         if (!contact_present) s_module_config_valid = false;
         if (attached && (!pbr_attached ||
             (pbr_now - last_pbr_announce_tick) >= pdMS_TO_TICKS(PBRIDGE_ANNOUNCE_MS))) {
-            /* LinkIt status.module_id is the peer's generic LinkIt type (1),
-             * not the Pi product/profile ID. Map this tested module explicitly. */
-            pbr_module_id = PBRIDGE_MODULE_ID;
+            /* module_id 取模块在 LNK1 帧里自报的值；没自报才回退编译期配置。
+             * 桥板不再把产品 ID 写死成某一个模块。 */
+            if (rx.frame.module_id >= 1 && rx.frame.module_id <= 255) {
+                pbr_module_id = rx.frame.module_id;
+            } else {
+                pbr_module_id = PBRIDGE_MODULE_ID;
+            }
+            s_module_reported_id = pbr_module_id;
             if (pbr_send_link_event(true, pbr_module_id)) {
                 pbr_attached = true; s_contact_attached = true;
                 last_pbr_announce_tick = pbr_now;

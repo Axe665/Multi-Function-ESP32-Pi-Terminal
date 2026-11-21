@@ -4,6 +4,20 @@
 
 本工程是 ESP32-S3 桥板固件:通过板载 CH343 USB-UART 以 PBR1 二进制帧与电脑/树莓派通信,通过 UART1 承载 LinkIt 模块通道。本轮在原有固件上加入 RC522 ISO14443A 读 UID 功能并实机验证;只修改 ESP32 固件,树莓派端程序未修改。
 
+## 2026-11-21 通用透传
+
+桥板不再写死某一个模块的产品 ID：
+
+- `module_id` 取模块在 LNK1 帧里自报的值，没自报才回退 `CONFIG_PBRIDGE_MODULE_ID`；
+- `business_adapter` / `https_port` / `module_instance` / `package_available` 从
+  `POGO_CMD_MODULE_CONFIG`(0x03) 原样透传，只校验类型、长度和字符集；
+- `package_transport` 新增 `http`，业务 lane × 包通道不再做组合限制；
+- 删除啸天专用分支和 `xiaotian-` 前缀校验。
+
+源码在 `main/main.c`；官方 2026-11-21 构建产物（bin/flash.sh/SHA256）归档在
+[`releases/2026-11-21/`](releases/2026-11-21/README.md)。官方包用于实机回滚，
+后续维护以源码重新编译为准。已用 ESP-IDF 5.5.4 编译通过，未烧录验证。
+
 ## 当前验证状态(2026-10-25)
 
 已在本机 ESP-IDF 5.5.4 完整构建并烧录桥板:bootloader、分区表、应用三段写入均通过 esptool hash 校验。复位后 PBR1 `status` 往返正常;RC522 在线(版本寄存器 0x92),已在串口监听中捕获真实 4 字节卡 UID 的 `rfid_card` 事件,PBR1 CRC 正确,固件累计成功上报计数由 8 增至 9。历史累计 `read_errors` 存在,捕获时 `last_error=0`、`tx_failures=0`。本地验证记录保存在工程下 `verification/`(运行输出,已被 git 忽略,不入库)。

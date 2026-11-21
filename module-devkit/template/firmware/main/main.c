@@ -38,22 +38,24 @@ static size_t package_reader(const char *file, uint32_t offset, uint8_t *buffer,
 static bool on_command(const char *event, const char *json, void *context) {
     (void)context;
     ESP_LOGI(TAG, "command event=%s payload=%s", event ? event : "", json ? json : "");
+    // Replace this callback with the module's hardware command dispatcher.
+    if (event && strcmp(event, "data") == 0)
+        module_data_service_publish((const uint8_t *)"{\"status\":\"ok\"}", 15);
     return true;
 }
 
-// 最小数据源：每秒发布一条模拟读数。
-// shortcut: 这里没有传感器驱动，换成真实采样时保留字段名和发布节奏。
+// 最小数据源：每秒发布一条模拟读数，字段对齐 manifest 的 sample.demo。
+// shortcut: 这里没有传感器驱动；换真实采样时保留字段名和发布节奏。
 static void publish_task(void *arg) {
     (void)arg;
     uint32_t counter = 0;
     char payload[192];
     while (true) {
         const int len = snprintf(payload, sizeof payload,
-            "{\"temperature_C\":%.1f,\"humidity_RH\":%.1f,\"light_lux\":%d,"
-            "\"counter\":%" PRIu32 ",\"received_at\":%" PRId64 "}",
+            "{\"value_a\":%.1f,\"value_b\":%.1f,\"value_c\":%.1f,"
+            "\"online\":true,\"received_at\":%" PRId64 "}",
             24.0 + (counter % 10) * 0.1, 60.0 + (counter % 5) * 0.2,
-            700 + (int)(counter % 20), counter,
-            (int64_t)(esp_timer_get_time() / 1000));
+            700.0 + (counter % 20), (int64_t)(esp_timer_get_time() / 1000));
         if (len > 0) module_data_service_publish((const uint8_t *)payload, (size_t)len);
         counter++;
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -68,6 +70,8 @@ void app_main(void) {
         .module_instance = CONFIG_MODULE_INSTANCE,
         .token = CONFIG_MODULE_TOKEN,
         .port = CONFIG_MODULE_PORT,
+        .module_type = "DEMO",
+        .display_name = "Demo Module",
     };
     module_data_service_set_package_reader(package_reader, NULL);
     const module_control_service_config_t control = {

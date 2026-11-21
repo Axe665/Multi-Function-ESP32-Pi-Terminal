@@ -9,13 +9,41 @@
   "library": "libmodule.so",
   "qml_page": "qml/ModulePage.qml",
   "abi_version": 1,
-  "min_host_api": 1,
-  "qt_major": 6,
-  "platform_api": 1,
+  "platform_api": 2,
   "network_api": "none",
   "file_api": "none",
+  "min_host_api": 3,
+  "control_protocol": "pogo-control-v1",
+  "data_protocol": "module-defined-v1",
+  "max_payload": 65532,
+  "qt_major": 6,
   "unload_contract": "synchronous-stop-v1",
   "capabilities": [],
   "permissions": ["transport.ble"],
-  "actions": []
+  "actions": ["ping"],
+  "data_schema": {
+    "version": 1,
+    "records": {
+      "event.module_ready": {
+        "kind": "event",
+        "label": "module ready",
+        "retention_days": 365,
+        "fields": {
+          "at": {"type": "int", "unit": "ms"}
+        }
+      },
+      "sample.demo": {
+        "kind": "sample",
+        "label": "demo sample",
+        "retention_days": 365,
+        "fields": {
+          "value_a": {"type": "double"},
+          "value_b": {"type": "double"},
+          "value_c": {"type": "double"},
+          "online": {"type": "bool"}
+        }
+      }
+    },
+    "kv_keys": []
+  }
 }

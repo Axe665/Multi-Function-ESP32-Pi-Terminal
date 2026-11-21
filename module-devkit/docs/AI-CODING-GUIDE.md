@@ -30,6 +30,86 @@
 - 不烧录、不重启 Pi 服务，除非开发者明确确认目标设备和操作。
 - `pi_module_stop()` 必须停止线程、定时器、回调和异步发送。
 
+## 宿主能提供什么（v3 能力清单）
+
+这一节是「当前项目领先于旧文档/旧 SDK 的部分」。照着老仓库写的模块会漏掉它们，
+表现为：页面拿不到数据、请求被静默拒绝、或者干脆没意识到这些能力存在。
+
+### QML 侧：模块页拿到的上下文属性
+
+宿主 `ModulePageHost` 每次加载都新建 context，注入下面这些对象。**按名字直接用**，
+不需要 import、不需要 require：
+
+| 名字 | 提供什么 |
+| --- | --- |
+| `appData` | 模块数据入口（v3 名称）。`moduleId`、`ready`、`schemaReady`、`lastError`；`records()`、`append(record, fields)`、`appendBatch`、`query(record, options)`、`series(record, field, spanMs, stepMs)`、`validateRecord`、`requestAdvice()` |
+| `moduleData` | 同上，**兼容别名**，保留一个版本周期。新代码写 `appData` |
+| `appAdvice` | 建议通道。见下 |
+| `appNetwork` | 异步 HTTP(S)。`request({method,url,headers,bodyBase64,timeoutMs})` 返回 id，结果走 `finished(id, response)` 信号；`allowed`、`lastError` |
+| `appFiles` | 受控文件。`request(op, args)`，op 取 `read/write/mkdir/rename/remove`；`appRoot`、`allowed`、`writeGrantExpiresAt`、`requestWriteAccess()` |
+| `sessionModel` | 当前会话 |
+| `userContext` | 当前用户信息 |
+| `hostTheme` | 宿主主题令牌 |
+
+两个容易踩的点：
+
+- **别用 `data` 当属性名**。`QQuickItem` 自带 `data`（子项列表），会遮蔽同名 context property，
+  页面调到的永远是子项列表。宿主因此用 `moduleData` / `appData`。
+- **`appFiles` 的写权限是申请的，不是默认给的**：`requestWriteAccess()` 之后等
+  `writeGrantExpiresAt` 变化，写类操作才会通过。
+
+### 建议通道 `appAdvice`
+
+```qml
+Component.onCompleted: {
+    appAdvice.setModuleId(appData.moduleId)
+    appAdvice.request({ record: "measurement.env", windowMs: 300000 })
+}
+Connections {
+    target: appAdvice
+    function onAdviceReady(requestId, payload) { /* 展示 payload */ }
+    function onAdviceFailed(requestId, reason) { /* 展示失败原因 */ }
+}
+```
+
+- `windowMs` 只接受 `300000` / `3600000` / `86400000` 三档；
+- `record` 必须是 manifest `data_schema` 里声明过的记录名；
+- 建议是**异步**返回的：必须接 `adviceReady` / `adviceFailed`，只发 `request` 不收结果
+  会让页面永远停在 loading；
+- `status` / `lastError` 反映通道状态（`unavailable` / `refreshing` / `ready`）。
+  云端不可用时它仍会尝试边/端本地方案，模块页要如实显示 `lastError` 而不是假装成功。
+
+### C++ 侧：`pi_host_services` 的九个回调
+
+宿主 `module_worker_main.cpp` 全部实现，但**老宿主的函数指针可能是空的**——调用前判空
+（`pi_module_sdk` 的封装已经替你做）。
+
+| 回调 | 用途 |
+| --- | --- |
+| `send_data` | 下行 JSON 到设备（业务通道） |
+| `send_control` | PBR1 桥控制面，**只用于桥板诊断**，不是业务通道 |
+| `emit_event` | 上行业务记录（v3 推荐，带 context） |
+| `publish_event` | 同上，老签名，`emit_event` 为空时回退 |
+| `publish_action` | 上报 UI 动作文本 |
+| `data_directory` | 模块自己的可写数据目录 |
+| `log` | 写 worker 日志 |
+| `network_request` | **同步** HTTP(S)，最长 35 s，仅公网 |
+| `file_request` | **同步**受控文件操作，写限本模块 app root |
+
+`pi_module_sdk.h` 里对应封装：`send_json`、`send_control`、`publish`、`data_directory`、
+`network_request`、`file_request`、`log`，以及 `has_network` / `has_file` /
+`has_data_directory` 三个能力探测。
+
+两处必须记住的语义差：
+
+- **C++ `network_request` 同步、QML `appNetwork.request` 异步**。C++ 侧不要在
+  `on_data` 热路径里调它，会卡住整个 worker 最长 35 秒。
+- **两者的返回值/响应只在下一次调用前有效**（宿主复用缓冲区）；`pi_module_sdk`
+  已经拷成 `std::string`，直接用裸 `host->network_request(...)` 时自己拷。
+
+网络与文件都不是自动可用的：要宿主在 manifest 里授予 `network_api` / `file_api`
+对应权限，未授权时一律返回 `{"ok":false,...}`（默认拒绝）。
+
 ## AI 工作流程
 
 ### 阶段 0：需求确认
@@ -55,12 +135,11 @@ python3 module-devkit/module_devkit.py init ./my-module \
 
 检查生成的：
 
-- `manifest.json`
+- `manifest.json`（v3：`platform_api=2`、`min_host_api=3`、`data_schema`）
 - `module.cpp`
-- `qml/ModulePage.qml` 与 `qml/components/`
+- `qml/ModulePage.qml`
 - `firmware/main/main.c`
 - `firmware/main/Kconfig.projbuild`
-- `tests/` 与 `README.md`
 
 ### 阶段 2：实现业务
 
@@ -78,8 +157,8 @@ AI 只修改模块工程，不修改 SDK 内置协议组件。实现顺序：
 
 ```sh
 python3 module-devkit/module_devkit.py doctor
-python3 module-devkit/module_devkit.py test ./my-module
 python3 module-devkit/module_devkit.py validate ./my-module
+python3 module-devkit/module_devkit.py schema check ./my-module
 ```
 
 若拥有匹配平台私钥，可发布：

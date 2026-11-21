@@ -225,6 +225,7 @@ python3 -m http.server 8000 --bind 127.0.0.1
 ├── module-devkit/     可独立使用的模块 SDK、模板与示例
 ├── MODULES.md         模块索引：目录 / 中文名 / manifest.id / module_id / 形态
 ├── esp/               设备固件：modules/ 按模块分类，bridge/ 控制桥
+├── projects/          独立产品基线（啸天 pogo 等，不是模块包）
 ├── archive/           历史交接快照，只读，不是构建入口
 ├── hardware/
 │   └── enclosure/    外壳 CAD、STL / STEP / 3MF、打印和装配资料

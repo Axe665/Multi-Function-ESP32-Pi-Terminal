@@ -9,6 +9,9 @@
 
 用法：
     python3 demo_dual_module.py <build-dir> <output-dir> --fence-so X --bp-so Y
+
+注意：本演示用 2026-11-21 devkit（API v3）构建模块，需要已迁移到 v3 的宿主。
+仓库里的 `pi_terminal` 源码仍是 v2，直接跑会因 API/清单版本不符被拒载。
 """
 import argparse
 import hashlib
@@ -23,6 +26,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]          # pi_terminal/
 REPO = ROOT.parent
 DEVKIT = REPO / 'module-devkit' / 'examples'
+# 啸天 id82 的模块 mock 已归档；双模块演示仍用它，真实啸天基线见 projects/xiaotian-pogo。
+FENCE = REPO / 'archive' / '2026-11-21-xiaotian-fence-mock' / 'xiaotian-fence'
 sys.path.insert(0, str(ROOT / 'tools'))
 
 import package_tool
@@ -117,14 +122,14 @@ def main():
 
         # 模块 .so 内嵌的 manifest 必须与包里逐字节一致（ModuleManager 会比对）。
         # 因此先用最终版 manifest 重新构建 .so，再用同一份打包。
-        def build_module(example: str, out_so: Path) -> tuple[Path, Path]:
-            manifest = json.loads((DEVKIT / example / 'manifest.json').read_text())
+        def build_module(example: Path, out_so: Path) -> tuple[Path, Path]:
+            manifest = json.loads((example / 'manifest.json').read_text())
             manifest['host_arch'] = sorted(set(manifest.get('host_arch', []) + [host_arch]))
-            src = tmp / ('src-' + example)
-            shutil.copytree(DEVKIT / example, src)
+            src = tmp / ('src-' + example.name)
+            shutil.copytree(example, src)
             (src / 'manifest.json').write_text(
                 json.dumps(manifest, ensure_ascii=False, indent=2))
-            bld = tmp / ('build-' + example)
+            bld = tmp / ('build-' + example.name)
             subprocess.run(['cmake', '-S', str(src), '-B', str(bld),
                             '-DMODULE_SDK_DIR=' + str(REPO / 'module-devkit' / 'sdk'),
                             '-DCMAKE_PREFIX_PATH=' + os.environ.get('QT_ROOT', ''),
@@ -134,11 +139,11 @@ def main():
                            check=True, capture_output=True)
             return bld / 'libmodule.so', src / 'manifest.json'
 
-        fence_so, fence_manifest = build_module('xiaotian-fence', Path(args.fence_so))
-        bp_so, bp_manifest = build_module('blood-pressure', Path(args.bp_so))
+        fence_so, fence_manifest = build_module(FENCE, Path(args.fence_so))
+        bp_so, bp_manifest = build_module(DEVKIT / 'blood-pressure', Path(args.bp_so))
 
         fence = pack_module(tmp, 'fence', fence_so,
-                            DEVKIT / 'xiaotian-fence' / 'qml', fence_manifest, host_arch)
+                            FENCE / 'qml', fence_manifest, host_arch)
         bp = pack_module(tmp, 'bp', bp_so,
                          DEVKIT / 'blood-pressure' / 'qml', bp_manifest, host_arch)
         package_tool.build(fence, tmp / 'http-a', str(tmp / 'keys' / 'private.pem'), host_arch)

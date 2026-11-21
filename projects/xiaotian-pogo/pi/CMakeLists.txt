@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.16)
+project(xiaotian_panel VERSION 0.1.0 LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_AUTOMOC ON)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2)
+add_executable(xiaotian-panel main.cpp controller.cpp controller.h)
+target_link_libraries(xiaotian-panel PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2)
+qt_add_resources(xiaotian-panel qml_files PREFIX "/" FILES qml/Main.qml qml/ModulePage.qml)

@@ -10,6 +10,7 @@
 #include "mbedtls/base64.h"
 #include "esp_log.h"
 #include "module_data_ble_gatt.h"
+#include "module_data_mdns.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -25,6 +26,10 @@ void module_data_service_stop_package_http(void);
 static const char *TAG = "PI_MODULE_DATA";
 static module_data_config_t s_cfg;
 static char s_instance[65], s_token[257];
+// module_type / display_name 是调用方传进来的指针，调用方可能用栈上临时字符串。
+// 广播会在 Wi-Fi 重连时异步重启（module_data_service_refresh_mdns），所以配置
+// 必须持有自己的副本，不能长期引用指针。
+static char s_mdns_type[33], s_mdns_name[65];
 static module_data_command_cb_t s_command;
 static void *s_context;
 static module_data_package_read_cb_t s_package_reader;
@@ -324,6 +329,11 @@ esp_err_t module_data_service_start(const module_data_config_t *config, module_d
     }
     if (strlen(config->module_instance) > 64 || strlen(config->token) > 256) return ESP_ERR_INVALID_SIZE;
     s_cfg = *config; strlcpy(s_instance, config->module_instance, sizeof(s_instance)); strlcpy(s_token, config->token, sizeof(s_token));
+    s_mdns_type[0] = '\0'; s_mdns_name[0] = '\0';
+    if (config->module_type) strlcpy(s_mdns_type, config->module_type, sizeof(s_mdns_type));
+    if (config->display_name) strlcpy(s_mdns_name, config->display_name, sizeof(s_mdns_name));
+    s_cfg.module_type = s_mdns_type[0] ? s_mdns_type : NULL;
+    s_cfg.display_name = s_mdns_name[0] ? s_mdns_name : NULL;
     s_command = callback; s_context = context; s_stop_requested = false;
     s_ready = false; s_disconnect_pending = false; s_rx = 0; s_tx = 1; s_ble_active = false;
     s_lock = xSemaphoreCreateMutex(); s_done = xEventGroupCreate();
@@ -332,12 +342,35 @@ esp_err_t module_data_service_start(const module_data_config_t *config, module_d
         if (s_done) { vEventGroupDelete(s_done); s_done = NULL; }
         return ESP_ERR_NO_MEM;
     }
+    /* 设计 §3.2：LAN 数据面就绪后广播 _orpi-module._tcp。
+     * 广播失败不影响数据面（主机还有 BLE 与手动连接），所以只告警不返回错误。 */
+    const char *mdns_name = (config->display_name != NULL && config->display_name[0] != '\0')
+                                ? config->display_name
+                                : config->module_instance;
+    const esp_err_t mdns_err = module_data_mdns_start(config->module_id, config->port,
+                                                     config->module_type, mdns_name);
+    if (mdns_err != ESP_OK && mdns_err != ESP_ERR_INVALID_STATE && mdns_err != ESP_ERR_NOT_SUPPORTED)
+        ESP_LOGW(TAG, "module mDNS broadcast unavailable: %s", esp_err_to_name(mdns_err));
     return ESP_OK;
+}
+
+void module_data_service_refresh_mdns(void)
+{
+    if (!s_lock || s_task == NULL) return;
+    const char *mdns_name = (s_cfg.display_name != NULL && s_cfg.display_name[0] != '\0')
+                                ? s_cfg.display_name
+                                : s_instance;
+    const esp_err_t err = module_data_mdns_start(s_cfg.module_id, s_cfg.port,
+                                                 s_cfg.module_type, mdns_name);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE && err != ESP_ERR_NOT_SUPPORTED)
+        ESP_LOGW(TAG, "module mDNS re-broadcast failed: %s", esp_err_to_name(err));
 }
 
 void module_data_service_stop(void)
 {
     if (!s_lock) return;
+    /* 断开即撤销广播：残留的 _orpi-module 记录会让主机以为还能连。 */
+    module_data_mdns_stop();
     s_stop_requested = true;
     module_data_service_stop_package_http();
     module_data_ble_gatt_stop(); s_ble_sender = NULL; s_ble_context = NULL; s_ble_active = false;

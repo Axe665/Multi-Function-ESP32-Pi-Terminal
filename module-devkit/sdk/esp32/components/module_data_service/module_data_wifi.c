@@ -1,5 +1,7 @@
 #include "module_data_service.h"
 
+#include "module_data_mdns.h"
+
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "esp_wifi.h"
@@ -48,6 +50,9 @@ static void wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data)
     }
     else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         xEventGroupClearBits(s_wifi_events, WIFI_CONNECTED);
+        // 数据面已断开：撤销 _orpi-module._tcp 广播，否则主机扫描到一条
+        // 连不上的记录，自动重连会一直失败。重连成功后由 service 层重新广播。
+        module_data_mdns_stop();
         if (s_ever_connected && s_reconnect_timer) {
             esp_timer_stop(s_reconnect_timer);
             esp_timer_start_once(s_reconnect_timer, 2000000);
@@ -56,6 +61,8 @@ static void wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data)
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         s_retry = 0; s_ever_connected = true;
         xEventGroupSetBits(s_wifi_events, WIFI_CONNECTED);
+        // 断开时撤销过广播，这里补回来；否则重连后主机永远扫不到这台模块。
+        module_data_service_refresh_mdns();
     }
 }
 

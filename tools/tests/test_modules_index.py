@@ -61,10 +61,28 @@ class ModulesIndexTest(unittest.TestCase):
         seen = {}
         for project in self.examples():
             manifest = json.loads((project / "manifest.json").read_text(encoding="utf-8"))
+            # 演示工程可以和真模块共用 module_id（planter-fake 就是故意复用 80）。
+            if project.name in self.rows and "桌面演示" in self.rows[project.name][4]:
+                continue
             module_id = manifest["module_id"]
             with self.subTest(module=project.name):
                 self.assertNotIn(module_id, seen, "module_id 与 %s 重复" % seen.get(module_id))
                 seen[module_id] = project.name
+
+    def test_projects_are_labeled(self):
+        projects = sorted(p for p in (ROOT / "projects").iterdir() if p.is_dir())
+        for project in projects:
+            readme = project / "README.md"
+            if not readme.is_file():
+                continue
+            head = "\n".join(readme.read_text(encoding="utf-8").splitlines()[:6])
+            # 只有带产品标注的独立设备才进 MODULES.md；普通工具项目不强行登记。
+            if "> 产品：" not in head:
+                continue
+            with self.subTest(project=project.name):
+                self.assertIn("projects/%s/" % project.name, self.rows, "MODULES.md 漏登记独立产品")
+                self.assertIn("module_id", head)
+                self.assertIn("非模块包", head)
 
 
 if __name__ == "__main__":

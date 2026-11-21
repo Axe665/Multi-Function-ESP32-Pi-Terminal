@@ -54,9 +54,9 @@ private slots:
                                    uint32_t(payload.size())),
                  0);
         QCOMPARE(capture.events, 1);
-        QVERIFY(capture.lastEvent.startsWith("sample|"));
+        QVERIFY(capture.lastEvent.startsWith("sample.bed|"));
 
-        const QByteArray json = capture.lastEvent.mid(7);
+        const QByteArray json = capture.lastEvent.mid(11);
         const QJsonObject sample = QJsonDocument::fromJson(json).object();
         QCOMPARE(sample.value("w").toDouble(), 62.3);
         QVERIFY(sample.value("received_at").isDouble());

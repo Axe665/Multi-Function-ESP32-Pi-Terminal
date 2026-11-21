@@ -1,80 +1,62 @@
 import QtQuick
 
-// 指标块：标签 + 读数 + 单位 + 备注。颜色全部来自宿主注入的 hostTheme。
-// kind 只影响左侧小图标：temperature / humidity / light / counter。
+// 指标卡：标签 + 读数 + 单位 + 一行说明。
+// 颜色只从 hostTheme 派生，和模板页的 veil() 层次保持一致。
 Rectangle {
     id: tile
     property var theme: ({})
-    property string kind: "counter"
     property string label: ""
     property string value: "--"
     property string unit: ""
     property string note: ""
 
-    readonly property real uiScale: (theme.scale > 0) ? theme.scale : 1
+    readonly property real u: (theme.scale > 0) ? theme.scale : 1
     readonly property color foreground: theme.foreground || "#ffffff"
-    readonly property color accent: theme.accent || "#85deff"
-    readonly property color muted: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.62)
+    readonly property color muted: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.50)
 
-    implicitHeight: 128 * uiScale
-    implicitWidth: 200 * uiScale
-    radius: 16 * uiScale
-    color: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.05)
-    border.width: 1
-    border.color: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.12)
+    implicitWidth: 160 * u
+    implicitHeight: 96 * u
+    radius: 16 * u
+    color: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.06)
+    border.width: u
+    border.color: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.08)
 
     Column {
-        anchors.fill: parent
-        anchors.margins: 16 * tile.uiScale
-        spacing: 6 * tile.uiScale
+        x: 14 * tile.u
+        y: 12 * tile.u
+        width: parent.width - 28 * tile.u
+        spacing: 4 * tile.u
 
+        Text {
+            text: tile.label
+            color: tile.muted
+            font.pixelSize: 12 * tile.u
+            elide: Text.ElideRight
+            width: parent.width
+        }
         Row {
-            spacing: 8 * tile.uiScale
-            Canvas {
-                width: 22 * tile.uiScale; height: 22 * tile.uiScale
-                onPaint: {
-                    const c = getContext("2d"); c.reset(); c.strokeStyle = tile.accent; c.fillStyle = tile.accent
-                    c.lineWidth = 2 * tile.uiScale
-                    if (tile.kind === "temperature") {
-                        c.strokeRect(8, 2, 5, 12); c.beginPath(); c.arc(10, 17, 4, 0, Math.PI * 2); c.fill()
-                    } else if (tile.kind === "humidity") {
-                        c.beginPath(); c.moveTo(10, 2); c.bezierCurveTo(2, 12, 2, 19, 10, 19)
-                        c.bezierCurveTo(18, 19, 18, 12, 10, 2); c.stroke()
-                    } else if (tile.kind === "light") {
-                        c.beginPath(); c.arc(10, 10, 5, 0, Math.PI * 2); c.stroke()
-                        for (let i = 0; i < 8; i++) {
-                            const a = i * Math.PI / 4
-                            c.beginPath(); c.moveTo(10 + Math.cos(a) * 7, 10 + Math.sin(a) * 7)
-                            c.lineTo(10 + Math.cos(a) * 10, 10 + Math.sin(a) * 10); c.stroke()
-                        }
-                    } else {
-                        c.font = (12 * tile.uiScale) + "px sans-serif"; c.fillText("‹›", 2, 16)
-                    }
-                }
+            spacing: 4 * tile.u
+            Text {
+                text: tile.value
+                color: tile.foreground
+                font.pixelSize: 24 * tile.u
+                font.bold: true
             }
             Text {
-                text: tile.label
-                color: tile.muted
-                font.pixelSize: 14 * tile.uiScale
-                anchors.verticalCenter: parent.verticalCenter
+                text: tile.unit
+                color: Qt.rgba(tile.foreground.r, tile.foreground.g, tile.foreground.b, 0.60)
+                font.pixelSize: 12 * tile.u
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 4 * tile.u
             }
         }
-
         Text {
-            text: tile.value
-            color: tile.foreground
-            font.pixelSize: 28 * tile.uiScale
-            font.bold: true
             width: parent.width
-            elide: Text.ElideRight
-        }
-
-        Text {
-            text: tile.unit + (tile.note ? "  " + tile.note : "")
+            text: tile.note
             color: tile.muted
-            font.pixelSize: 12 * tile.uiScale
-            width: parent.width
-            wrapMode: Text.Wrap
+            font.pixelSize: 11 * tile.u
+            elide: Text.ElideRight
+            maximumLineCount: 1
         }
     }
 }

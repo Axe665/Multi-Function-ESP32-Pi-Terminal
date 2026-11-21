@@ -1,13 +1,14 @@
 # ESP 固件工具链（ESP-IDF 5.5.4 / ESP32-S3）
 
-设备侧固件（桥板 + 模块）来自 **独立仓库** `gggitj/ESP-Modular-Terminal-Service` 的固定版本
-`16aebdd`，完整工程随主仓放在 [`esp/`](../../esp/)。
+设备侧固件（桥板 + 模块）在 **独立仓库** 里构建，本仓不跟踪 `esp/` 目录。
+完整工程内容随主仓放在 [`esp/`](../../esp/)，固定版本
+`16aebdd`。
 
 ## 1. 版本要求（写死，不要用 latest）
 
 | 组件 | 版本 | 说明 |
 |---|---|---|
-| ESP-IDF | **5.5.4** | 与 `esp/` 的 `sdkconfig.defaults` 对齐 |
+| ESP-IDF | **5.5.4** | 与 `esp/` 下的 `sdkconfig.defaults` 对齐 |
 | mbedTLS | **3.6.5** | 随 IDF 5.5.4 提供；PBR 协议向量按此版本生成 |
 | 目标芯片 | ESP32-S3（Xtensa LX7） | 桥板 LinkIt Host 与模块都用 S3 |
 | 工具链 | `xtensa-esp32s3-elf-gcc`（IDF 5.5.4 自带，GCC 14.2） | `install.sh esp32s3` 自动装 |
@@ -39,8 +40,8 @@ idf.py --version        # 应输出 ESP-IDF v5.5.4
 ```sh
 # 模块在 esp/modules/ 下，桥板在 esp/bridge/ 下
 export PI_MODULE_SDKCONFIG=$PWD/sdkconfig.private     # 私有配置，不入库
-export PI_MODULE_PACKAGE_DIR=/path/to/embedded-package
-./build_scripts/build_module.sh smart-planter
+./build_scripts/build_module.sh smart-planter   # 需要签名嵌入包
+./build_scripts/build_esp32.sh S3_PiBridge_LinkIt_Host
 ./build_scripts/build_esp32.sh S3_PiBridge_LinkIt_Host
 ```
 
@@ -58,8 +59,7 @@ idf.py -B build set-target esp32s3 build
 `module_firmware.bin` 1.2 MB / `.elf` 12 MB，构建通过。
 
 `build_esp32.sh` 只做两件事：检查 `idf.py` 已在 PATH、把 `ESP_BUILD_DIR` 指到
-`~/esp32_workspace/builds/<project>`。它**不会**替你 source IDF。模块也可以直接用
-`build_module.sh <模块名>`，后者额外要求签名嵌入包。
+`~/esp32_workspace/builds/<project>`。它**不会**替你 source IDF。
 
 模块工程还有一层封装：
 

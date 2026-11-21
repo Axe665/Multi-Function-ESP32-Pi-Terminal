@@ -1,0 +1,8 @@
+{
+  "source": "C:\\Users\\11727\\Documents\\ChatGPT\\ESP32模块\\esp\\S3_PiBridge_LinkIt_Host_20261030\\S3_PiBridge_LinkIt_Host\\main\\main.c",
+  "source_sha256": "e6466ab54b9a0534d42123e1453de866e5fdeda0ee61ddd910a432725ad6d3cc",
+  "normalized_source_sha256": "e6466ab54b9a0534d42123e1453de866e5fdeda0ee61ddd910a432725ad6d3cc",
+  "candidate_sha256": "0303a47bb25b029b6c0ba4c2681c6b075a1b614875ea368cb13ff99997179e99",
+  "changes": "Infrared profile recognition only; battery/RFID/secure service untouched",
+  "flashed": false
+}

@@ -163,7 +163,11 @@
     },
     "sdk/esp32/components/module_data_service/CMakeLists.txt": {
       "source": "esp/shared/module_data_service/CMakeLists.txt",
-      "sha256": "a802858c51bfb8eaea5c3e5dd5f77533f51767a24ef580167ec185d88ef7fbde"
+      "sha256": "71ef2a898681405afba169b585a9ed8cc9f7192cb94c45a98f1ccbdedea48e44"
+    },
+    "sdk/esp32/components/module_data_service/Kconfig": {
+      "source": "esp/shared/module_data_service/Kconfig",
+      "sha256": "6826ac108b34eecbb7465788dfc8f23373ed0a7eb044d657d1aed7ec78936478"
     },
     "sdk/esp32/components/module_data_service/include/module_data_ble.h": {
       "source": "esp/shared/module_data_service/include/module_data_ble.h",
@@ -173,9 +177,13 @@
       "source": "esp/shared/module_data_service/include/module_data_ble_gatt.h",
       "sha256": "e15cf1935e6aa5b2e3c1784d8adda688352efdd213cde6ae833291fbf2b117d8"
     },
+    "sdk/esp32/components/module_data_service/include/module_data_mdns.h": {
+      "source": "esp/shared/module_data_service/include/module_data_mdns.h",
+      "sha256": "842f2b2aa99e1712c6ab5206f7f1725c209437d4802c3253cf949d8dca402b14"
+    },
     "sdk/esp32/components/module_data_service/include/module_data_service.h": {
       "source": "esp/shared/module_data_service/include/module_data_service.h",
-      "sha256": "d21b009be80da6dd00947db94edb4dff697761cbf07c67ab9f6291db42a78dee"
+      "sha256": "ddc4f462e6379c13f946b354328209bae1bb437f92731a9bead3af5e762bf156"
     },
     "sdk/esp32/components/module_data_service/module_data_ble.c": {
       "source": "esp/shared/module_data_service/module_data_ble.c",
@@ -189,17 +197,21 @@
       "source": "esp/shared/module_data_service/module_data_http_package.c",
       "sha256": "4d5c13a55b4a11daebe3cff3554013a41111f43230f6bcfa49cf2e709c1521d7"
     },
+    "sdk/esp32/components/module_data_service/module_data_mdns.c": {
+      "source": "esp/shared/module_data_service/module_data_mdns.c",
+      "sha256": "b0537d1406fbdcb0bb932fd2bb93093faa667b65bb98ae5f486878b08805e2fc"
+    },
     "sdk/esp32/components/module_data_service/module_data_package.c": {
       "source": "esp/shared/module_data_service/module_data_package.c",
       "sha256": "3f3384d5f699857ef538fefb81bf54f24827fb2cf8c4c881eb3fd590d01834ad"
     },
     "sdk/esp32/components/module_data_service/module_data_service.c": {
       "source": "esp/shared/module_data_service/module_data_service.c",
-      "sha256": "2188e20d634b5d6f6b9a6a4bffd12fcb9954d91b7c12a288db837dd129461696"
+      "sha256": "18fa624d86449bfc5c7fffab245ca1f47dc0fc685c8ad4f7d8eb58b539eca77c"
     },
     "sdk/esp32/components/module_data_service/module_data_wifi.c": {
       "source": "esp/shared/module_data_service/module_data_wifi.c",
-      "sha256": "d9215073d583fd03d17b6982ee7dc59181872c85fbf25257a5ddb0a1c26c85f1"
+      "sha256": "1ce1d7907556a537d1bc0f0a26ba88ad7b147a93fe6ab407e3a4151ddec5a2a1"
     },
     "sdk/esp32/components/module_control_service/CMakeLists.txt": {
       "source": "esp/shared/module_control_service/CMakeLists.txt",
@@ -1856,10 +1868,6 @@
     "examples/smart-planter/firmware/partitions.csv": {
       "source": "esp/modules/smart-planter/partitions.csv",
       "sha256": "ce5e77649576bf899994b0a6858153b21bb724727c0429c4aa5f17e26ba94d7d"
-    },
-    "sdk/include/pi_module_api.h": {
-      "source": "pi_terminal/src/modules/api/pi_module_api.h",
-      "sha256": "6ce28e7324964251edf2ae62ca4ff381c8a0a05376df0e214992b7fec0697c58"
     },
     "tools/package_tool.py": {
       "source": "pi_terminal/tools/package_tool.py",

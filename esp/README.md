@@ -4,7 +4,7 @@
 
 | 目录 | 角色 | 模块名 | module_id |
 |---|---|---|---|
-| `bridge/S3_PiBridge_LinkIt_Host/` | 控制桥：LinkIt 模块通道、RC522 NFC、PBR1 上行 | —（不是模块） | — |
+| `bridge/S3_PiBridge_LinkIt_Host/` | 控制桥：LinkIt 模块通道、RC522 NFC、PBR1 上行；2026-11-21 通用透传发布包在 `releases/2026-11-21/` | —（不是模块） | — |
 | `modules/smart-planter/` | 模块固件：传感器、LCD、供电保护、认证 BLE/LAN、插件包嵌入 | 智能盆栽 · 环境看板 | 80 |
 | `shared/module_data_service/` | TCP/BLE 业务会话及插件包传输 | — | — |
 | `shared/module_control_service/` | LinkIt/PBR 控制面 | — | — |
@@ -12,6 +12,8 @@
 | `shared/lvgl/` | LVGL 8.4.0 运行时子集，保留原许可证 | — | — |
 
 `modules/smart-planter/` 是正式模块源码入口；`module-devkit/examples/smart-planter/firmware/` 是供外部开发者独立使用的导出副本，不依赖主仓库。
+
+啸天红外护栏是独立 HTTPS 产品，不在 `esp/` 分类内：固件、面板和工具在 [`projects/xiaotian-pogo/`](../projects/xiaotian-pogo/README.md)。
 
 ```sh
 # 从仓库根目录检查正式固件与 SDK 副本的一致性

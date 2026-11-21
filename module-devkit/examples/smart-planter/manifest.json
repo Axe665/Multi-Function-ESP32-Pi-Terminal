@@ -5,20 +5,68 @@
   "module_id": 80,
   "package_id": "planter.environment-3.0.0-arm64",
   "package_version": "3.0.0",
-  "host_arch": ["aarch64", "arm64"],
+  "host_arch": [
+    "aarch64",
+    "arm64"
+  ],
   "library": "libmodule.so",
   "qml_page": "qml/ModulePage.qml",
   "abi_version": 1,
-  "min_host_api": 1,
+  "min_host_api": 3,
   "qt_major": 6,
-  "platform_api": 1,
-  "network_api": "none",
-  "file_api": "none",
   "unload_contract": "synchronous-stop-v1",
   "max_payload": 65532,
   "control_protocol": "pogo-control-v1",
   "data_protocol": "module-defined-v1",
-  "capabilities": ["env.read", "battery.read", "history.read"],
-  "permissions": ["transport.hotspot_lan"],
-  "actions": ["request_disconnect"]
+  "capabilities": [
+    "env.read",
+    "battery.read",
+    "history.read"
+  ],
+  "permissions": [
+    "transport.hotspot_lan"
+  ],
+  "actions": [
+    "request_disconnect"
+  ],
+  "platform_api": 2,
+  "network_api": "none",
+  "file_api": "none",
+  "data_schema": {
+    "version": 1,
+    "records": {
+      "sample.environment": {
+        "kind": "sample",
+        "label": "sample",
+        "retention_days": 365,
+        "fields": {
+          "temperature_c": {
+            "type": "double",
+            "unit": "C"
+          },
+          "humidity_rh": {
+            "type": "double",
+            "unit": "%RH"
+          },
+          "pressure_hpa": {
+            "type": "double",
+            "unit": "hPa"
+          },
+          "light_lux": {
+            "type": "double",
+            "unit": "lux"
+          },
+          "battery_v": {
+            "type": "double",
+            "unit": "V"
+          },
+          "battery_pct": {
+            "type": "int",
+            "unit": "%"
+          }
+        }
+      }
+    },
+    "kv_keys": []
+  }
 }

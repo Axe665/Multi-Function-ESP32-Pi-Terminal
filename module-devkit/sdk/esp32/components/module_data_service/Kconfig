@@ -1,0 +1,12 @@
+menu "Module data service"
+
+config MODULE_DATA_MDNS_ENABLED
+    bool "Advertise _orpi-module._tcp via mDNS"
+    default n
+    help
+      启用后模块在 LAN 数据面就绪时广播 _orpi-module._tcp，供 Pi 侧按 uid 匹配。
+      依赖 espressif/mdns 组件（idf_component.yml 或 managed_components）；
+      没有该组件时请保持关闭，否则编译会在 mdns.h 处失败。
+      关闭时数据面仍可用，主机走 BLE 或手动填写地址。
+
+endmenu
